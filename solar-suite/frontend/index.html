@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Solar Suite — API Wiring Reference</title>
+<style>
+  body { background:#0a0e14; color:#e5e7eb; font-family:'JetBrains Mono', monospace; padding:2rem; max-width:900px; margin:auto; }
+  h1 { background:linear-gradient(90deg,#00c6ff,#0072ff); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+  pre { background:#111827; border:1px solid #1f2937; padding:1rem; border-radius:8px; overflow-x:auto; }
+  section { margin-bottom:2rem; }
+  code { color:#60a5fa; }
+</style>
+</head>
+<body>
+<h1>⚡ Solar Suite — API Wiring Reference</h1>
+<p>
+  This is <strong>not</strong> your final UI — it's a working reference showing exactly how to call each
+  endpoint from JS. Copy the <code>fetch</code> patterns below into your existing black-blue HTML/JS app
+  (the one with Chart.js + SheetJS) in place of the hand-ported math functions.
+</p>
+
+<section>
+<h2>1. Loss Correction — upload + Fixed</h2>
+<pre><code>// Step 1: upload the excel file, get back a file_id + detected columns
+async function uploadExcel(fileInput) {
+  const form = new FormData();
+  form.append("file", fileInput.files[0]);
+  const res = await fetch("/api/upload", { method: "POST", body: form });
+  return res.json(); // { file_id, is_cluster, ghi_cols, rows }
+}
+
+// Step 2a: Fixed plant type — immediate result, no optimization
+async function runFixed(fileId, editedRows) {
+  const form = new FormData();
+  form.append("file_id", fileId);
+  if (editedRows) form.append("edited_rows", JSON.stringify(editedRows));
+  const res = await fetch("/api/loss-correction/fixed", { method: "POST", body: form });
+  return res.json(); // { best_loss, chart: {x, forecast, actual}, efficiency_table }
+}</code></pre>
+</section>
+
+<section>
+<h2>2. Loss Correction — Tracking (async, polls for the DE optimizer)</h2>
+<pre><code>async function runTrackingOptimize(fileId, editedRows) {
+  const form = new FormData();
+  form.append("file_id", fileId);
+  if (editedRows) form.append("edited_rows", JSON.stringify(editedRows));
+  const res = await fetch("/api/loss-correction/tracking/optimize", { method: "POST", body: form });
+  const { job_id } = await res.json();
+  return pollJob(job_id); // drive your progress bar off this
+}
+
+async function pollJob(jobId) {
+  while (true) {
+    const res = await fetch(`/api/status/${jobId}`);
+    const job = await res.json();
+    if (job.status === "done") return job.result;
+    if (job.status === "error") throw new Error(job.error);
+    await new Promise(r => setTimeout(r, 800)); // poll every ~0.8s, update progress bar here
+  }
+}
+
+// After optimize, user can tweak the number inputs (loss, dhi, start, end, max, east, west)
+// and recalc fast without rerunning the optimizer:
+async function recalcTracking(fileId, params, editedRows) {
+  const form = new FormData();
+  form.append("file_id", fileId);
+  form.append("params", JSON.stringify(params)); // {loss, dhi, start, end, max, east, west}
+  if (editedRows) form.append("edited_rows", JSON.stringify(editedRows));
+  const res = await fetch("/api/loss-correction/tracking/recalculate", { method: "POST", body: form });
+  return res.json();
+}</code></pre>
+</section>
+
+<section>
+<h2>3. RT Correction</h2>
+<pre><code>async function rtOptimize(actualArr, trendArr) {
+  const form = new FormData();
+  form.append("actual", JSON.stringify(actualArr));
+  form.append("trend", JSON.stringify(trendArr));
+  const res = await fetch("/api/rt-correction/optimize", { method: "POST", body: form });
+  const { job_id } = await res.json();
+  return pollJob(job_id); // { params: {w,n1,n2,b}, chart, time_block_lookup }
+}
+
+async function rtRecalculate(actualArr, trendArr, params) {
+  const form = new FormData();
+  form.append("actual", JSON.stringify(actualArr));
+  form.append("trend", JSON.stringify(trendArr));
+  form.append("params", JSON.stringify(params));
+  const res = await fetch("/api/rt-correction/recalculate", { method: "POST", body: form });
+  return res.json();
+}</code></pre>
+</section>
+
+<section>
+<h2>4. Aeromal (password required on every call — checked server-side)</h2>
+<pre><code>async function aeromalLogin(password) {
+  const form = new FormData();
+  form.append("password", password);
+  const res = await fetch("/api/aeromal/login", { method: "POST", body: form });
+  return res.ok; // false => wrong password, show your error state
+}
+
+async function aeromalNoCurtailment(password, powerArr, windowLength=11, powerAvailability=100) {
+  const form = new FormData();
+  form.append("password", password);
+  form.append("power", JSON.stringify(powerArr));
+  form.append("window_length", windowLength);
+  form.append("power_availability", powerAvailability);
+  const res = await fetch("/api/aeromal/no-curtailment", { method: "POST", body: form });
+  if (!res.ok) throw new Error((await res.json()).detail);
+  return res.json();
+}
+
+async function aeromalCurtailment(password, powerArr, peakCap, targetWidth, windowLength, powerAvailability=100) {
+  const form = new FormData();
+  form.append("password", password);
+  form.append("power", JSON.stringify(powerArr));
+  form.append("peak_cap", peakCap);
+  form.append("target_width", targetWidth);
+  form.append("window_length", windowLength);
+  form.append("power_availability", powerAvailability);
+  const res = await fetch("/api/aeromal/curtailment", { method: "POST", body: form });
+  if (!res.ok) throw new Error((await res.json()).detail);
+  return res.json();
+}</code></pre>
+</section>
+
+<p style="color:#9ca3af">
+  Swap this file for your real UI in <code>frontend/index.html</code> once you've wired these calls in —
+  the FastAPI app serves whatever's in that folder as static files.
+</p>
+</body>
+</html>
