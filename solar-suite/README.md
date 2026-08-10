@@ -36,10 +36,11 @@ Caddyfile              # reverse proxy + HTTPS + basic auth
 
 1. **Replace `frontend/index.html`** with your actual black-blue app, wired to
    call the endpoints (see the reference file for the exact contract).
-2. **Move the Aeromal password out of source.** `app/models/aeromal.py` has it
-   hardcoded (`AEROMAL_PASSWORD`) matching your original Streamlit app — swap
-   this for `os.environ["AEROMAL_PASSWORD"]` and set it via docker-compose
-   `environment:` before this goes anywhere near the internet.
+2. **Set the Aeromal password.** It's read from the `AEROMAL_PASSWORD`
+   environment variable (not hardcoded) — copy `.env.example` to `.env`,
+   fill in a real password, and docker-compose will pick it up automatically.
+   If `.env` is missing, the app fails closed (no login succeeds) rather than
+   silently using a default.
 3. **Edit `Caddyfile`** — put your real internal domain (or the server's IP)
    and generate a password hash:
    ```bash

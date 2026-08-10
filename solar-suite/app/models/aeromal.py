@@ -7,13 +7,19 @@ Password gate is enforced server-side in the FastAPI route, not here —
 never trust a client-side-only check.
 """
 
+import os
 import numpy as np
 from scipy.signal import savgol_filter
 
-AEROMAL_PASSWORD = "asdfghjkl;'"  # TODO: move to an environment variable before shipping
+# Read from environment. No hardcoded default on purpose — if this isn't set,
+# the app should fail loudly rather than silently fall back to a known password.
+AEROMAL_PASSWORD = os.environ.get("AEROMAL_PASSWORD")
 
 
 def check_password(password: str) -> bool:
+    if not AEROMAL_PASSWORD:
+        # Misconfigured deployment — fail closed, not open.
+        return False
     return password == AEROMAL_PASSWORD
 
 
