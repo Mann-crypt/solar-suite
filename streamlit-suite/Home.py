@@ -118,7 +118,7 @@ with col1:
         key="home_loss_correction",
         use_container_width=True,
     ):
-        st.switch_page("pages/1_🌤️_Loss_Correction.py")
+        st.switch_page("pages/1_Loss_Correction.py")
 
 
 # ==========================================================
