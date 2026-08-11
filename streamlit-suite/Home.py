@@ -26,7 +26,7 @@ if st.session_state.get("aeromal_auth", False):
 
 st.sidebar.markdown("""
 <div style='text-align:center;color: gray;font-size:13px;line-height:2;'>
-Developed and Maintained by:<br><b style='color:#404040;'>Manjot Singh</b><br>
+Developed and Maintained by:<br><b style='color:#F5F7FA;'>Manjot Singh</b><br>
 Script Writer:<br><b style='color:gray;'>Tushar Sharma</b><br>
 Challenger:<br><b style='color:gray;'>Aarav Sharma</b><br>
 Tester:<br><b style='color:gray;'>Jatin Chaturvedi</b><br>
