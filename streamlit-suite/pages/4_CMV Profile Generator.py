@@ -19,15 +19,6 @@ st.set_page_config(
 
 
 # ==========================================================
-# CONSTANTS
-# ==========================================================
-
-BLOCKS = 96
-MIN_CAP = 800
-MAX_CAP = 1200
-
-
-# ==========================================================
 # FUNCTIONS
 # ==========================================================
 
@@ -54,11 +45,27 @@ def find_date_column(df):
     return None
 
 
-def prepare_data(df, min_data_requirement):
+# ----------------------------------------------------------
+# CLEAN DATA
+# ----------------------------------------------------------
+
+def prepare_data(
+    df,
+    min_data_requirement,
+    min_cap,
+    max_cap,
+):
     """
     Clean raw CMV data.
 
-    min_data_requirement is a percentage from 0 to 100.
+    min_data_requirement:
+        Percentage of non-empty values required.
+
+    min_cap:
+        Minimum acceptable generation value.
+
+    max_cap:
+        Maximum acceptable generation value.
     """
 
     df = df.copy()
@@ -70,12 +77,14 @@ def prepare_data(df, min_data_requirement):
     date_col = find_date_column(df)
 
     if date_col is not None:
+
         parsed_date = pd.to_datetime(
             df[date_col],
             errors="coerce",
         )
 
         if parsed_date.notna().any():
+
             df[date_col] = parsed_date
             df = df.set_index(date_col)
 
@@ -96,7 +105,7 @@ def prepare_data(df, min_data_requirement):
                 df[col] = converted
 
     # ------------------------------------------------------
-    # Keep numeric columns only
+    # Numeric columns only
     # ------------------------------------------------------
 
     numeric_df = df.select_dtypes(
@@ -105,14 +114,14 @@ def prepare_data(df, min_data_requirement):
 
     if numeric_df.empty:
         raise ValueError(
-            "No numeric columns were found in the workbook."
+            "No numeric columns were found."
         )
 
     # ------------------------------------------------------
     # Minimum data requirement
     # ------------------------------------------------------
 
-    min_data_threshold = int(
+    threshold = int(
         np.ceil(
             len(numeric_df)
             * min_data_requirement
@@ -122,13 +131,14 @@ def prepare_data(df, min_data_requirement):
 
     numeric_df = numeric_df.dropna(
         axis=1,
-        thresh=min_data_threshold,
+        thresh=threshold,
     )
 
     if numeric_df.empty:
         raise ValueError(
-            f"No columns satisfy the selected "
-            f"{min_data_requirement}% minimum data requirement."
+            f"No columns satisfy the "
+            f"{min_data_requirement}% minimum "
+            "data requirement."
         )
 
     # ------------------------------------------------------
@@ -138,26 +148,28 @@ def prepare_data(df, min_data_requirement):
     numeric_df = numeric_df.fillna(0)
 
     # ------------------------------------------------------
-    # Remove columns outside min/max cap
+    # Remove columns outside generation caps
     # ------------------------------------------------------
 
-    columns_removed_cap = []
+    columns_to_drop = []
 
     for col in numeric_df.columns:
 
-        values = numeric_df[col].to_numpy(dtype=float)
+        values = numeric_df[col].to_numpy(
+            dtype=float
+        )
 
         if len(values) == 0:
-            columns_removed_cap.append(col)
+            columns_to_drop.append(col)
             continue
 
         maximum = np.nanmax(values)
 
-        if maximum > MAX_CAP or maximum < MIN_CAP:
-            columns_removed_cap.append(col)
+        if maximum > max_cap or maximum < min_cap:
+            columns_to_drop.append(col)
 
     numeric_df = numeric_df.drop(
-        columns=columns_removed_cap,
+        columns=columns_to_drop,
         errors="ignore",
     )
 
@@ -176,14 +188,22 @@ def prepare_data(df, min_data_requirement):
 
     if numeric_df.empty:
         raise ValueError(
-            "No usable generation columns remain after cleaning."
+            "No usable generation columns remain "
+            "after cleaning."
         )
 
-    return numeric_df, columns_removed_cap, list(zero_columns)
+    return numeric_df
 
 
-def calculate_percentiles(df, blocks=BLOCKS):
-    """Calculate 95th percentile for every 15-minute block."""
+# ----------------------------------------------------------
+# PERCENTILE
+# ----------------------------------------------------------
+
+def calculate_percentiles(
+    df,
+    blocks=96,
+):
+    """Calculate 95th percentile for each 15-minute block."""
 
     usable_rows = (
         len(df) // blocks
@@ -198,51 +218,68 @@ def calculate_percentiles(df, blocks=BLOCKS):
 
     days = usable_rows // blocks
 
-    percentile_data = {}
+    result = {}
 
     for col in df.columns:
 
-        values = df[col].to_numpy(dtype=float)
+        values = df[col].to_numpy(
+            dtype=float
+        )
 
         reshaped = values.reshape(
             days,
             blocks,
         )
 
-        percentile_data[col] = np.percentile(
+        result[col] = np.percentile(
             reshaped,
             95,
             axis=0,
         )
 
-    return pd.DataFrame(percentile_data)
+    return pd.DataFrame(result)
 
+
+# ----------------------------------------------------------
+# CONSTANT BLOCK REMOVAL
+# ----------------------------------------------------------
 
 def remove_constant_blocks(percentile_df):
-    """
-    Preserve the original constant-block handling logic.
-    """
 
     result = percentile_df.copy()
 
     for col in result.columns:
 
-        series = result[col]
+        s = result[col]
 
-        result[col] = series.where(
-            series.diff() != 0,
+        group = (
+            s.ne(s.shift())
+            .cumsum()
+        )
+
+        group_size = group.map(
+            group.value_counts()
+        )
+
+        result[col] = s.mask(
+            (group_size > 2) & (s != 0),
             0,
         )
 
     return result
 
 
+# ----------------------------------------------------------
+# SMOOTHING
+# ----------------------------------------------------------
+
 def generate_smooth_profile(
     average,
     window_length,
     polynomial_order,
+    threshold=4.9,
 ):
-    """Generate final Savitzky-Golay smooth profile."""
+    """Generate smooth CMV profile."""
 
     values = np.asarray(
         average,
@@ -264,7 +301,7 @@ def generate_smooth_profile(
 
     # Remove very small generation
     smooth = np.where(
-        smooth < 4.9,
+        smooth < threshold,
         0,
         smooth,
     )
@@ -275,20 +312,22 @@ def generate_smooth_profile(
         window_length,
     )
 
-    # Ensure second window is odd
     if second_window % 2 == 0:
         second_window -= 1
 
-    second_poly = min(
-        polynomial_order,
-        second_window - 1,
+    second_window = max(
+        second_window,
+        polynomial_order + 2,
     )
 
-    if second_window >= 3:
+    if second_window % 2 == 0:
+        second_window += 1
+
+    if second_window <= len(smooth):
         smooth = savgol_filter(
             smooth,
             window_length=second_window,
-            polyorder=second_poly,
+            polyorder=polynomial_order,
         )
 
     return np.clip(
@@ -298,11 +337,40 @@ def generate_smooth_profile(
     )
 
 
+# ----------------------------------------------------------
+# LEGEND HIGHLIGHT
+# ----------------------------------------------------------
+
+def add_legend_highlight(fig):
+
+    fig.update_layout(
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="left",
+            x=0,
+            bgcolor="rgba(0,0,0,0)",
+        ),
+        hovermode="x unified",
+    )
+
+    fig.update_traces(
+        hoverinfo="x+y+name",
+        selector=dict(type="scatter"),
+    )
+
+    return fig
+
+
+# ----------------------------------------------------------
+# PERCENTILE CHART
+# ----------------------------------------------------------
+
 def make_percentile_chart(
     percentile_df,
     selected_columns,
 ):
-    """95th percentile chart for column selection."""
 
     fig = go.Figure()
 
@@ -313,7 +381,9 @@ def make_percentile_chart(
 
     for col in percentile_df.columns:
 
-        selected = col in selected_columns
+        selected = (
+            col in selected_columns
+        )
 
         fig.add_trace(
             go.Scatter(
@@ -322,33 +392,18 @@ def make_percentile_chart(
                 name=str(col),
                 mode="lines",
                 line=dict(
-                    width=3 if selected else 1.5,
+                    width=3 if selected else 1.2
                 ),
                 opacity=1 if selected else 0.35,
                 legendgroup=str(col),
-                hovertemplate=(
-                    f"{col}<br>"
-                    "Block: %{x}<br>"
-                    "Power: %{y:.2f}<extra></extra>"
-                ),
             )
         )
 
     fig.update_layout(
         height=550,
-        hovermode="x unified",
         template="streamlit",
         xaxis_title="15 Minute Block",
         yaxis_title="95th Percentile Power",
-        hoverlabel=dict(
-            namelength=-1,
-        ),
-        legend=dict(
-            orientation="h",
-            y=1.12,
-            x=0,
-            groupclick="togglegroup",
-        ),
         margin=dict(
             l=20,
             r=20,
@@ -357,14 +412,17 @@ def make_percentile_chart(
         ),
     )
 
-    return fig
+    return add_legend_highlight(fig)
 
+
+# ----------------------------------------------------------
+# FINAL CMV CHART
+# ----------------------------------------------------------
 
 def make_final_chart(
     average,
     smooth,
 ):
-    """Generated CMV curve only."""
 
     x = np.arange(
         1,
@@ -400,15 +458,9 @@ def make_final_chart(
 
     fig.update_layout(
         height=550,
-        hovermode="x unified",
         template="streamlit",
         xaxis_title="15 Minute Block",
         yaxis_title="Power",
-        legend=dict(
-            orientation="h",
-            y=1.12,
-            x=0,
-        ),
         margin=dict(
             l=20,
             r=20,
@@ -417,7 +469,7 @@ def make_final_chart(
         ),
     )
 
-    return fig
+    return add_legend_highlight(fig)
 
 
 # ==========================================================
@@ -524,18 +576,59 @@ st.success(
 
 st.subheader("2. Cleaning Settings")
 
-min_data_requirement = st.slider(
-    "Minimum Data Requirement",
-    min_value=0,
-    max_value=100,
-    value=30,
-    step=5,
-    format="%d%%",
-    help=(
-        "Minimum percentage of non-empty values "
-        "required for a column to be retained."
-    ),
-)
+clean_col1, clean_col2, clean_col3 = st.columns(3)
+
+with clean_col1:
+
+    min_data_requirement = st.slider(
+        "Minimum Data Requirement",
+        min_value=0,
+        max_value=100,
+        value=30,
+        step=5,
+        format="%d%%",
+        help=(
+            "Minimum percentage of non-empty "
+            "values required for a column."
+        ),
+    )
+
+with clean_col2:
+
+    min_cap = st.number_input(
+        "Minimum Generation Cap",
+        min_value=0.0,
+        value=800.0,
+        step=10.0,
+        help=(
+            "Columns whose maximum generation "
+            "is below this value will be removed."
+        ),
+    )
+
+with clean_col3:
+
+    max_cap = st.number_input(
+        "Maximum Generation Cap",
+        min_value=0.0,
+        value=1200.0,
+        step=10.0,
+        help=(
+            "Columns whose maximum generation "
+            "is above this value will be removed."
+        ),
+    )
+
+
+if min_cap >= max_cap:
+
+    st.error(
+        "Minimum Generation Cap must be "
+        "less than Maximum Generation Cap."
+    )
+
+    st.stop()
+
 
 min_data_threshold = int(
     np.ceil(
@@ -546,39 +639,15 @@ min_data_threshold = int(
 )
 
 
-# ----------------------------------------------------------
-# CAP SETTINGS DISPLAY
-# ----------------------------------------------------------
-
-cap1, cap2, cap3 = st.columns(3)
-
-with cap1:
-    st.metric(
-        "Minimum Data",
-        f"{min_data_requirement}%",
-    )
-
-with cap2:
-    st.metric(
-        "Minimum Cap",
-        f"{MIN_CAP}",
-    )
-
-with cap3:
-    st.metric(
-        "Maximum Cap",
-        f"{MAX_CAP}",
-    )
-
 st.caption(
-    f"At least **{min_data_threshold:,} of "
-    f"{len(raw_df):,} rows** must contain data."
+    f"Minimum data: **{min_data_requirement}%** "
+    f"→ at least **{min_data_threshold:,} / "
+    f"{len(raw_df):,} rows**"
 )
 
-st.info(
-    f"Generation columns with maximum value below "
-    f"**{MIN_CAP}** or above **{MAX_CAP}** "
-    f"are automatically removed."
+st.caption(
+    f"Generation range: "
+    f"**{min_cap:,.0f} to {max_cap:,.0f}**"
 )
 
 
@@ -588,9 +657,11 @@ st.info(
 
 try:
 
-    clean_df, cap_removed, zero_removed = prepare_data(
+    clean_df = prepare_data(
         raw_df,
         min_data_requirement,
+        min_cap,
+        max_cap,
     )
 
 except Exception as e:
@@ -624,8 +695,8 @@ c3.metric(
 )
 
 c4.metric(
-    "Removed by Cap",
-    len(cap_removed),
+    "Minimum Requirement",
+    f"{min_data_requirement}%",
 )
 
 
@@ -641,50 +712,6 @@ if isinstance(
     st.success(
         "Date column detected and used as the DataFrame index."
     )
-
-
-# ==========================================================
-# CLEANING DETAILS
-# ==========================================================
-
-with st.expander(
-    "View Cleaning Details"
-):
-
-    st.write(
-        f"**Minimum data requirement:** "
-        f"{min_data_requirement}%"
-    )
-
-    st.write(
-        f"**Minimum generation cap:** {MIN_CAP}"
-    )
-
-    st.write(
-        f"**Maximum generation cap:** {MAX_CAP}"
-    )
-
-    st.write(
-        f"**Columns removed by cap:** "
-        f"{len(cap_removed)}"
-    )
-
-    st.write(
-        f"**Completely zero columns removed:** "
-        f"{len(zero_removed)}"
-    )
-
-    if cap_removed:
-
-        st.write("Columns removed by min/max cap:")
-
-        st.dataframe(
-            pd.DataFrame({
-                "Column": cap_removed,
-            }),
-            use_container_width=True,
-            hide_index=True,
-        )
 
 
 # ==========================================================
@@ -709,11 +736,13 @@ try:
 
     percentile_df = calculate_percentiles(
         clean_df,
-        blocks=BLOCKS,
+        blocks=96,
     )
 
-    percentile_df = remove_constant_blocks(
-        percentile_df
+    percentile_df = (
+        remove_constant_blocks(
+            percentile_df
+        )
     )
 
 except Exception as e:
@@ -742,8 +771,9 @@ selected_columns = st.multiselect(
     options=all_columns,
     default=all_columns,
     help=(
-        "Select the generation columns that should "
-        "contribute to the final CMV average."
+        "Select the generation columns "
+        "that should contribute to the "
+        "final CMV average."
     ),
 )
 
@@ -765,9 +795,9 @@ st.subheader(
 )
 
 st.caption(
-    "All available columns are shown here. "
-    "Hover over a legend item to highlight that profile. "
-    "Use the legend to hide/show profiles."
+    "All cleaned columns are shown here. "
+    "Selected columns are highlighted. "
+    "Hover over a legend item to highlight its curve."
 )
 
 fig_percentile = make_percentile_chart(
@@ -782,12 +812,15 @@ st.plotly_chart(
 
 
 # ==========================================================
-# SELECTED PERCENTILE DATA
+# SELECTED DATA
 # ==========================================================
 
-selected_percentile_df = percentile_df[
-    selected_columns
-].copy()
+selected_percentile_df = (
+    percentile_df[
+        selected_columns
+    ]
+    .copy()
+)
 
 
 # ==========================================================
@@ -809,164 +842,78 @@ st.subheader(
     "5. Smoothing Settings"
 )
 
-st.caption(
-    "Adjust the Savitzky-Golay window length and "
-    "polynomial order."
+smooth_col1, smooth_col2 = st.columns(2)
+
+max_window = len(average)
+
+if max_window % 2 == 0:
+    max_window -= 1
+
+max_window = min(
+    max_window,
+    51,
 )
 
+if max_window < 5:
 
-s1, s2 = st.columns(2)
-
-
-with s1:
-
-    st.markdown(
-        "**Window Length**"
+    st.error(
+        "Not enough blocks for smoothing."
     )
 
-    w1, w2, w3 = st.columns(
-        [1, 2, 1]
-    )
+    st.stop()
 
-    if "cmv_window" not in st.session_state:
-        st.session_state.cmv_window = 15
 
-    with w1:
+with smooth_col1:
 
-        if st.button(
-            "−",
-            key="window_minus",
-            use_container_width=True,
-        ):
-
-            st.session_state.cmv_window = max(
-                3,
-                st.session_state.cmv_window - 2,
-            )
-
-    with w2:
-
-        st.number_input(
-            "Window",
-            min_value=3,
-            max_value=95,
-            step=2,
-            key="cmv_window",
-            label_visibility="collapsed",
+    window_options = list(
+        range(
+            5,
+            max_window + 1,
+            2,
         )
-
-    with w3:
-
-        if st.button(
-            "+",
-            key="window_plus",
-            use_container_width=True,
-        ):
-
-            st.session_state.cmv_window = min(
-                95,
-                st.session_state.cmv_window + 2,
-            )
-
-
-with s2:
-
-    st.markdown(
-        "**Polynomial Order**"
     )
 
-    p1, p2, p3 = st.columns(
-        [1, 2, 1]
+    window_length = st.selectbox(
+        "Window Length",
+        options=window_options,
+        index=(
+            window_options.index(15)
+            if 15 in window_options
+            else 0
+        ),
+        help=(
+            "Must be an odd number. "
+            "Larger values produce stronger smoothing."
+        ),
     )
 
-    if "cmv_poly" not in st.session_state:
-        st.session_state.cmv_poly = 3
 
-    with p1:
+with smooth_col2:
 
-        if st.button(
-            "−",
-            key="poly_minus",
-            use_container_width=True,
-        ):
-
-            st.session_state.cmv_poly = max(
+    polynomial_order = st.selectbox(
+        "Polynomial Order",
+        options=[
+            i
+            for i in range(
                 1,
-                st.session_state.cmv_poly - 1,
+                min(
+                    8,
+                    window_length,
+                ),
             )
-
-    with p2:
-
-        st.number_input(
-            "Polynomial",
-            min_value=1,
-            max_value=10,
-            step=1,
-            key="cmv_poly",
-            label_visibility="collapsed",
-        )
-
-    with p3:
-
-        if st.button(
-            "+",
-            key="poly_plus",
-            use_container_width=True,
-        ):
-
-            st.session_state.cmv_poly = min(
-                10,
-                st.session_state.cmv_poly + 1,
-            )
-
-
-# ==========================================================
-# VALIDATE SMOOTHING SETTINGS
-# ==========================================================
-
-window_length = st.session_state.cmv_window
-polynomial_order = st.session_state.cmv_poly
-
-# Make sure window is odd
-if window_length % 2 == 0:
-    window_length += 1
-
-# Polynomial must be smaller than window
-if polynomial_order >= window_length:
-
-    polynomial_order = window_length - 1
-
-    st.session_state.cmv_poly = polynomial_order
-
-
-if window_length > len(average):
-
-    window_length = (
-        len(average)
-        if len(average) % 2 == 1
-        else len(average) - 1
+        ],
+        index=2 if window_length >= 5 else 0,
+        help=(
+            "Higher values preserve more local "
+            "curve shape."
+        ),
     )
-
-    if window_length < 3:
-
-        st.error(
-            "Not enough blocks for Savitzky-Golay smoothing."
-        )
-
-        st.stop()
-
-    st.session_state.cmv_window = window_length
-
-    if polynomial_order >= window_length:
-
-        polynomial_order = window_length - 1
-        st.session_state.cmv_poly = polynomial_order
 
 
 st.caption(
-    f"Current smoothing: "
-    f"**Window Length = {window_length}**, "
-    f"**Polynomial Order = {polynomial_order}**"
+    f"Smoothing configuration: "
+    f"Window Length = **{window_length}**, "
+    f"Polynomial Order = **{polynomial_order}**"
 )
 
 
@@ -982,7 +929,7 @@ smooth = generate_smooth_profile(
 
 
 # ==========================================================
-# GENERATED CMV CURVE
+# FINAL CMV CURVE
 # ==========================================================
 
 st.subheader(
@@ -993,16 +940,6 @@ st.caption(
     "Only the final average and smooth profile "
     "are shown here."
 )
-
-final_output = pd.DataFrame({
-    "Block": np.arange(
-        1,
-        len(smooth) + 1,
-    ),
-    "95th Percentile Average": average,
-    "Smooth Profile": smooth,
-})
-
 
 fig_final = make_final_chart(
     average,
@@ -1018,6 +955,16 @@ st.plotly_chart(
 # ==========================================================
 # RESULT TABLE
 # ==========================================================
+
+final_output = pd.DataFrame({
+    "Block": np.arange(
+        1,
+        len(smooth) + 1,
+    ),
+    "95th Percentile Average": average,
+    "Smooth Profile": smooth,
+})
+
 
 with st.expander(
     "View Generated Curve Data"
@@ -1042,6 +989,7 @@ selection_df = pd.DataFrame({
     ],
 })
 
+
 with st.expander(
     "View Column Selection"
 ):
@@ -1062,8 +1010,8 @@ st.subheader(
 )
 
 st.caption(
-    "Adds the generated CMV results to the original "
-    "workbook while preserving all existing sheets."
+    "The original workbook is preserved. "
+    "The generated CMV results are added as separate sheets."
 )
 
 
@@ -1076,7 +1024,7 @@ if st.button(
     try:
 
         # --------------------------------------------------
-        # Start from ORIGINAL uploaded workbook
+        # Start from ORIGINAL workbook
         # --------------------------------------------------
 
         output = BytesIO(
@@ -1084,7 +1032,7 @@ if st.button(
         )
 
         # --------------------------------------------------
-        # CMV OUTPUT
+        # CMV CURVE
         # --------------------------------------------------
 
         cmv_output = pd.DataFrame({
@@ -1100,7 +1048,9 @@ if st.button(
         # PERCENTILE DATA
         # --------------------------------------------------
 
-        percentile_output = percentile_df.copy()
+        percentile_output = (
+            percentile_df.copy()
+        )
 
         percentile_output.insert(
             0,
@@ -1133,7 +1083,7 @@ if st.button(
                 "Minimum Data Requirement",
                 "Minimum Generation Cap",
                 "Maximum Generation Cap",
-                "Smoothing Window Length",
+                "Window Length",
                 "Polynomial Order",
                 "Rows",
                 "Original Columns",
@@ -1142,8 +1092,8 @@ if st.button(
             "Value": [
                 selected_sheet,
                 f"{min_data_requirement}%",
-                MIN_CAP,
-                MAX_CAP,
+                min_cap,
+                max_cap,
                 window_length,
                 polynomial_order,
                 len(raw_df),
