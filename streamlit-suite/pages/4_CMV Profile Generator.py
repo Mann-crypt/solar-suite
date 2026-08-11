@@ -19,6 +19,17 @@ st.set_page_config(
 
 
 # ==========================================================
+# SESSION STATE
+# ==========================================================
+
+if "cmv_smooth" not in st.session_state:
+    st.session_state.cmv_smooth = None
+
+if "cmv_smoothing_config" not in st.session_state:
+    st.session_state.cmv_smoothing_config = None
+
+
+# ==========================================================
 # FUNCTIONS
 # ==========================================================
 
@@ -45,9 +56,9 @@ def find_date_column(df):
     return None
 
 
-# ----------------------------------------------------------
+# ==========================================================
 # CLEAN DATA
-# ----------------------------------------------------------
+# ==========================================================
 
 def prepare_data(
     df,
@@ -165,7 +176,10 @@ def prepare_data(
 
         maximum = np.nanmax(values)
 
-        if maximum > max_cap or maximum < min_cap:
+        if (
+            maximum > max_cap
+            or maximum < min_cap
+        ):
             columns_to_drop.append(col)
 
     numeric_df = numeric_df.drop(
@@ -195,9 +209,9 @@ def prepare_data(
     return numeric_df
 
 
-# ----------------------------------------------------------
+# ==========================================================
 # PERCENTILE
-# ----------------------------------------------------------
+# ==========================================================
 
 def calculate_percentiles(
     df,
@@ -240,9 +254,9 @@ def calculate_percentiles(
     return pd.DataFrame(result)
 
 
-# ----------------------------------------------------------
+# ==========================================================
 # CONSTANT BLOCK REMOVAL
-# ----------------------------------------------------------
+# ==========================================================
 
 def remove_constant_blocks(percentile_df):
 
@@ -269,9 +283,9 @@ def remove_constant_blocks(percentile_df):
     return result
 
 
-# ----------------------------------------------------------
+# ==========================================================
 # SMOOTHING
-# ----------------------------------------------------------
+# ==========================================================
 
 def generate_smooth_profile(
     average,
@@ -282,9 +296,14 @@ def generate_smooth_profile(
     polynomial_order_2=None,
     threshold=4.9,
 ):
-    """Generate CMV profile using one or two Savitzky-Golay stages."""
+    """Generate CMV profile using one or two
+    Savitzky-Golay stages.
+    """
 
-    values = np.asarray(average, dtype=float)
+    values = np.asarray(
+        average,
+        dtype=float,
+    )
 
     # ------------------------------------------------------
     # First smoothing
@@ -296,9 +315,16 @@ def generate_smooth_profile(
         polyorder=polynomial_order_1,
     )
 
-    smooth = np.clip(smooth, 0, None)
+    smooth = np.clip(
+        smooth,
+        0,
+        None,
+    )
 
+    # ------------------------------------------------------
     # Remove very small generation
+    # ------------------------------------------------------
+
     smooth = np.where(
         smooth < threshold,
         0,
@@ -314,6 +340,7 @@ def generate_smooth_profile(
         and window_length_2 is not None
         and polynomial_order_2 is not None
     ):
+
         smooth = savgol_filter(
             smooth,
             window_length=window_length_2,
@@ -329,9 +356,9 @@ def generate_smooth_profile(
     return smooth
 
 
-# ----------------------------------------------------------
+# ==========================================================
 # LEGEND HIGHLIGHT
-# ----------------------------------------------------------
+# ==========================================================
 
 def add_legend_highlight(fig):
 
@@ -349,15 +376,17 @@ def add_legend_highlight(fig):
 
     fig.update_traces(
         hoverinfo="x+y+name",
-        selector=dict(type="scatter"),
+        selector=dict(
+            type="scatter"
+        ),
     )
 
     return fig
 
 
-# ----------------------------------------------------------
+# ==========================================================
 # PERCENTILE CHART
-# ----------------------------------------------------------
+# ==========================================================
 
 def make_percentile_chart(
     percentile_df,
@@ -384,9 +413,15 @@ def make_percentile_chart(
                 name=str(col),
                 mode="lines",
                 line=dict(
-                    width=3 if selected else 1.2
+                    width=3
+                    if selected
+                    else 1.2
                 ),
-                opacity=1 if selected else 0.35,
+                opacity=(
+                    1
+                    if selected
+                    else 0.35
+                ),
                 legendgroup=str(col),
             )
         )
@@ -407,9 +442,9 @@ def make_percentile_chart(
     return add_legend_highlight(fig)
 
 
-# ----------------------------------------------------------
+# ==========================================================
 # FINAL CMV CHART
-# ----------------------------------------------------------
+# ==========================================================
 
 def make_final_chart(
     average,
@@ -471,8 +506,8 @@ def make_final_chart(
 st.title("📈 CMV Curve Generator")
 
 st.caption(
-    "Generate a 95th-percentile CMV generation profile "
-    "from historical generation data."
+    "Generate a 95th-percentile CMV generation "
+    "profile from historical generation data."
 )
 
 st.divider()
@@ -482,7 +517,9 @@ st.divider()
 # EXCEL IMPORT
 # ==========================================================
 
-st.subheader("1. Import Excel Workbook")
+st.subheader(
+    "1. Import Excel Workbook"
+)
 
 uploaded_file = st.file_uploader(
     "Upload Excel Workbook",
@@ -566,9 +603,12 @@ st.success(
 # CLEANING SETTINGS
 # ==========================================================
 
-st.subheader("2. Cleaning Settings")
+st.subheader(
+    "2. Cleaning Settings"
+)
 
 clean_col1, clean_col2, clean_col3 = st.columns(3)
+
 
 with clean_col1:
 
@@ -585,6 +625,7 @@ with clean_col1:
         ),
     )
 
+
 with clean_col2:
 
     min_cap = st.number_input(
@@ -597,6 +638,7 @@ with clean_col2:
             "is below this value will be removed."
         ),
     )
+
 
 with clean_col3:
 
@@ -702,7 +744,8 @@ if isinstance(
 ):
 
     st.success(
-        "Date column detected and used as the DataFrame index."
+        "Date column detected and used "
+        "as the DataFrame index."
     )
 
 
@@ -830,9 +873,12 @@ average = (
 # SMOOTHING SETTINGS
 # ==========================================================
 
-st.subheader("5. Smoothing Settings")
+st.subheader(
+    "5. Smoothing Settings"
+)
 
 smooth_col1, smooth_col2 = st.columns(2)
+
 
 # ==========================================================
 # FIRST SMOOTHING
@@ -840,7 +886,9 @@ smooth_col1, smooth_col2 = st.columns(2)
 
 with smooth_col1:
 
-    st.markdown("**First Smoothing**")
+    st.markdown(
+        "**First Smoothing**"
+    )
 
     max_window_1 = min(
         len(average),
@@ -851,9 +899,11 @@ with smooth_col1:
         max_window_1 -= 1
 
     if max_window_1 < 3:
+
         st.error(
             "Not enough blocks for smoothing."
         )
+
         st.stop()
 
     default_window_1 = min(
@@ -895,8 +945,8 @@ with smooth_col1:
         ),
         step=1,
         help=(
-            "Must be smaller than the window length. "
-            "Higher values preserve more curve shape."
+            "Must be smaller than the "
+            "window length."
         ),
     )
 
@@ -907,14 +957,16 @@ with smooth_col1:
 
 with smooth_col2:
 
-    st.markdown("**Second Smoothing**")
+    st.markdown(
+        "**Second Smoothing**"
+    )
 
     use_second_smoothing = st.checkbox(
         "Apply Second Smoothing",
         value=True,
         help=(
-            "Apply another Savitzky-Golay smoothing "
-            "stage after the first smoothing."
+            "Apply another Savitzky-Golay "
+            "smoothing stage."
         ),
     )
 
@@ -929,9 +981,12 @@ with smooth_col2:
             max_window_2 -= 1
 
         if max_window_2 < 3:
+
             st.error(
-                "Not enough blocks for second smoothing."
+                "Not enough blocks for "
+                "second smoothing."
             )
+
             st.stop()
 
         default_window_2 = min(
@@ -973,8 +1028,8 @@ with smooth_col2:
             ),
             step=1,
             help=(
-                "Must be smaller than the second "
-                "window length."
+                "Must be smaller than the "
+                "second window length."
             ),
         )
 
@@ -985,65 +1040,94 @@ with smooth_col2:
 
 
 # ==========================================================
-# SETTINGS SUMMARY
+# SMOOTHING CONFIGURATION
 # ==========================================================
 
 if use_second_smoothing:
 
-    st.caption(
-        f"**Smoothing:** "
-        f"First → Window **{window_length_1}**, "
-        f"Polynomial **{polynomial_order_1}** | "
-        f"Second → Window **{window_length_2}**, "
+    smoothing_summary = (
+        f"First: Window **{window_length_1}**, "
+        f"Polynomial **{polynomial_order_1}**  |  "
+        f"Second: Window **{window_length_2}**, "
         f"Polynomial **{polynomial_order_2}**"
     )
 
 else:
 
-    st.caption(
-        f"**Smoothing:** "
-        f"First → Window **{window_length_1}**, "
-        f"Polynomial **{polynomial_order_1}** | "
-        f"Second Smoothing → **Disabled**"
+    smoothing_summary = (
+        f"First: Window **{window_length_1}**, "
+        f"Polynomial **{polynomial_order_1}**  |  "
+        f"Second Smoothing: **Disabled**"
     )
 
 
-# ----------------------------------------------------------
-# Configuration summary
-# ----------------------------------------------------------
-
-if use_second_smoothing:
-
-    st.caption(
-        f"**Smoothing configuration:** "
-        f"First Window = **{window_length_1}**, "
-        f"First Polynomial = **{polynomial_order_1}** | "
-        f"Second Window = **{window_length_2}**, "
-        f"Second Polynomial = **{polynomial_order_2}**"
-    )
-
-else:
-
-    st.caption(
-        f"**Smoothing configuration:** "
-        f"First Window = **{window_length_1}**, "
-        f"First Polynomial = **{polynomial_order_1}** | "
-        f"Second Smoothing = **Disabled**"
-    )
-
-
-# ==========================================================
-# GENERATE SMOOTH PROFILE
-# ==========================================================
-
-smooth = generate_smooth_profile(
-    average=average,
-    window_length_1=window_length_1,
-    polynomial_order_1=polynomial_order_1,
-    use_second_smoothing=use_second_smoothing,
-    window_length_2=window_length_2,
-    polynomial_order_2=polynomial_order_2,
+st.caption(
+    f"**Current configuration:** "
+    f"{smoothing_summary}"
 )
+
+
+# ==========================================================
+# APPLY SMOOTHING BUTTON
+# ==========================================================
+
+st.markdown("")
+
+
+button_left, button_center, button_right = st.columns(
+    [2, 1, 2]
+)
+
+with button_center:
+
+    apply_smoothing = st.button(
+        "✨ Apply Smoothing",
+        type="primary",
+        use_container_width=True,
+        key="apply_smoothing",
+    )
+
+
+# ==========================================================
+# APPLY SMOOTHING
+# ==========================================================
+
+if apply_smoothing:
+
+    try:
+
+        smooth_result = generate_smooth_profile(
+            average=average,
+            window_length_1=window_length_1,
+            polynomial_order_1=polynomial_order_1,
+            use_second_smoothing=use_second_smoothing,
+            window_length_2=window_length_2,
+            polynomial_order_2=polynomial_order_2,
+        )
+
+        st.session_state.cmv_smooth = (
+            smooth_result
+        )
+
+        st.session_state.cmv_smoothing_config = {
+            "window_1": window_length_1,
+            "poly_1": polynomial_order_1,
+            "second_enabled": use_second_smoothing,
+            "window_2": window_length_2,
+            "poly_2": polynomial_order_2,
+        }
+
+        st.success(
+            "Smoothing applied successfully."
+        )
+
+    except Exception as e:
+
+        st.error(
+            f"Unable to generate smooth profile: {e}"
+        )
+
+        st.session_state.cmv_smooth = None
 
 
 # ==========================================================
@@ -1054,45 +1138,61 @@ st.subheader(
     "6. Generated CMV Curve"
 )
 
-st.caption(
-    "Only the final average and smooth profile "
-    "are shown here."
-)
 
-fig_final = make_final_chart(
-    average,
-    smooth,
-)
+if st.session_state.cmv_smooth is None:
 
-st.plotly_chart(
-    fig_final,
-    use_container_width=True,
-)
+    st.info(
+        "Configure the smoothing parameters "
+        "and click **✨ Apply Smoothing** "
+        "to generate the final CMV curve."
+    )
+
+else:
+
+    smooth = st.session_state.cmv_smooth
+
+    st.caption(
+        "The chart below shows the 95th-percentile "
+        "average and the generated smooth profile."
+    )
+
+    fig_final = make_final_chart(
+        average,
+        smooth,
+    )
+
+    st.plotly_chart(
+        fig_final,
+        use_container_width=True,
+    )
 
 
 # ==========================================================
 # RESULT TABLE
 # ==========================================================
 
-final_output = pd.DataFrame({
-    "Block": np.arange(
-        1,
-        len(smooth) + 1,
-    ),
-    "95th Percentile Average": average,
-    "Smooth Profile": smooth,
-})
+if st.session_state.cmv_smooth is not None:
 
+    smooth = st.session_state.cmv_smooth
 
-with st.expander(
-    "View Generated Curve Data"
-):
+    final_output = pd.DataFrame({
+        "Block": np.arange(
+            1,
+            len(smooth) + 1,
+        ),
+        "95th Percentile Average": average,
+        "Smooth Profile": smooth,
+    })
 
-    st.dataframe(
-        final_output,
-        use_container_width=True,
-        hide_index=True,
-    )
+    with st.expander(
+        "View Generated Curve Data"
+    ):
+
+        st.dataframe(
+            final_output,
+            use_container_width=True,
+            hide_index=True,
+        )
 
 
 # ==========================================================
@@ -1106,7 +1206,6 @@ selection_df = pd.DataFrame({
         for col in all_columns
     ],
 })
-
 
 with st.expander(
     "View Column Selection"
@@ -1129,178 +1228,211 @@ st.subheader(
 
 st.caption(
     "The original workbook is preserved. "
-    "The generated CMV results are added as separate sheets."
+    "The generated CMV results are added "
+    "as separate sheets."
 )
 
 
-if st.button(
-    "💾 Add CMV Curve & Download Updated Workbook",
-    type="primary",
-    use_container_width=True,
-):
+# ==========================================================
+# DOWNLOAD ONLY AFTER SMOOTHING
+# ==========================================================
 
-    try:
+if st.session_state.cmv_smooth is None:
 
-        # --------------------------------------------------
-        # Start from ORIGINAL workbook
-        # --------------------------------------------------
+    st.info(
+        "Apply smoothing first to enable "
+        "the Excel download."
+    )
 
-        output = BytesIO(
-            uploaded_file.getvalue()
-        )
+else:
 
-        # --------------------------------------------------
-        # CMV CURVE
-        # --------------------------------------------------
+    smooth = st.session_state.cmv_smooth
 
-        cmv_output = pd.DataFrame({
-            "Block": np.arange(
-                1,
-                len(smooth) + 1,
-            ),
-            "95th Percentile Average": average,
-            "Smooth Profile": smooth,
-        })
+    if st.button(
+        "💾 Add CMV Curve & Download Updated Workbook",
+        type="primary",
+        use_container_width=True,
+        key="update_workbook",
+    ):
 
-        # --------------------------------------------------
-        # PERCENTILE DATA
-        # --------------------------------------------------
+        try:
 
-        percentile_output = (
-            percentile_df.copy()
-        )
+            # --------------------------------------------------
+            # START FROM ORIGINAL WORKBOOK
+            # --------------------------------------------------
 
-        percentile_output.insert(
-            0,
-            "Block",
-            np.arange(
-                1,
-                len(percentile_output) + 1,
-            ),
-        )
-
-        # --------------------------------------------------
-        # COLUMN SELECTION
-        # --------------------------------------------------
-
-        selection_output = pd.DataFrame({
-            "Column": all_columns,
-            "Included in Average": [
-                col in selected_columns
-                for col in all_columns
-            ],
-        })
-
-        # --------------------------------------------------
-        # SETTINGS
-        # --------------------------------------------------
-        
-        settings_output = pd.DataFrame({
-            "Setting": [
-                "Source Sheet",
-                "Minimum Data Requirement",
-                "Minimum Generation Cap",
-                "Maximum Generation Cap",
-                "First Window Length",
-                "First Polynomial Order",
-                "Second Smoothing",
-                "Second Window Length",
-                "Second Polynomial Order",
-                "Rows",
-                "Original Columns",
-                "Usable Columns",
-            ],
-            "Value": [
-                selected_sheet,
-                f"{min_data_requirement}%",
-                min_cap,
-                max_cap,
-                window_length_1,
-                polynomial_order_1,
-                "Enabled" if use_second_smoothing else "Disabled",
-                window_length_2 if use_second_smoothing else "",
-                polynomial_order_2 if use_second_smoothing else "",
-                len(raw_df),
-                raw_df.shape[1],
-                clean_df.shape[1],
-            ],
-        })
-
-        # --------------------------------------------------
-        # UPDATE ORIGINAL WORKBOOK
-        # --------------------------------------------------
-
-        with pd.ExcelWriter(
-            output,
-            engine="openpyxl",
-            mode="a",
-            if_sheet_exists="replace",
-        ) as writer:
-
-            cmv_output.to_excel(
-                writer,
-                sheet_name="CMV_Curve",
-                index=False,
+            output = BytesIO(
+                uploaded_file.getvalue()
             )
 
-            percentile_output.to_excel(
-                writer,
-                sheet_name="Percentile_Data",
-                index=False,
+            # --------------------------------------------------
+            # CMV CURVE
+            # --------------------------------------------------
+
+            cmv_output = pd.DataFrame({
+                "Block": np.arange(
+                    1,
+                    len(smooth) + 1,
+                ),
+                "95th Percentile Average": average,
+                "Smooth Profile": smooth,
+            })
+
+            # --------------------------------------------------
+            # PERCENTILE DATA
+            # --------------------------------------------------
+
+            percentile_output = (
+                percentile_df.copy()
             )
 
-            selection_output.to_excel(
-                writer,
-                sheet_name="Column_Selection",
-                index=False,
+            percentile_output.insert(
+                0,
+                "Block",
+                np.arange(
+                    1,
+                    len(percentile_output) + 1,
+                ),
             )
 
-            settings_output.to_excel(
-                writer,
-                sheet_name="CMV_Settings",
-                index=False,
+            # --------------------------------------------------
+            # COLUMN SELECTION
+            # --------------------------------------------------
+
+            selection_output = pd.DataFrame({
+                "Column": all_columns,
+                "Included in Average": [
+                    col in selected_columns
+                    for col in all_columns
+                ],
+            })
+
+            # --------------------------------------------------
+            # SETTINGS
+            # --------------------------------------------------
+
+            settings_output = pd.DataFrame({
+                "Setting": [
+                    "Source Sheet",
+                    "Minimum Data Requirement",
+                    "Minimum Generation Cap",
+                    "Maximum Generation Cap",
+                    "First Window Length",
+                    "First Polynomial Order",
+                    "Second Smoothing",
+                    "Second Window Length",
+                    "Second Polynomial Order",
+                    "Rows",
+                    "Original Columns",
+                    "Usable Columns",
+                ],
+                "Value": [
+                    selected_sheet,
+                    f"{min_data_requirement}%",
+                    min_cap,
+                    max_cap,
+                    window_length_1,
+                    polynomial_order_1,
+                    (
+                        "Enabled"
+                        if use_second_smoothing
+                        else "Disabled"
+                    ),
+                    (
+                        window_length_2
+                        if use_second_smoothing
+                        else ""
+                    ),
+                    (
+                        polynomial_order_2
+                        if use_second_smoothing
+                        else ""
+                    ),
+                    len(raw_df),
+                    raw_df.shape[1],
+                    clean_df.shape[1],
+                ],
+            })
+
+            # --------------------------------------------------
+            # UPDATE ORIGINAL WORKBOOK
+            # --------------------------------------------------
+
+            with pd.ExcelWriter(
+                output,
+                engine="openpyxl",
+                mode="a",
+                if_sheet_exists="replace",
+            ) as writer:
+
+                cmv_output.to_excel(
+                    writer,
+                    sheet_name="CMV_Curve",
+                    index=False,
+                )
+
+                percentile_output.to_excel(
+                    writer,
+                    sheet_name="Percentile_Data",
+                    index=False,
+                )
+
+                selection_output.to_excel(
+                    writer,
+                    sheet_name="Column_Selection",
+                    index=False,
+                )
+
+                settings_output.to_excel(
+                    writer,
+                    sheet_name="CMV_Settings",
+                    index=False,
+                )
+
+            output.seek(0)
+
+            # --------------------------------------------------
+            # DOWNLOAD NAME
+            # --------------------------------------------------
+
+            original_name = uploaded_file.name
+
+            if original_name.lower().endswith(
+                ".xlsx"
+            ):
+
+                download_name = (
+                    original_name[:-5]
+                    + "_Updated.xlsx"
+                )
+
+            else:
+
+                download_name = (
+                    original_name
+                    + "_Updated.xlsx"
+                )
+
+            st.success(
+                "CMV Curve added successfully. "
+                "All existing workbook sheets "
+                "were preserved."
             )
 
-        output.seek(0)
-
-        # --------------------------------------------------
-        # DOWNLOAD NAME
-        # --------------------------------------------------
-
-        original_name = uploaded_file.name
-
-        if original_name.lower().endswith(".xlsx"):
-
-            download_name = (
-                original_name[:-5]
-                + "_Updated.xlsx"
+            st.download_button(
+                "⬇️ Download Updated Workbook",
+                data=output.getvalue(),
+                file_name=download_name,
+                mime=(
+                    "application/vnd.openxmlformats-officedocument."
+                    "spreadsheetml.sheet"
+                ),
+                use_container_width=True,
+                key="download_updated_workbook",
             )
 
-        else:
+        except Exception as e:
 
-            download_name = (
-                original_name
-                + "_Updated.xlsx"
+            st.error(
+                f"Unable to update workbook: {e}"
             )
-
-        st.success(
-            "CMV Curve added successfully. "
-            "All existing workbook sheets were preserved."
-        )
-
-        st.download_button(
-            "⬇️ Download Updated Workbook",
-            data=output.getvalue(),
-            file_name=download_name,
-            mime=(
-                "application/vnd.openxmlformats-officedocument."
-                "spreadsheetml.sheet"
-            ),
-            use_container_width=True,
-        )
-
-    except Exception as e:
-
-        st.error(
-            f"Unable to update workbook: {e}"
-        )
