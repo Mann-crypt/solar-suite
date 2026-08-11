@@ -275,29 +275,28 @@ def remove_constant_blocks(percentile_df):
 
 def generate_smooth_profile(
     average,
-    window_length,
-    polynomial_order,
+    window_length_1,
+    polynomial_order_1,
+    use_second_smoothing=False,
+    window_length_2=None,
+    polynomial_order_2=None,
     threshold=4.9,
 ):
-    """Generate smooth CMV profile."""
+    """Generate CMV profile using one or two Savitzky-Golay stages."""
 
-    values = np.asarray(
-        average,
-        dtype=float,
-    )
+    values = np.asarray(average, dtype=float)
 
+    # ------------------------------------------------------
     # First smoothing
+    # ------------------------------------------------------
+
     smooth = savgol_filter(
         values,
-        window_length=window_length,
-        polyorder=polynomial_order,
+        window_length=window_length_1,
+        polyorder=polynomial_order_1,
     )
 
-    smooth = np.clip(
-        smooth,
-        0,
-        None,
-    )
+    smooth = np.clip(smooth, 0, None)
 
     # Remove very small generation
     smooth = np.where(
@@ -306,35 +305,28 @@ def generate_smooth_profile(
         smooth,
     )
 
+    # ------------------------------------------------------
     # Second smoothing
-    second_window = min(
-        7,
-        window_length,
-    )
+    # ------------------------------------------------------
 
-    if second_window % 2 == 0:
-        second_window -= 1
-
-    second_window = max(
-        second_window,
-        polynomial_order + 2,
-    )
-
-    if second_window % 2 == 0:
-        second_window += 1
-
-    if second_window <= len(smooth):
+    if (
+        use_second_smoothing
+        and window_length_2 is not None
+        and polynomial_order_2 is not None
+    ):
         smooth = savgol_filter(
             smooth,
-            window_length=second_window,
-            polyorder=polynomial_order,
+            window_length=window_length_2,
+            polyorder=polynomial_order_2,
         )
 
-    return np.clip(
-        smooth,
-        0,
-        None,
-    )
+        smooth = np.clip(
+            smooth,
+            0,
+            None,
+        )
+
+    return smooth
 
 
 # ----------------------------------------------------------
@@ -842,33 +834,38 @@ st.subheader("5. Smoothing Settings")
 
 smooth_col1, smooth_col2 = st.columns(2)
 
-# ----------------------------------------------------------
-# Window 1 limits
-# ----------------------------------------------------------
-
-max_window_1 = min(len(average), 51)
-
-if max_window_1 % 2 == 0:
-    max_window_1 -= 1
-
-if max_window_1 < 3:
-    st.error("Not enough blocks for smoothing.")
-    st.stop()
-
-# Default window must be valid
-default_window_1 = min(15, max_window_1)
-
-if default_window_1 < 3:
-    default_window_1 = 3
-
-if default_window_1 % 2 == 0:
-    default_window_1 -= 1
-
+# ==========================================================
+# FIRST SMOOTHING
+# ==========================================================
 
 with smooth_col1:
 
+    st.markdown("**First Smoothing**")
+
+    max_window_1 = min(
+        len(average),
+        51,
+    )
+
+    if max_window_1 % 2 == 0:
+        max_window_1 -= 1
+
+    if max_window_1 < 3:
+        st.error(
+            "Not enough blocks for smoothing."
+        )
+        st.stop()
+
+    default_window_1 = min(
+        15,
+        max_window_1,
+    )
+
+    if default_window_1 % 2 == 0:
+        default_window_1 -= 1
+
     window_length_1 = st.number_input(
-        "First Window Length",
+        "Window Length",
         min_value=3,
         max_value=max_window_1,
         value=default_window_1,
@@ -879,38 +876,44 @@ with smooth_col1:
         ),
     )
 
-    # Ensure odd
     if window_length_1 % 2 == 0:
-        st.warning(
-            "First Window Length must be odd. "
-            f"Using {window_length_1 - 1}."
-        )
+
         window_length_1 -= 1
 
+        st.warning(
+            f"Window Length must be odd. "
+            f"Using {window_length_1}."
+        )
+
     polynomial_order_1 = st.number_input(
-        "First Polynomial Order",
+        "Polynomial Order",
         min_value=1,
         max_value=window_length_1 - 1,
-        value=min(3, window_length_1 - 1),
+        value=min(
+            3,
+            window_length_1 - 1,
+        ),
         step=1,
         help=(
-            "Polynomial order must be smaller "
-            "than the window length."
+            "Must be smaller than the window length. "
+            "Higher values preserve more curve shape."
         ),
     )
 
 
-# ----------------------------------------------------------
-# Second smoothing
-# ----------------------------------------------------------
+# ==========================================================
+# SECOND SMOOTHING
+# ==========================================================
 
 with smooth_col2:
+
+    st.markdown("**Second Smoothing**")
 
     use_second_smoothing = st.checkbox(
         "Apply Second Smoothing",
         value=True,
         help=(
-            "Enable a second Savitzky-Golay smoothing "
+            "Apply another Savitzky-Golay smoothing "
             "stage after the first smoothing."
         ),
     )
@@ -925,13 +928,16 @@ with smooth_col2:
         if max_window_2 % 2 == 0:
             max_window_2 -= 1
 
+        if max_window_2 < 3:
+            st.error(
+                "Not enough blocks for second smoothing."
+            )
+            st.stop()
+
         default_window_2 = min(
             7,
             max_window_2,
         )
-
-        if default_window_2 < 3:
-            default_window_2 = 3
 
         if default_window_2 % 2 == 0:
             default_window_2 -= 1
@@ -944,26 +950,31 @@ with smooth_col2:
             step=2,
             help=(
                 "Must be an odd number. "
-                "This is applied after the first smoothing."
+                "Applied after the first smoothing."
             ),
         )
 
         if window_length_2 % 2 == 0:
-            st.warning(
-                "Second Window Length must be odd. "
-                f"Using {window_length_2 - 1}."
-            )
+
             window_length_2 -= 1
+
+            st.warning(
+                f"Second Window Length must be odd. "
+                f"Using {window_length_2}."
+            )
 
         polynomial_order_2 = st.number_input(
             "Second Polynomial Order",
             min_value=1,
             max_value=window_length_2 - 1,
-            value=min(3, window_length_2 - 1),
+            value=min(
+                3,
+                window_length_2 - 1,
+            ),
             step=1,
             help=(
-                "Polynomial order must be smaller "
-                "than the second window length."
+                "Must be smaller than the second "
+                "window length."
             ),
         )
 
@@ -971,6 +982,30 @@ with smooth_col2:
 
         window_length_2 = None
         polynomial_order_2 = None
+
+
+# ==========================================================
+# SETTINGS SUMMARY
+# ==========================================================
+
+if use_second_smoothing:
+
+    st.caption(
+        f"**Smoothing:** "
+        f"First → Window **{window_length_1}**, "
+        f"Polynomial **{polynomial_order_1}** | "
+        f"Second → Window **{window_length_2}**, "
+        f"Polynomial **{polynomial_order_2}**"
+    )
+
+else:
+
+    st.caption(
+        f"**Smoothing:** "
+        f"First → Window **{window_length_1}**, "
+        f"Polynomial **{polynomial_order_1}** | "
+        f"Second Smoothing → **Disabled**"
+    )
 
 
 # ----------------------------------------------------------
@@ -1002,9 +1037,12 @@ else:
 # ==========================================================
 
 smooth = generate_smooth_profile(
-    average,
-    window_length,
-    polynomial_order,
+    average=average,
+    window_length_1=window_length_1,
+    polynomial_order_1=polynomial_order_1,
+    use_second_smoothing=use_second_smoothing,
+    window_length_2=window_length_2,
+    polynomial_order_2=polynomial_order_2,
 )
 
 
@@ -1156,15 +1194,18 @@ if st.button(
         # --------------------------------------------------
         # SETTINGS
         # --------------------------------------------------
-
+        
         settings_output = pd.DataFrame({
             "Setting": [
                 "Source Sheet",
                 "Minimum Data Requirement",
                 "Minimum Generation Cap",
                 "Maximum Generation Cap",
-                "Window Length",
-                "Polynomial Order",
+                "First Window Length",
+                "First Polynomial Order",
+                "Second Smoothing",
+                "Second Window Length",
+                "Second Polynomial Order",
                 "Rows",
                 "Original Columns",
                 "Usable Columns",
@@ -1174,8 +1215,11 @@ if st.button(
                 f"{min_data_requirement}%",
                 min_cap,
                 max_cap,
-                window_length,
-                polynomial_order,
+                window_length_1,
+                polynomial_order_1,
+                "Enabled" if use_second_smoothing else "Disabled",
+                window_length_2 if use_second_smoothing else "",
+                polynomial_order_2 if use_second_smoothing else "",
                 len(raw_df),
                 raw_df.shape[1],
                 clean_df.shape[1],
