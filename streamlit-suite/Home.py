@@ -25,7 +25,7 @@ if st.session_state.get("aeromal_auth", False):
     st.sidebar.divider()
 
 st.sidebar.markdown("""
-<div style='text-align:center;color:gray;font-size:13px;line-height:2;'>
+<div style='text-align:center;font-size:13px;line-height:2;'>
 Developed and Maintained by:<br><b style='color:#e5e7eb;'>Manjot Singh</b><br>
 Script Writer:<br><b style='color:#e5e7eb;'>Tushar Sharma</b><br>
 Challenger:<br><b style='color:#e5e7eb;'>Aarav Sharma</b><br>
