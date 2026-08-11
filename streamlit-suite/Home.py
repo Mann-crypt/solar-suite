@@ -48,22 +48,27 @@ st.divider()
 st.markdown(
     """
     <style>
+
     .tool-card {
-        background: #111827;
-        border: 1px solid #1f2937;
+        background-color: var(--background-color);
+        border: 1px solid var(--secondary-background-color);
         border-radius: 12px;
         padding: 24px;
         min-height: 190px;
         margin-bottom: 10px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
     }
 
-    .tool-card h3 {
+    .tool-card h4 {
         margin-top: 0;
-        color: white;
+        color: var(--text-color);
+        font-size: 22px;
+        font-weight: 700;
     }
 
     .tool-card p {
-        color: #8b96a8;
+        color: var(--text-color);
+        opacity: 0.65;
         font-size: 14px;
         line-height: 1.6;
     }
@@ -74,6 +79,7 @@ st.markdown(
         height: 45px;
         font-weight: 600;
     }
+
     </style>
     """,
     unsafe_allow_html=True,
