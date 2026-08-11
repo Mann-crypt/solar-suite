@@ -22,7 +22,7 @@ if st.session_state.get("aeromal_auth", False):
     if st.sidebar.button("🚪 Logout Aeromal", use_container_width=True):
         st.session_state.aeromal_auth = False
         st.rerun()
-        st.sidebar.divider()
+    st.sidebar.divider()
 
 st.sidebar.markdown("""
 <div style='text-align:center;color:gray;font-size:13px;line-height:2;'>
