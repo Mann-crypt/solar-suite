@@ -627,15 +627,13 @@ st.caption(
     "profile from historical generation data."
 )
 
-st.divider()
-
 
 # ==========================================================
 # 1. EXCEL IMPORT
 # ==========================================================
 
 st.subheader(
-    "1. Import Excel Workbook"
+    "Import Excel Workbook"
 )
 
 uploaded_file = st.file_uploader(
@@ -723,7 +721,7 @@ st.success(
 # ==========================================================
 
 st.subheader(
-    "2. Cleaning Settings"
+    "Cleaning Settings"
 )
 
 clean_col1, clean_col2, clean_col3 = (
@@ -937,7 +935,7 @@ except Exception as e:
 # ==========================================================
 
 st.subheader(
-    "3. Select Columns for Average"
+    "Select Columns for Average"
 )
 
 all_columns = list(
@@ -969,7 +967,7 @@ if not selected_columns:
 # ==========================================================
 
 st.subheader(
-    "4. 95th Percentile Profiles"
+    "95th Percentile Profiles"
 )
 
 st.caption(
@@ -1014,11 +1012,7 @@ average = (
 # 5. SMOOTHING SETTINGS
 # ==========================================================
 
-# ==========================================================
-# 5. SMOOTHING SETTINGS
-# ==========================================================
-
-st.subheader("5. Smoothing Settings")
+st.subheader("Smoothing Settings")
 
 # ----------------------------------------------------------
 # APPLY SECOND SMOOTHING
@@ -1232,7 +1226,7 @@ smooth = generate_smooth_profile(
 # ==========================================================
 
 st.subheader(
-    "6. Generated CMV Curve"
+    "Generated CMV Curve"
 )
 
 st.caption(
@@ -1303,7 +1297,7 @@ with st.expander(
 # ==========================================================
 
 st.subheader(
-    "7. Update Original Workbook"
+    "Update Original Workbook"
 )
 
 st.caption(
