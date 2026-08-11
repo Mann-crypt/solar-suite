@@ -16,6 +16,24 @@ st.set_page_config(
     page_icon="📡",
     layout="wide",
 )
+st.sidebar.markdown("""
+<h1 style='text-align:center;
+background:linear-gradient(90deg,#00c6ff,#0072ff);
+-webkit-background-clip:text;
+-webkit-text-fill-color:transparent;
+font-size:40px;font-weight:800;'>
+⚡ Solar Suite
+</h1>
+<p style='text-align:center;color:gray;font-size:14px;'>Forecast Correction Platform</p>
+""", unsafe_allow_html=True)
+st.sidebar.divider()
+
+st.markdown("""
+<style>
+div[data-testid="metric-container"]{
+    background:#111827;border:1px solid #1f2937;border-radius:10px;padding:12px 20px;
+}
+</style>""", unsafe_allow_html=True)
 
 
 # ==========================================================
