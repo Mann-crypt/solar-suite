@@ -25,13 +25,13 @@ if st.session_state.get("aeromal_auth", False):
     st.sidebar.divider()
 
 st.sidebar.markdown("""
-<div style='text-align:center;color: Blue;font-size:13px;line-height:2;'>
-Developed and Maintained by:<br><b style='color:#e5e7eb;'>Manjot Singh</b><br>
-Script Writer:<br><b style='color:#e5e7eb;'>Tushar Sharma</b><br>
-Challenger:<br><b style='color:#e5e7eb;'>Aarav Sharma</b><br>
-Tester:<br><b style='color:#e5e7eb;'>Jatin Chaturvedi</b><br>
-Improviser:<br><b style='color:#e5e7eb;'>Ujala Agrahari</b><br>
-Suggested by:<br><b style='color:#e5e7eb;'>Garima Bajetha</b>
+<div style='text-align:center;color: gray;font-size:13px;line-height:2;'>
+Developed and Maintained by:<br><b style='color:gray;'>Manjot Singh</b><br>
+Script Writer:<br><b style='color:gray;'>Tushar Sharma</b><br>
+Challenger:<br><b style='color:gray;'>Aarav Sharma</b><br>
+Tester:<br><b style='color:gray;'>Jatin Chaturvedi</b><br>
+Improviser:<br><b style='color:gray;'>Ujala Agrahari</b><br>
+Suggested by:<br><b style='color:gray;'>Garima Bajetha</b>
 </div>
 """, unsafe_allow_html=True)
 
