@@ -13,7 +13,7 @@ from scipy.signal import savgol_filter
 
 st.set_page_config(
     page_title="CMV Curve Generator",
-    page_icon="📈",
+    page_icon="📡",
     layout="wide",
 )
 
@@ -619,7 +619,7 @@ def make_final_chart(
 # ==========================================================
 
 st.title(
-    "📈 CMV Curve Generator"
+    "📡 CMV Curve Generator"
 )
 
 st.caption(
