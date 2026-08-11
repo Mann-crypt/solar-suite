@@ -16,16 +16,16 @@ r();
 </script>""", height=0)
 
 # ── Global sidebar branding ───────────────────────────────────────────────────
-st.sidebar.markdown("""
-<h1 style='text-align:center;
-background:linear-gradient(90deg,#00c6ff,#0072ff);
--webkit-background-clip:text;
--webkit-text-fill-color:transparent;
-font-size:40px;font-weight:800;'>
-⚡ Solar Suite
-</h1>
-<p style='text-align:center;color:gray;font-size:14px;'>Forecast Correction Platform</p>
-""", unsafe_allow_html=True)
+#st.sidebar.markdown("""
+#<h1 style='text-align:center;
+#background:linear-gradient(90deg,#00c6ff,#0072ff);
+#-webkit-background-clip:text;
+#-webkit-text-fill-color:transparent;
+#font-size:40px;font-weight:800;'>
+#⚡ Solar Suite
+#</h1>
+#<p style='text-align:center;color:gray;font-size:14px;'>Forecast Correction Platform</p>
+#""", unsafe_allow_html=True)
 
 st.sidebar.divider()
 
@@ -34,8 +34,6 @@ if st.session_state.get("aeromal_auth", False):
     if st.sidebar.button("🚪 Logout Aeromal", use_container_width=True):
         st.session_state.aeromal_auth = False
         st.rerun()
-
-#st.sidebar.divider()
 
 st.sidebar.markdown("""
 <div style='text-align:center;color:gray;font-size:13px;line-height:2;'>
