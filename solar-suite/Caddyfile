@@ -1,9 +1,0 @@
-# Replace with your actual internal domain (or the server's IP if you don't have one yet).
-# Generate the password hash with:
-#   docker run --rm caddy caddy hash-password --plaintext 'yourpassword'
-solar.yourteamdomain.com {
-    basicauth {
-        manjot $2a$14$REPLACE_WITH_GENERATED_HASH
-    }
-    reverse_proxy solar-suite:8000
-}
