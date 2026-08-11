@@ -798,8 +798,8 @@ with st.expander(
 st.subheader("5. Update Original Workbook")
 
 st.caption(
-    "Adds/replaces the CMV_Curve sheet while keeping "
-    "all other sheets unchanged."
+    "Adds/replaces the CMV_Curve, Percentile_Data and "
+    "Column_Selection sheets while keeping all other sheets unchanged."
 )
 
 if st.button(
@@ -810,15 +810,13 @@ if st.button(
 
     try:
         # --------------------------------------------------
-        # Load ORIGINAL uploaded workbook into memory
+        # Load ORIGINAL uploaded workbook
         # --------------------------------------------------
 
-        output = BytesIO(
-            uploaded_file.getvalue()
-        )
+        output = BytesIO(uploaded_file.getvalue())
 
         # --------------------------------------------------
-        # Add / replace sheets
+        # Open existing workbook and add/replace sheets
         # --------------------------------------------------
 
         with pd.ExcelWriter(
@@ -833,10 +831,7 @@ if st.button(
             # ==============================================
 
             final_output = pd.DataFrame({
-                "Block": np.arange(
-                    1,
-                    len(smooth) + 1,
-                ),
+                "Block": np.arange(1, len(smooth) + 1),
                 "95th Percentile Average": average,
                 "Smooth Profile": smooth,
             })
@@ -856,10 +851,7 @@ if st.button(
             percentile_output.insert(
                 0,
                 "Block",
-                np.arange(
-                    1,
-                    len(percentile_output) + 1,
-                ),
+                np.arange(1, len(percentile_output) + 1),
             )
 
             percentile_output.to_excel(
@@ -887,36 +879,38 @@ if st.button(
             )
 
         # --------------------------------------------------
-        # Reset buffer position
+        # Reset buffer
         # --------------------------------------------------
 
         output.seek(0)
 
-        st.success(
-            "Workbook updated successfully. "
-            "Existing sheets were preserved."
-        )
-
         # --------------------------------------------------
-        # Download updated ORIGINAL workbook
+        # Create download filename
         # --------------------------------------------------
 
         original_name = uploaded_file.name
 
         if original_name.lower().endswith(".xlsx"):
             download_name = (
-                original_name[:-5]
-                + "_Updated.xlsx"
+                original_name[:-5] + "_Updated.xlsx"
             )
         else:
             download_name = (
-                original_name
-                + "_Updated.xlsx"
+                original_name + "_Updated.xlsx"
             )
+
+        st.success(
+            "Workbook updated successfully. "
+            "All existing sheets have been preserved."
+        )
+
+        # --------------------------------------------------
+        # Download
+        # --------------------------------------------------
 
         st.download_button(
             "⬇️ Download Updated Workbook",
-            data=output.getvalue(),
+            data=output,
             file_name=download_name,
             mime=(
                 "application/vnd.openxmlformats-officedocument."
