@@ -25,13 +25,29 @@ if st.session_state.get("aeromal_auth", False):
     st.sidebar.divider()
 
 st.sidebar.markdown("""
-<div style='text-align:center;color: gray;font-size:13px;line-height:2;'>
-Developed and Maintained by:<br><b style='color:#F1F5F9;'>Manjot Singh</b><br>
-Script Writer:<br><b style='color:gray;'>Tushar Sharma</b><br>
-Challenger:<br><b style='color:gray;'>Aarav Sharma</b><br>
-Tester:<br><b style='color:gray;'>Jatin Chaturvedi</b><br>
-Improviser:<br><b style='color:gray;'>Ujala Agrahari</b><br>
-Suggested by:<br><b style='color:gray;'>Garima Bajetha</b>
+<div style='
+    text-align:center;
+    color:var(--text-color);
+    font-size:13px;
+    line-height:2;
+'>
+    Developed and Maintained by:<br>
+    <b style='color:var(--text-color);'>Manjot Singh</b><br>
+
+    Script Writer:<br>
+    <b style='color:var(--text-color);'>Tushar Sharma</b><br>
+
+    Challenger:<br>
+    <b style='color:var(--text-color);'>Aarav Sharma</b><br>
+
+    Tester:<br>
+    <b style='color:var(--text-color);'>Jatin Chaturvedi</b><br>
+
+    Improviser:<br>
+    <b style='color:var(--text-color);'>Ujala Agrahari</b><br>
+
+    Suggested by:<br>
+    <b style='color:var(--text-color);'>Garima Bajetha</b>
 </div>
 """, unsafe_allow_html=True)
 
