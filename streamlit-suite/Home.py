@@ -118,9 +118,7 @@ with col1:
         key="home_loss_correction",
         use_container_width=True,
     ):
-
-        st.session_state["selected_page"] = "Loss Correction"
-        st.rerun()
+        st.switch_page("pages/1_🌤️_Loss_Correction.py")
 
 
 # ==========================================================
@@ -147,9 +145,7 @@ with col2:
         key="home_rt_correction",
         use_container_width=True,
     ):
-
-        st.session_state["selected_page"] = "RT Correction"
-        st.rerun()
+        st.switch_page("pages/2_⏰_RT_Correction.py")
 
 
 # ==========================================================
@@ -176,6 +172,4 @@ with col3:
         key="home_aeromal",
         use_container_width=True,
     ):
-
-        st.session_state["selected_page"] = "Aeromal"
-        st.rerun()
+        st.switch_page("pages/3_🐱‍🏍_Aeromal.py")
