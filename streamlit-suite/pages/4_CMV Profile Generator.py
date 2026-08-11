@@ -1014,13 +1014,29 @@ average = (
 # 5. SMOOTHING SETTINGS
 # ==========================================================
 
-st.subheader(
-    "5. Smoothing Settings"
+# ==========================================================
+# 5. SMOOTHING SETTINGS
+# ==========================================================
+
+st.subheader("5. Smoothing Settings")
+
+# ----------------------------------------------------------
+# APPLY SECOND SMOOTHING
+# ----------------------------------------------------------
+
+use_second_smoothing = st.checkbox(
+    "Apply Second Smoothing",
+    value=True,
+    help=(
+        "Enable a second Savitzky-Golay "
+        "smoothing stage after the first smoothing."
+    ),
 )
 
-smooth_col1, smooth_col2 = (
-    st.columns(2)
-)
+# Small spacing before the two smoothing sections
+st.markdown("")
+
+smooth_col1, smooth_col2 = st.columns(2)
 
 
 # ==========================================================
@@ -1029,13 +1045,7 @@ smooth_col1, smooth_col2 = (
 
 with smooth_col1:
 
-    st.markdown(
-        "**First Smoothing**"
-    )
-
-    # ------------------------------------------------------
-    # Window limits
-    # ------------------------------------------------------
+    st.markdown("**First Smoothing**")
 
     max_window_1 = min(
         len(average),
@@ -1043,7 +1053,6 @@ with smooth_col1:
     )
 
     if max_window_1 % 2 == 0:
-
         max_window_1 -= 1
 
     if max_window_1 < 3:
@@ -1060,7 +1069,6 @@ with smooth_col1:
     )
 
     if default_window_1 % 2 == 0:
-
         default_window_1 -= 1
 
     window_length_1 = st.number_input(
@@ -1075,22 +1083,14 @@ with smooth_col1:
         ),
     )
 
-    # ------------------------------------------------------
-    # Ensure odd window
-    # ------------------------------------------------------
-
     if window_length_1 % 2 == 0:
 
         window_length_1 -= 1
 
         st.warning(
-            "Window Length must be odd. "
+            f"Window Length must be odd. "
             f"Using {window_length_1}."
         )
-
-    # ------------------------------------------------------
-    # Polynomial order
-    # ------------------------------------------------------
 
     polynomial_order_1 = st.number_input(
         "Polynomial Order",
@@ -1114,26 +1114,7 @@ with smooth_col1:
 
 with smooth_col2:
 
-    st.markdown(
-        "**Second Smoothing**"
-    )
-
-    # ------------------------------------------------------
-    # Apply second smoothing
-    # ------------------------------------------------------
-
-    use_second_smoothing = st.checkbox(
-        "Apply Second Smoothing",
-        value=True,
-        help=(
-            "Enable a second Savitzky-Golay "
-            "smoothing stage."
-        ),
-    )
-
-    # ------------------------------------------------------
-    # Second smoothing settings
-    # ------------------------------------------------------
+    st.markdown("**Second Smoothing**")
 
     if use_second_smoothing:
 
@@ -1143,7 +1124,6 @@ with smooth_col2:
         )
 
         if max_window_2 % 2 == 0:
-
             max_window_2 -= 1
 
         if max_window_2 < 3:
@@ -1161,7 +1141,6 @@ with smooth_col2:
         )
 
         if default_window_2 % 2 == 0:
-
             default_window_2 -= 1
 
         window_length_2 = st.number_input(
@@ -1176,22 +1155,14 @@ with smooth_col2:
             ),
         )
 
-        # --------------------------------------------------
-        # Ensure odd
-        # --------------------------------------------------
-
         if window_length_2 % 2 == 0:
 
             window_length_2 -= 1
 
             st.warning(
-                "Second Window Length must be odd. "
+                f"Second Window Length must be odd. "
                 f"Using {window_length_2}."
             )
-
-        # --------------------------------------------------
-        # Polynomial order
-        # --------------------------------------------------
 
         polynomial_order_2 = st.number_input(
             "Second Polynomial Order",
@@ -1213,6 +1184,10 @@ with smooth_col2:
         window_length_2 = None
         polynomial_order_2 = None
 
+        st.info(
+            "Second smoothing is disabled."
+        )
+
 
 # ==========================================================
 # SMOOTHING SUMMARY
@@ -1222,26 +1197,19 @@ if use_second_smoothing:
 
     st.caption(
         f"**Smoothing:** "
-        f"First → Window "
-        f"**{window_length_1}**, "
-        f"Polynomial "
-        f"**{polynomial_order_1}** | "
-        f"Second → Window "
-        f"**{window_length_2}**, "
-        f"Polynomial "
-        f"**{polynomial_order_2}**"
+        f"First → Window **{window_length_1}**, "
+        f"Polynomial **{polynomial_order_1}** | "
+        f"Second → Window **{window_length_2}**, "
+        f"Polynomial **{polynomial_order_2}**"
     )
 
 else:
 
     st.caption(
         f"**Smoothing:** "
-        f"First → Window "
-        f"**{window_length_1}**, "
-        f"Polynomial "
-        f"**{polynomial_order_1}** | "
-        f"Second Smoothing → "
-        f"**Disabled**"
+        f"First → Window **{window_length_1}**, "
+        f"Polynomial **{polynomial_order_1}** | "
+        f"Second Smoothing → **Disabled**"
     )
 
 
