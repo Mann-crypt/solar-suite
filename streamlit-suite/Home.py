@@ -165,3 +165,34 @@ with col3:
         use_container_width=True,
     ):
         st.switch_page("pages/3_Aeromal.py")
+
+# ==========================================================
+# CMV PROFILE GENERATOR
+# ==========================================================
+
+st.markdown("<br>", unsafe_allow_html=True)
+
+col4, col5, col6 = st.columns(3)
+
+with col4:
+
+    st.markdown(
+        """
+        <div class="tool-card">
+            <h4>📈 CMV Profile Generator</h4>
+            <p>
+                Generate a 95th-percentile CMV generation profile
+                from historical generation data using
+                Savitzky-Golay smoothing.
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    if st.button(
+        "Open CMV Profile Generator →",
+        key="home_cmv_profile_generator",
+        use_container_width=True,
+    ):
+        st.switch_page("pages/4_CMV_Profile_Generator.py")
