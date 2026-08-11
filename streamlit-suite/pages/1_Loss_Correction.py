@@ -151,18 +151,15 @@ def add_poa_cluster(df):
 
 def make_chart(forecast, actual):
     x = np.arange(1, 97)
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(x=x, y=forecast, mode="lines", name="Forecast",
-                             line=dict(color="#00c6ff", width=3)))
-    fig.add_trace(go.Scatter(x=x, y=actual, mode="lines", name="Actual",
-                             line=dict(color="#ef4444", width=3)))
-    fig.update_layout(title="Forecast vs Actual Power", template="plotly_dark",
-                      height=500, hovermode="x unified",
-                      xaxis=dict(title="15 Minute Block", dtick=4),
-                      yaxis=dict(title="Power (MW)"),
-                      legend=dict(orientation="h", y=1.08, x=0),
-                      margin=dict(l=20, r=20, t=60, b=20),
-                      paper_bgcolor="#111827", plot_bgcolor="#111827")
+    fig = go.Figure([
+        go.Scatter(x=x, y=forecast, mode="lines", name="Forecast", line={"color":"#00c6ff","width":3}),
+        go.Scatter(x=x, y=actual, mode="lines", name="Actual", line={"color":"#ef4444","width":3})
+    ])
+    fig.update_layout(
+        title="Forecast vs Actual Power", template="streamlit", height=500, hovermode="x unified",
+        xaxis={"title":"15 Minute Block","dtick":4}, yaxis={"title":"Power (MW)"},
+        legend={"orientation":"h","y":1.08,"x":0}, margin={"l":20,"r":20,"t":60,"b":20}
+    )
     return fig
 
 
