@@ -128,13 +128,9 @@ with st.expander("📅 Important Time Blocks"):
     st.dataframe(lookup_df, use_container_width=True, hide_index=True)
 
 # ── Chart ─────────────────────────────────────────────────────────────────────
-fig = go.Figure()
-fig.add_trace(go.Scatter(x=df["Blocks"], y=df["Projection"], name="Projection",
-                          line=dict(color="#00c6ff", width=3)))
-fig.add_trace(go.Scatter(x=df["Blocks"], y=df["Actual"], name="Actual",
-                          line=dict(color="#ef4444", width=3)))
-fig.update_layout(height=550, hovermode="x unified", template="plotly_dark",
-                  paper_bgcolor="#111827", plot_bgcolor="#111827",
-                  legend=dict(orientation="h", y=1.08, x=0),
-                  margin=dict(l=20, r=20, t=60, b=20))
+fig = go.Figure([
+    go.Scatter(x=df["Blocks"], y=df["Projection"], name="Projection", line={"color":"#00c6ff","width":3}),
+    go.Scatter(x=df["Blocks"], y=df["Actual"], name="Actual", line={"color":"#ef4444","width":3})
+])
+fig.update_layout(height=550, hovermode="x unified", template="streamlit", legend={"orientation":"h","y":1.08,"x":0}, margin={"l":20,"r":20,"t":60,"b":20})
 st.plotly_chart(fig, use_container_width=True)
