@@ -24,46 +24,13 @@ if st.session_state.get("aeromal_auth", False):
         st.rerun()
     st.sidebar.divider()
 
-st.sidebar.markdown("""
-<div style="
-    text-align: center;
-    font-size: 13px;
-    line-height: 2;
-    color: inherit;
-">
-
-    <div style="opacity: 0.55;">
-        Developed and Maintained by:
-    </div>
-    <b>Manjot Singh</b>
-
-    <div style="opacity: 0.55;">
-        Script Writer:
-    </div>
-    <b>Tushar Sharma</b>
-
-    <div style="opacity: 0.55;">
-        Challenger:
-    </div>
-    <b>Aarav Sharma</b>
-
-    <div style="opacity: 0.55;">
-        Tester:
-    </div>
-    <b>Jatin Chaturvedi</b>
-
-    <div style="opacity: 0.55;">
-        Improviser:
-    </div>
-    <b>Ujala Agrahari</b>
-
-    <div style="opacity: 0.55;">
-        Suggested by:
-    </div>
-    <b>Garima Bajetha</b>
-
-</div>
-""", unsafe_allow_html=True)
+st.sidebar.markdown(""" <div style='text-align:center;font-size:13px;line-height:2;'>
+Developed and Maintained by:<br><b>Manjot Singh</b><br>
+Script Writer:<br><b>Tushar Sharma</b><br> 
+Challenger:<br><b>Aarav Sharma</b><br> 
+Tester:<br><b>Jatin Chaturvedi</b><br> 
+Improviser:<br><b>Ujala Agrahari</b><br> 
+Suggested by:<br><b>Garima Bajetha</b> </div> """, unsafe_allow_html=True)
 
 # ── Home page content ─────────────────────────────────────────────────────────
 st.markdown("""
