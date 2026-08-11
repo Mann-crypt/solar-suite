@@ -17,6 +17,7 @@ font-size:40px;font-weight:800;'>
 </h1>
 <p style='text-align:center;color:gray;font-size:14px;'>Forecast Correction Platform</p>
 """, unsafe_allow_html=True)
+st.sidebar.divider()
 
 
 # Password from environment variable — never hardcoded in source
