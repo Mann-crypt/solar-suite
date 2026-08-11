@@ -10,7 +10,7 @@ st.set_page_config(
 # ── Idle-reload script (10 min) ──────────────────────────────────────────────
 st.components.v1.html("""<script>
 let t;
-function r(){clearTimeout(t);t=setTimeout(()=>location.reload(),120000);}
+function r(){clearTimeout(t);t=setTimeout(()=>location.reload(),60000);}
 ["mousemove","mousedown","keydown","scroll","touchstart"].forEach(e=>document.addEventListener(e,r));
 r();
 </script>""", height=0)
