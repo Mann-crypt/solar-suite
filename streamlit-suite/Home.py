@@ -151,8 +151,7 @@ with col3:
         <div class="tool-card">
             <h4>🐱‍🏍 Aeromal</h4>
             <p>
-                Curtailment shaping and 95th-percentile profile
-                generation using Savitzky-Golay filtering.
+                Shaping fluctuating forecast to smooth profile either its curtailment or not using adcvanced developer's logic and Intelligence.
             </p>
         </div>
         """,
@@ -183,7 +182,7 @@ with col4:
             <p>
                 Generate a 95th-percentile CMV generation profile
                 from historical generation data using
-                Savitzky-Golay smoothing.
+                something confidential that only developer and scripter knows.
             </p>
         </div>
         """,
