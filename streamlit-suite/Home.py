@@ -8,12 +8,19 @@ st.set_page_config(
 )
 
 # ── Idle-reload script (10 min) ──────────────────────────────────────────────
-st.components.v1.html("""<script>
+# ── Auto-reload after 1 minute of inactivity ──
+st.components.v1.html("""
+<script>
 let t;
-function r(){clearTimeout(t);t=setTimeout(()=>location.reload(),60000);}
-["mousemove","mousedown","keydown","scroll","touchstart"].forEach(e=>document.addEventListener(e,r));
+function r(){
+    clearTimeout(t);
+    t=setTimeout(()=>window.parent.location.reload(),60000);
+}
+["mousemove","mousedown","keydown","scroll","touchstart","click"]
+.forEach(e=>document.addEventListener(e,r));
 r();
-</script>""", height=0)
+</script>
+""", height=0)
 
 # ── Global sidebar branding ───────────────────────────────────────────────────
 
