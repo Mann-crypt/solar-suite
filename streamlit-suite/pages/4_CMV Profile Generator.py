@@ -2,17 +2,18 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
-from scipy.signal import savgol_filter
+
 from io import BytesIO
+from scipy.signal import savgol_filter
 
 
 # ==========================================================
-# CONFIG
+# PAGE CONFIG
 # ==========================================================
 
 st.set_page_config(
     page_title="CMV Curve Generator",
-    page_icon="☀️",
+    page_icon="📈",
     layout="wide",
 )
 
@@ -24,221 +25,267 @@ st.set_page_config(
 def find_date_column(df):
     """Find a likely Date column."""
 
-    candidates = [
+    possible_names = [
         "Date",
-        "date",
         "Datetime",
-        "DateTime",
+        "Date Time",
         "Timestamp",
         "Time",
     ]
 
-    for col in df.columns:
-        if str(col).strip() in candidates:
-            return col
+    normalized = {
+        str(col).strip().lower().replace("_", " "): col
+        for col in df.columns
+    }
 
-    # Try detecting datetime-like columns
-    for col in df.columns:
-        try:
-            converted = pd.to_datetime(
-                df[col],
-                errors="coerce"
-            )
+    for name in possible_names:
+        key = name.lower()
 
-            if converted.notna().mean() > 0.7:
-                return col
-
-        except Exception:
-            pass
+        if key in normalized:
+            return normalized[key]
 
     return None
 
 
-def clean_data(
+def prepare_data(
     df,
-    min_data_requirement=0.30,
-    upper_limit=1200,
-    lower_limit=800,
+    min_data_requirement,
 ):
-    """Apply the original cleaning logic."""
+    """
+    Clean raw CMV data.
+
+    min_data_requirement is a percentage from 0 to 100.
+    """
 
     df = df.copy()
 
     # ------------------------------------------------------
-    # Remove columns with insufficient data
+    # Date handling
     # ------------------------------------------------------
 
-    threshold = int(
-        len(df) * min_data_requirement
-    )
+    date_col = find_date_column(df)
 
-    df = df.dropna(
-        axis=1,
-        thresh=threshold,
-    )
+    if date_col is not None:
+
+        parsed_date = pd.to_datetime(
+            df[date_col],
+            errors="coerce",
+        )
+
+        # Keep Date as index only if useful values exist
+        if parsed_date.notna().any():
+
+            df[date_col] = parsed_date
+            df = df.set_index(date_col)
 
     # ------------------------------------------------------
-    # Remove invalid columns
-    # > 1200 anywhere
-    # Maximum below 800
+    # Convert numeric columns where possible
     # ------------------------------------------------------
-
-    drop_columns = []
 
     for col in df.columns:
 
         if not pd.api.types.is_numeric_dtype(
             df[col]
         ):
-            continue
 
-        values = pd.to_numeric(
-            df[col],
-            errors="coerce",
+            converted = pd.to_numeric(
+                df[col],
+                errors="coerce",
+            )
+
+            # Convert only when there is meaningful
+            # numeric data
+            if converted.notna().sum() > 0:
+
+                df[col] = converted
+
+    # ------------------------------------------------------
+    # Keep only numeric columns
+    # ------------------------------------------------------
+
+    numeric_df = df.select_dtypes(
+        include=np.number
+    ).copy()
+
+    if numeric_df.empty:
+
+        raise ValueError(
+            "No numeric columns were found "
+            "in the workbook."
         )
 
-        if (
-            (values > upper_limit).any()
-            or values.max() < lower_limit
-        ):
-            drop_columns.append(col)
+    # ------------------------------------------------------
+    # Minimum data requirement
+    # ------------------------------------------------------
 
-    df = df.drop(
-        columns=drop_columns,
-        errors="ignore",
+    min_data_threshold = int(
+        np.ceil(
+            len(numeric_df)
+            * min_data_requirement
+            / 100
+        )
     )
 
+    numeric_df = numeric_df.dropna(
+        axis=1,
+        thresh=min_data_threshold,
+    )
+
+    if numeric_df.empty:
+
+        raise ValueError(
+            "No columns satisfy the selected "
+            f"{min_data_requirement}% minimum "
+            "data requirement."
+        )
+
     # ------------------------------------------------------
-    # Fill missing values
+    # Replace missing values
     # ------------------------------------------------------
 
-    df = df.fillna(0)
+    numeric_df = numeric_df.fillna(0)
 
     # ------------------------------------------------------
-    # Convert constant non-zero runs > 2 blocks to zero
+    # Remove abnormal columns
+    #
+    # Original logic:
+    # > 1200 OR maximum < 800
     # ------------------------------------------------------
 
-    for col in df.columns:
+    columns_to_drop = []
 
-        s = df[col]
+    for col in numeric_df.columns:
 
-        if not pd.api.types.is_numeric_dtype(s):
+        values = numeric_df[col].to_numpy(
+            dtype=float
+        )
+
+        if len(values) == 0:
+            columns_to_drop.append(col)
             continue
 
-        group = (
-            s != s.shift()
-        ).cumsum()
+        maximum = np.nanmax(values)
 
-        group_size = group.map(
-            group.value_counts()
-        )
+        if maximum > 1200 or maximum < 800:
 
-        df[col] = s.mask(
-            (group_size > 2) & (s != 0),
-            0,
-        )
+            columns_to_drop.append(col)
+
+    numeric_df = numeric_df.drop(
+        columns=columns_to_drop,
+        errors="ignore",
+    )
 
     # ------------------------------------------------------
     # Remove completely zero columns
     # ------------------------------------------------------
 
-    zero_columns = df.columns[
-        (df == 0).all()
+    zero_columns = numeric_df.columns[
+        (numeric_df == 0).all()
     ]
 
-    df = df.drop(
-        columns=zero_columns
+    numeric_df = numeric_df.drop(
+        columns=zero_columns,
+        errors="ignore",
     )
 
-    return df, drop_columns, list(zero_columns)
+    if numeric_df.empty:
+
+        raise ValueError(
+            "No usable generation columns remain "
+            "after cleaning."
+        )
+
+    return numeric_df
 
 
 def calculate_percentiles(
     df,
-    blocks_per_day=96,
+    blocks=96,
 ):
-    """Calculate 95th percentile profile for every column."""
+    """
+    Reshape data into days x 96 blocks and calculate
+    95th percentile for each block.
+    """
 
-    numeric_df = df.select_dtypes(
-        include=np.number
-    )
+    usable_rows = (
+        len(df) // blocks
+    ) * blocks
 
-    if numeric_df.empty:
+    if usable_rows < blocks:
+
         raise ValueError(
-            "No numeric generation columns found."
+            f"At least {blocks} rows are required."
         )
 
-    days = len(numeric_df) // blocks_per_day
+    df = df.iloc[
+        :usable_rows
+    ].copy()
 
-    if days < 1:
-        raise ValueError(
-            "Not enough data for 96-block daily reshaping."
-        )
+    days = usable_rows // blocks
 
-    usable_length = (
-        days * blocks_per_day
-    )
-
-    numeric_df = numeric_df.iloc[
-        :usable_length
-    ]
-
-    result = {}
-
-    for col in numeric_df.columns:
-
-        data = numeric_df[col].to_numpy(
-            dtype=float
-        )
-
-        reshaped = data.reshape(
-            days,
-            blocks_per_day,
-        )
-
-        percentile = np.percentile(
-            reshaped,
-            95,
-            axis=0,
-        )
-
-        result[col] = percentile
-
-    return pd.DataFrame(result)
-
-
-def remove_repeated_values(
-    df
-):
-    """Replace consecutive identical percentile values with zero."""
-
-    df = df.copy()
+    percentile_data = {}
 
     for col in df.columns:
 
-        values = df[col]
+        values = df[col].to_numpy(
+            dtype=float
+        )
 
-        df[col] = values.where(
-            values.diff().fillna(1) != 0,
+        reshaped = values.reshape(
+            days,
+            blocks,
+        )
+
+        percentile_data[col] = (
+            np.percentile(
+                reshaped,
+                95,
+                axis=0,
+            )
+        )
+
+    return pd.DataFrame(
+        percentile_data
+    )
+
+
+def remove_constant_blocks(
+    percentile_df,
+):
+    """
+    Replace consecutive equal percentile values
+    with zero, following the original logic.
+    """
+
+    result = percentile_df.copy()
+
+    for col in result.columns:
+
+        series = result[col]
+
+        result[col] = series.where(
+            series.diff() != 0,
             0,
         )
 
-    return df
+    return result
 
 
-def smooth_profile(
+def generate_smooth_profile(
     average,
 ):
-    """Apply the original smoothing logic."""
+    """
+    Generate smooth CMV profile.
+    """
 
-    average = np.asarray(
+    values = np.asarray(
         average,
         dtype=float,
     )
 
     # First smoothing
     smooth = savgol_filter(
-        average,
+        values,
         window_length=15,
         polyorder=3,
     )
@@ -249,6 +296,7 @@ def smooth_profile(
         None,
     )
 
+    # Remove very small generation
     smooth = np.where(
         smooth < 4.9,
         0,
@@ -271,13 +319,13 @@ def smooth_profile(
     return smooth
 
 
-def create_percentile_chart(
+def make_percentile_chart(
     percentile_df,
-    dropped_columns=None,
+    selected_columns,
 ):
-    """Interactive percentile chart with hover highlighting."""
-
-    dropped_columns = dropped_columns or []
+    """
+    Plot 95th percentile profile of all selected columns.
+    """
 
     fig = go.Figure()
 
@@ -288,7 +336,9 @@ def create_percentile_chart(
 
     for col in percentile_df.columns:
 
-        is_dropped = col in dropped_columns
+        is_selected = (
+            col in selected_columns
+        )
 
         fig.add_trace(
             go.Scatter(
@@ -297,37 +347,26 @@ def create_percentile_chart(
                 name=str(col),
                 mode="lines",
                 line=dict(
-                    width=1.5 if not is_dropped else 1,
-                    color=(
-                        "rgba(150,150,150,0.25)"
-                        if is_dropped
-                        else None
-                    ),
+                    width=3
+                    if is_selected
+                    else 1.5
                 ),
-                opacity=(
-                    0.25
-                    if is_dropped
-                    else 1
-                ),
+                opacity=1
+                if is_selected
+                else 0.45,
                 legendgroup=str(col),
-                hovertemplate=(
-                    f"{col}<br>"
-                    "Block: %{x}<br>"
-                    "95th Percentile: %{y:.2f}"
-                    "<extra></extra>"
-                ),
             )
         )
 
     fig.update_layout(
-        height=600,
-        template="streamlit",
+        height=550,
         hovermode="x unified",
-        xaxis_title="15-Minute Block",
-        yaxis_title="Power",
+        template="streamlit",
+        xaxis_title="15 Minute Block",
+        yaxis_title="95th Percentile Power",
         legend=dict(
             orientation="h",
-            y=1.05,
+            y=1.08,
             x=0,
         ),
         margin=dict(
@@ -336,38 +375,49 @@ def create_percentile_chart(
             t=60,
             b=20,
         ),
-        hoverlabel=dict(
-            bgcolor="rgba(0,0,0,0.8)",
-            font_size=13,
-        ),
-    )
-
-    # Highlight hovered trace
-    fig.update_traces(
-        selector=dict(type="scatter"),
-        line=dict(width=1.5),
     )
 
     return fig
 
 
-def create_final_chart(
+def make_final_chart(
     percentile_df,
-    selected_columns,
+    average,
     smooth,
 ):
-    """Final average + smoothed profile."""
+    """
+    Plot percentile columns, average and final profile.
+    """
+
+    fig = go.Figure()
 
     x = np.arange(
         1,
-        len(percentile_df) + 1,
+        len(average) + 1,
     )
 
-    average = percentile_df[
-        selected_columns
-    ].mean(axis=1)
+    # ------------------------------------------------------
+    # Individual percentile profiles
+    # ------------------------------------------------------
 
-    fig = go.Figure()
+    for col in percentile_df.columns:
+
+        fig.add_trace(
+            go.Scatter(
+                x=x,
+                y=percentile_df[col],
+                name=str(col),
+                mode="lines",
+                line=dict(
+                    width=1.2
+                ),
+                opacity=0.35,
+            )
+        )
+
+    # ------------------------------------------------------
+    # Average
+    # ------------------------------------------------------
 
     fig.add_trace(
         go.Scatter(
@@ -380,6 +430,10 @@ def create_final_chart(
             ),
         )
     )
+
+    # ------------------------------------------------------
+    # Smooth profile
+    # ------------------------------------------------------
 
     fig.add_trace(
         go.Scatter(
@@ -395,14 +449,14 @@ def create_final_chart(
     )
 
     fig.update_layout(
-        height=500,
-        template="streamlit",
+        height=550,
         hovermode="x unified",
-        xaxis_title="15-Minute Block",
+        template="streamlit",
+        xaxis_title="15 Minute Block",
         yaxis_title="Power",
         legend=dict(
             orientation="h",
-            y=1.05,
+            y=1.08,
             x=0,
         ),
         margin=dict(
@@ -417,38 +471,42 @@ def create_final_chart(
 
 
 # ==========================================================
-# PAGE
+# HEADER
 # ==========================================================
 
-st.title("☀️ CMV Curve Generator")
+st.title("📈 CMV Curve Generator")
 
 st.caption(
-    "Generate a 95th-percentile CMV profile "
+    "Generate a 95th-percentile CMV generation profile "
     "from historical generation data."
 )
 
+st.divider()
+
 
 # ==========================================================
-# FILE UPLOAD
+# EXCEL IMPORT
 # ==========================================================
+
+st.subheader("1. Import Excel Workbook")
 
 uploaded_file = st.file_uploader(
-    "Upload CMV Excel Workbook",
+    "Upload Excel Workbook",
     type=["xlsx"],
+    key="cmv_excel_upload",
 )
-
 
 if uploaded_file is None:
 
     st.info(
-        "Upload an Excel workbook to continue."
+        "Upload an Excel workbook to begin."
     )
 
     st.stop()
 
 
 # ==========================================================
-# READ EXCEL
+# SHEET SELECTION
 # ==========================================================
 
 try:
@@ -457,7 +515,7 @@ try:
         uploaded_file
     )
 
-    sheets = excel_file.sheet_names
+    sheet_names = excel_file.sheet_names
 
 except Exception as e:
 
@@ -468,17 +526,21 @@ except Exception as e:
     st.stop()
 
 
-sheet_name = st.selectbox(
-    "Select Source Sheet",
-    sheets,
+selected_sheet = st.selectbox(
+    "Select CMV source sheet",
+    sheet_names,
 )
 
 
+# ==========================================================
+# READ SOURCE SHEET
+# ==========================================================
+
 try:
 
-    df_original = pd.read_excel(
+    raw_df = pd.read_excel(
         uploaded_file,
-        sheet_name=sheet_name,
+        sheet_name=selected_sheet,
     )
 
 except Exception as e:
@@ -490,84 +552,56 @@ except Exception as e:
     st.stop()
 
 
-# ==========================================================
-# DATE INDEX
-# ==========================================================
+if raw_df.empty:
 
-date_column = find_date_column(
-    df_original
-)
-
-if date_column:
-
-    try:
-
-        df_original[date_column] = pd.to_datetime(
-            df_original[date_column],
-            errors="coerce",
-        )
-
-        df_original = df_original.set_index(
-            date_column
-        )
-
-        st.success(
-            f"Date column detected: {date_column}"
-        )
-
-    except Exception:
-
-        st.warning(
-            "Date column detected but could not be "
-            "converted reliably."
-        )
-
-
-# ==========================================================
-# DATA PREVIEW
-# ==========================================================
-
-with st.expander(
-    "View Source Data"
-):
-
-    st.dataframe(
-        df_original.head(20),
-        use_container_width=True,
+    st.error(
+        "The selected sheet is empty."
     )
 
+    st.stop()
+
+
+st.success(
+    f"Loaded {selected_sheet}: "
+    f"{raw_df.shape[0]:,} rows × "
+    f"{raw_df.shape[1]:,} columns."
+)
+
 
 # ==========================================================
-# CLEANING SETTINGS
+# MINIMUM DATA REQUIREMENT
 # ==========================================================
 
 st.subheader(
-    "Data Cleaning"
+    "2. Cleaning Settings"
 )
 
-col1, col2, col3 = st.columns(3)
+min_data_requirement = st.slider(
+    "Minimum Data Requirement",
+    min_value=0,
+    max_value=100,
+    value=30,
+    step=5,
+    format="%d%%",
+    help=(
+        "Minimum percentage of non-empty values "
+        "required for a column to be retained."
+    ),
+)
 
-with col1:
-
-    min_data_requirement = st.slider(
-        "Minimum Data Requirement",
-        0, 100, 30, 5,
-        format="%d%%",
-    ) / 100
-    
-with col2:
-
-    upper_limit = st.number_input(
-        "Upper Power Limit",
-        value=1200.0,
+min_data_threshold = int(
+    np.ceil(
+        len(raw_df)
+        * min_data_requirement
+        / 100
     )
+)
 
-with col3:
-
-    lower_limit = st.number_input(
-        "Minimum Valid Peak",
-        value=800.0,
-    )
+st.caption(
+    f"Current setting: **{min_data_requirement}%** "
+    f"→ at least **{min_data_threshold:,} "
+    f"of {len(raw_df):,} rows** must contain data."
+)
 
 
 # ==========================================================
@@ -576,11 +610,9 @@ with col3:
 
 try:
 
-    df_clean, auto_dropped, zero_dropped = clean_data(
-        df_original,
-        min_data_requirement=min_requirement,
-        upper_limit=upper_limit,
-        lower_limit=lower_limit,
+    clean_df = prepare_data(
+        raw_df,
+        min_data_requirement,
     )
 
 except Exception as e:
@@ -592,17 +624,59 @@ except Exception as e:
     st.stop()
 
 
-st.write(
-    f"Remaining columns: **{len(df_clean.columns)}**"
+# ==========================================================
+# CLEANING SUMMARY
+# ==========================================================
+
+col1, col2, col3, col4 = st.columns(4)
+
+col1.metric(
+    "Original Columns",
+    raw_df.shape[1],
 )
 
-if auto_dropped:
+col2.metric(
+    "Usable Columns",
+    clean_df.shape[1],
+)
 
-    with st.expander(
-        "Automatically Removed Columns"
-    ):
+col3.metric(
+    "Rows",
+    len(clean_df),
+)
 
-        st.write(auto_dropped)
+col4.metric(
+    "Minimum Requirement",
+    f"{min_data_requirement}%",
+)
+
+
+# ==========================================================
+# DATE INFORMATION
+# ==========================================================
+
+if isinstance(
+    clean_df.index,
+    pd.DatetimeIndex,
+):
+
+    st.success(
+        "Date column detected and used as the DataFrame index."
+    )
+
+
+# ==========================================================
+# PREVIEW CLEAN DATA
+# ==========================================================
+
+with st.expander(
+    "View Cleaned Data"
+):
+
+    st.dataframe(
+        clean_df.head(20),
+        use_container_width=True,
+    )
 
 
 # ==========================================================
@@ -612,44 +686,23 @@ if auto_dropped:
 try:
 
     percentile_df = calculate_percentiles(
-        df_clean,
-        96,
+        clean_df,
+        blocks=96,
     )
 
-    percentile_df = remove_repeated_values(
-        percentile_df
+    percentile_df = (
+        remove_constant_blocks(
+            percentile_df
+        )
     )
 
 except Exception as e:
 
     st.error(
-        f"Percentile calculation failed: {e}"
+        f"Unable to calculate 95th percentile: {e}"
     )
 
     st.stop()
-
-
-# ==========================================================
-# PERCENTILE GRAPH
-# ==========================================================
-
-st.subheader(
-    "2. 95th Percentile Profile by Column"
-)
-
-st.caption(
-    "Hover over the legend or a curve to inspect "
-    "individual column profiles."
-)
-
-fig = create_percentile_chart(
-    percentile_df
-)
-
-st.plotly_chart(
-    fig,
-    use_container_width=True,
-)
 
 
 # ==========================================================
@@ -657,12 +710,7 @@ st.plotly_chart(
 # ==========================================================
 
 st.subheader(
-    "3. Select Columns for Final Average"
-)
-
-st.caption(
-    "Unselect columns that should not contribute "
-    "to the final CMV profile."
+    "3. Select Columns for Average"
 )
 
 all_columns = list(
@@ -673,8 +721,11 @@ selected_columns = st.multiselect(
     "Columns included in final average",
     options=all_columns,
     default=all_columns,
+    help=(
+        "Select the generation columns that should "
+        "contribute to the final CMV average."
+    ),
 )
-
 
 if not selected_columns:
 
@@ -685,89 +736,81 @@ if not selected_columns:
     st.stop()
 
 
-dropped_by_user = [
-    col
-    for col in all_columns
-    if col not in selected_columns
-]
+# ==========================================================
+# PERCENTILE GRAPH
+# ==========================================================
+
+st.subheader(
+    "4. 95th Percentile Profiles"
+)
+
+st.caption(
+    "Use this chart to decide which columns "
+    "should contribute to the final average."
+)
+
+fig_percentile = make_percentile_chart(
+    percentile_df,
+    selected_columns,
+)
+
+st.plotly_chart(
+    fig_percentile,
+    use_container_width=True,
+)
 
 
 # ==========================================================
-# SELECTED COLUMN SUMMARY
+# SELECTED DATA
 # ==========================================================
 
-col1, col2, col3 = st.columns(3)
-
-col1.metric(
-    "Total Columns",
-    len(all_columns),
+selected_percentile_df = (
+    percentile_df[
+        selected_columns
+    ]
+    .copy()
 )
-
-col2.metric(
-    "Included",
-    len(selected_columns),
-)
-
-col3.metric(
-    "Excluded",
-    len(dropped_by_user),
-)
-
-
-if dropped_by_user:
-
-    with st.expander(
-        "Excluded Columns"
-    ):
-
-        st.write(
-            dropped_by_user
-        )
 
 
 # ==========================================================
 # FINAL AVERAGE
 # ==========================================================
 
-average = percentile_df[
-    selected_columns
-].mean(axis=1)
+average = (
+    selected_percentile_df
+    .mean(axis=1)
+    .to_numpy()
+)
 
 
 # ==========================================================
-# SMOOTH
+# SMOOTH PROFILE
 # ==========================================================
 
-smooth = smooth_profile(
+if len(average) < 15:
+
+    st.error(
+        "At least 15 blocks are required "
+        "for smoothing."
+    )
+
+    st.stop()
+
+
+smooth = generate_smooth_profile(
     average
 )
 
 
 # ==========================================================
-# FINAL PROFILE
+# FINAL RESULT
 # ==========================================================
 
 st.subheader(
-    "4. Final CMV Profile"
+    "5. Generated CMV Curve"
 )
 
-final_fig = create_final_chart(
-    percentile_df,
-    selected_columns,
-    smooth,
-)
-
-st.plotly_chart(
-    final_fig,
-    use_container_width=True,
-)
-
-
-# ==========================================================
-# FINAL DATA
-# ==========================================================
-
-result = pd.DataFrame({
+final_output = pd.DataFrame({
     "Block": np.arange(
         1,
         len(smooth) + 1,
@@ -776,13 +819,52 @@ result = pd.DataFrame({
     "Smooth Profile": smooth,
 })
 
+fig_final = make_final_chart(
+    selected_percentile_df,
+    average,
+    smooth,
+)
+
+st.plotly_chart(
+    fig_final,
+    use_container_width=True,
+)
+
+
+# ==========================================================
+# RESULT TABLE
+# ==========================================================
 
 with st.expander(
-    "View Final Profile Data"
+    "View Generated Curve Data"
 ):
 
     st.dataframe(
-        result,
+        final_output,
+        use_container_width=True,
+        hide_index=True,
+    )
+
+
+# ==========================================================
+# COLUMN SELECTION TABLE
+# ==========================================================
+
+selection_df = pd.DataFrame({
+    "Column": all_columns,
+    "Included in Average": [
+        col in selected_columns
+        for col in all_columns
+    ],
+})
+
+
+with st.expander(
+    "View Column Selection"
+):
+
+    st.dataframe(
+        selection_df,
         use_container_width=True,
         hide_index=True,
     )
@@ -792,28 +874,87 @@ with st.expander(
 # EXCEL OUTPUT
 # ==========================================================
 
-st.subheader("5. Update Original Workbook")
-
-st.caption(
-    "Adds/replaces the CMV_Curve, Percentile_Data and "
-    "Column_Selection sheets while keeping all other sheets unchanged."
+st.subheader(
+    "6. Update Original Workbook"
 )
 
+st.caption(
+    "The selected source sheet is preserved. "
+    "The generated CMV Curve, percentile data and "
+    "column selection are added as separate sheets."
+)
+
+
 if st.button(
-    "💾 Add CMV Curve to Workbook",
+    "💾 Add CMV Curve & Download Updated Workbook",
     type="primary",
     use_container_width=True,
 ):
 
     try:
-        # --------------------------------------------------
-        # Load ORIGINAL uploaded workbook
-        # --------------------------------------------------
-
-        output = BytesIO(uploaded_file.getvalue())
 
         # --------------------------------------------------
-        # Open existing workbook and add/replace sheets
+        # IMPORTANT:
+        # Start from the ORIGINAL uploaded Excel bytes.
+        # --------------------------------------------------
+
+        output = BytesIO(
+            uploaded_file.getvalue()
+        )
+
+        # --------------------------------------------------
+        # Create output tables
+        # --------------------------------------------------
+
+        cmv_output = pd.DataFrame({
+            "Block": np.arange(
+                1,
+                len(smooth) + 1,
+            ),
+            "95th Percentile Average": average,
+            "Smooth Profile": smooth,
+        })
+
+        percentile_output = (
+            percentile_df.copy()
+        )
+
+        percentile_output.insert(
+            0,
+            "Block",
+            np.arange(
+                1,
+                len(percentile_output) + 1,
+            ),
+        )
+
+        selection_output = pd.DataFrame({
+            "Column": all_columns,
+            "Included in Average": [
+                col in selected_columns
+                for col in all_columns
+            ],
+        })
+
+        settings_output = pd.DataFrame({
+            "Setting": [
+                "Source Sheet",
+                "Minimum Data Requirement",
+                "Rows",
+                "Original Columns",
+                "Usable Columns",
+            ],
+            "Value": [
+                selected_sheet,
+                f"{min_data_requirement}%",
+                len(raw_df),
+                raw_df.shape[1],
+                clean_df.shape[1],
+            ],
+        })
+
+        # --------------------------------------------------
+        # Update ORIGINAL workbook
         # --------------------------------------------------
 
         with pd.ExcelWriter(
@@ -823,32 +964,10 @@ if st.button(
             if_sheet_exists="replace",
         ) as writer:
 
-            # ==============================================
-            # CMV CURVE
-            # ==============================================
-
-            final_output = pd.DataFrame({
-                "Block": np.arange(1, len(smooth) + 1),
-                "95th Percentile Average": average,
-                "Smooth Profile": smooth,
-            })
-
-            final_output.to_excel(
+            cmv_output.to_excel(
                 writer,
                 sheet_name="CMV_Curve",
                 index=False,
-            )
-
-            # ==============================================
-            # PERCENTILE DATA
-            # ==============================================
-
-            percentile_output = percentile_df.copy()
-
-            percentile_output.insert(
-                0,
-                "Block",
-                np.arange(1, len(percentile_output) + 1),
             )
 
             percentile_output.to_excel(
@@ -857,57 +976,54 @@ if st.button(
                 index=False,
             )
 
-            # ==============================================
-            # COLUMN SELECTION
-            # ==============================================
-
-            selection_df = pd.DataFrame({
-                "Column": all_columns,
-                "Included in Average": [
-                    col in selected_columns
-                    for col in all_columns
-                ],
-            })
-
-            selection_df.to_excel(
+            selection_output.to_excel(
                 writer,
                 sheet_name="Column_Selection",
                 index=False,
             )
 
-        # --------------------------------------------------
-        # Reset buffer
-        # --------------------------------------------------
+            settings_output.to_excel(
+                writer,
+                sheet_name="CMV_Settings",
+                index=False,
+            )
 
         output.seek(0)
 
         # --------------------------------------------------
-        # Create download filename
+        # Download name
         # --------------------------------------------------
 
         original_name = uploaded_file.name
 
-        if original_name.lower().endswith(".xlsx"):
+        if original_name.lower().endswith(
+            ".xlsx"
+        ):
+
             download_name = (
-                original_name[:-5] + "_Updated.xlsx"
+                original_name[:-5]
+                + "_Updated.xlsx"
             )
+
         else:
+
             download_name = (
-                original_name + "_Updated.xlsx"
+                original_name
+                + "_Updated.xlsx"
             )
+
+        # --------------------------------------------------
+        # Single download button
+        # --------------------------------------------------
 
         st.success(
-            "Workbook updated successfully. "
-            "All existing sheets have been preserved."
+            "CMV Curve added successfully. "
+            "All existing workbook sheets were preserved."
         )
-
-        # --------------------------------------------------
-        # Download
-        # --------------------------------------------------
 
         st.download_button(
             "⬇️ Download Updated Workbook",
-            data=output,
+            data=output.getvalue(),
             file_name=download_name,
             mime=(
                 "application/vnd.openxmlformats-officedocument."
