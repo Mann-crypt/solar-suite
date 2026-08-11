@@ -91,7 +91,7 @@ with col1:
     st.markdown(
         """
         <div class="tool-card">
-            <h3>⛅ Loss Correction</h3>
+            <h4>⛅ Loss Correction</h4>
             <p>
                 Differential evolution optimization for Fixed and
                 Tracking plants. Supports cluster and non-cluster
