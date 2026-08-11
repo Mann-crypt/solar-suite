@@ -179,7 +179,7 @@ with col4:
     st.markdown(
         """
         <div class="tool-card">
-            <h4>📈 CMV Profile Generator</h4>
+            <h4>🌤 CMV Profile Generator</h4>
             <p>
                 Generate a 95th-percentile CMV generation profile
                 from historical generation data using
