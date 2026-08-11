@@ -119,7 +119,7 @@ with col2:
     st.markdown(
         """
         <div class="tool-card">
-            <h3>⏰ RT Correction</h3>
+            <h4>⏰ RT Correction</h4>
             <p>
                 Parabolic ramp-profile fitting for real-time
                 generation correction with key time block lookup.
@@ -146,7 +146,7 @@ with col3:
     st.markdown(
         """
         <div class="tool-card">
-            <h3>🐱‍🏍 Aeromal</h3>
+            <h4>🐱‍🏍 Aeromal</h4>
             <p>
                 Curtailment shaping and 95th-percentile profile
                 generation using Savitzky-Golay filtering.
