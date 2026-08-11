@@ -25,40 +25,43 @@ if st.session_state.get("aeromal_auth", False):
     st.sidebar.divider()
 
 st.sidebar.markdown("""
-<div style='
-    text-align:center;
-    font-size:13px;
-    line-height:2;
-'>
-    <span style='color:var(--text-color); opacity:0.55;'>
+<div style="
+    text-align: center;
+    font-size: 13px;
+    line-height: 2;
+    color: inherit;
+">
+
+    <div style="opacity: 0.55;">
         Developed and Maintained by:
-    </span><br>
-    <b style='color:var(--text-color);'>Manjot Singh</b><br>
+    </div>
+    <b>Manjot Singh</b>
 
-    <span style='color:var(--text-color); opacity:0.55;'>
+    <div style="opacity: 0.55;">
         Script Writer:
-    </span><br>
-    <b style='color:var(--text-color);'>Tushar Sharma</b><br>
+    </div>
+    <b>Tushar Sharma</b>
 
-    <span style='color:var(--text-color); opacity:0.55;'>
+    <div style="opacity: 0.55;">
         Challenger:
-    </span><br>
-    <b style='color:var(--text-color);'>Aarav Sharma</b><br>
+    </div>
+    <b>Aarav Sharma</b>
 
-    <span style='color:var(--text-color); opacity:0.55;'>
+    <div style="opacity: 0.55;">
         Tester:
-    </span><br>
-    <b style='color:var(--text-color);'>Jatin Chaturvedi</b><br>
+    </div>
+    <b>Jatin Chaturvedi</b>
 
-    <span style='color:var(--text-color); opacity:0.55;'>
+    <div style="opacity: 0.55;">
         Improviser:
-    </span><br>
-    <b style='color:var(--text-color);'>Ujala Agrahari</b><br>
+    </div>
+    <b>Ujala Agrahari</b>
 
-    <span style='color:var(--text-color); opacity:0.55;'>
+    <div style="opacity: 0.55;">
         Suggested by:
-    </span><br>
-    <b style='color:var(--text-color);'>Garima Bajetha</b>
+    </div>
+    <b>Garima Bajetha</b>
+
 </div>
 """, unsafe_allow_html=True)
 
