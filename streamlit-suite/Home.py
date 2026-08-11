@@ -27,26 +27,37 @@ if st.session_state.get("aeromal_auth", False):
 st.sidebar.markdown("""
 <div style='
     text-align:center;
-    color:var(--text-color);
     font-size:13px;
     line-height:2;
 '>
-    Developed and Maintained by:<br>
+    <span style='color:var(--text-color); opacity:0.55;'>
+        Developed and Maintained by:
+    </span><br>
     <b style='color:var(--text-color);'>Manjot Singh</b><br>
 
-    Script Writer:<br>
+    <span style='color:var(--text-color); opacity:0.55;'>
+        Script Writer:
+    </span><br>
     <b style='color:var(--text-color);'>Tushar Sharma</b><br>
 
-    Challenger:<br>
+    <span style='color:var(--text-color); opacity:0.55;'>
+        Challenger:
+    </span><br>
     <b style='color:var(--text-color);'>Aarav Sharma</b><br>
 
-    Tester:<br>
+    <span style='color:var(--text-color); opacity:0.55;'>
+        Tester:
+    </span><br>
     <b style='color:var(--text-color);'>Jatin Chaturvedi</b><br>
 
-    Improviser:<br>
+    <span style='color:var(--text-color); opacity:0.55;'>
+        Improviser:
+    </span><br>
     <b style='color:var(--text-color);'>Ujala Agrahari</b><br>
 
-    Suggested by:<br>
+    <span style='color:var(--text-color); opacity:0.55;'>
+        Suggested by:
+    </span><br>
     <b style='color:var(--text-color);'>Garima Bajetha</b>
 </div>
 """, unsafe_allow_html=True)
