@@ -795,28 +795,30 @@ with st.expander(
 # EXCEL OUTPUT
 # ==========================================================
 
-st.subheader(
-    "5. Update Original Workbook"
-)
+st.subheader("5. Update Original Workbook")
 
 st.caption(
-    "The CMV_Curve sheet will be added/replaced "
-    "inside the uploaded workbook."
+    "Adds/replaces the CMV_Curve sheet while keeping "
+    "all other sheets unchanged."
 )
 
-
 if st.button(
-    "💾 Generate Updated Workbook",
+    "💾 Add CMV Curve to Workbook",
     type="primary",
     use_container_width=True,
 ):
 
-    output = BytesIO()
-
     try:
+        # --------------------------------------------------
+        # Load ORIGINAL uploaded workbook into memory
+        # --------------------------------------------------
+
+        output = BytesIO(
+            uploaded_file.getvalue()
+        )
 
         # --------------------------------------------------
-        # Load original workbook
+        # Add / replace sheets
         # --------------------------------------------------
 
         with pd.ExcelWriter(
@@ -826,42 +828,9 @@ if st.button(
             if_sheet_exists="replace",
         ) as writer:
 
-            # --------------------------------------------------
-            # Final CMV Curve
-            # --------------------------------------------------
-
-            percentile_output = (
-                percentile_df.copy()
-            )
-
-            percentile_output.insert(
-                0,
-                "Block",
-                np.arange(
-                    1,
-                    len(percentile_output) + 1,
-                ),
-            )
-
-            percentile_output[
-                "Selected for Average"
-            ] = ""
-
-            for col in selected_columns:
-
-                percentile_output.loc[
-                    0,
-                    "Selected for Average"
-                ] = ""
-
-            # Save selected columns separately
-            selection_df = pd.DataFrame({
-                "Column": all_columns,
-                "Included": [
-                    col in selected_columns
-                    for col in all_columns
-                ],
-            })
+            # ==============================================
+            # CMV CURVE
+            # ==============================================
 
             final_output = pd.DataFrame({
                 "Block": np.arange(
@@ -872,29 +841,44 @@ if st.button(
                 "Smooth Profile": smooth,
             })
 
-            # --------------------------------------------------
-            # Main CMV sheet
-            # --------------------------------------------------
-
             final_output.to_excel(
                 writer,
                 sheet_name="CMV_Curve",
                 index=False,
             )
 
-            # --------------------------------------------------
-            # Percentile data
-            # --------------------------------------------------
+            # ==============================================
+            # PERCENTILE DATA
+            # ==============================================
 
-            percentile_df.to_excel(
+            percentile_output = percentile_df.copy()
+
+            percentile_output.insert(
+                0,
+                "Block",
+                np.arange(
+                    1,
+                    len(percentile_output) + 1,
+                ),
+            )
+
+            percentile_output.to_excel(
                 writer,
                 sheet_name="Percentile_Data",
                 index=False,
             )
 
-            # --------------------------------------------------
-            # Column selection
-            # --------------------------------------------------
+            # ==============================================
+            # COLUMN SELECTION
+            # ==============================================
+
+            selection_df = pd.DataFrame({
+                "Column": all_columns,
+                "Included in Average": [
+                    col in selected_columns
+                    for col in all_columns
+                ],
+            })
 
             selection_df.to_excel(
                 writer,
@@ -902,20 +886,38 @@ if st.button(
                 index=False,
             )
 
+        # --------------------------------------------------
+        # Reset buffer position
+        # --------------------------------------------------
+
         output.seek(0)
 
         st.success(
-            "CMV_Curve, Percentile_Data and "
-            "Column_Selection sheets added successfully."
+            "Workbook updated successfully. "
+            "Existing sheets were preserved."
         )
+
+        # --------------------------------------------------
+        # Download updated ORIGINAL workbook
+        # --------------------------------------------------
+
+        original_name = uploaded_file.name
+
+        if original_name.lower().endswith(".xlsx"):
+            download_name = (
+                original_name[:-5]
+                + "_Updated.xlsx"
+            )
+        else:
+            download_name = (
+                original_name
+                + "_Updated.xlsx"
+            )
 
         st.download_button(
             "⬇️ Download Updated Workbook",
             data=output.getvalue(),
-            file_name=uploaded_file.name.replace(
-                ".xlsx",
-                "_Updated.xlsx",
-            ),
+            file_name=download_name,
             mime=(
                 "application/vnd.openxmlformats-officedocument."
                 "spreadsheetml.sheet"
