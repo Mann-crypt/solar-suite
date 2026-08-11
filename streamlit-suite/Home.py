@@ -151,7 +151,7 @@ with col3:
         <div class="tool-card">
             <h4>🐱‍🏍 Aeromal</h4>
             <p>
-                Shaping fluctuating forecast to smooth profile either its curtailment or not using adcvanced developer's logic and Intelligence.
+                Shaping fluctuating forecast to smooth profile either its curtailment or not using adcvanced developer's Intelligence.
             </p>
         </div>
         """,
