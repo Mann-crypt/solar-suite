@@ -8,8 +8,7 @@ from scipy.signal import savgol_filter
 st.set_page_config(page_title="Aeromal — Solar Suite", layout="wide")
 
 # Password from environment variable — never hardcoded in source
-AEROMAL_PASSWORD = os.environ.get("AEROMAL_PASSWORD", "")
-
+AEROMAL_PASSWORD = "asdfghjkl;'"
 # ── Auth gate ─────────────────────────────────────────────────────────────────
 if "aeromal_auth" not in st.session_state:
     st.session_state.aeromal_auth = False
