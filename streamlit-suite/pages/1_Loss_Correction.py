@@ -11,7 +11,7 @@ st.set_page_config(page_title="Loss Correction — Solar Suite", layout="wide")
 # ── Idle-reload script (10 min) ──────────────────────────────────────────────
 st.components.v1.html("""<script>
 let t;
-function r(){clearTimeout(t);t=setTimeout(()=>location.reload(),600000);}
+function r(){clearTimeout(t);t=setTimeout(()=>location.reload(),300000);}
 ["mousemove","mousedown","keydown","scroll","touchstart"].forEach(e=>document.addEventListener(e,r));
 r();
 </script>""", height=0)
