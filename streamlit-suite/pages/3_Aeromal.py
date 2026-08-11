@@ -187,15 +187,65 @@ if curtailment:
     Final_Smooth_Sym = (Final_Smooth + sh[::-1]) / 2
 
     fig = go.Figure()
-    fig.add_trace(go.Scatter(x=np.arange(96), y=ap,              name="Generation",  line=dict(width=3)))
-    fig.add_trace(go.Scatter(x=np.arange(96), y=Final_Smooth,    name="Profile",     line=dict(width=3, color="#00c6ff")))
-    fig.add_trace(go.Scatter(x=np.arange(96), y=Final_Smooth_Sym,name="Sym Profile", line=dict(width=3, color="#0072ff")))
-    fig.update_layout(height=550, hovermode="x unified",
-                      paper_bgcolor="#111827", plot_bgcolor="#111827",
-                      legend=dict(orientation="h", y=1.08, x=0),
-                      margin=dict(l=20, r=20, t=60, b=20))
-    st.plotly_chart(fig, use_container_width=True)
 
+    fig.add_trace(
+        go.Scatter(
+            x=np.arange(96),
+            y=ap,
+            name="Generation",
+            line=dict(width=3),
+        )
+    )
+    
+    fig.add_trace(
+        go.Scatter(
+            x=np.arange(96),
+            y=Final_Smooth,
+            name="Profile",
+            line=dict(
+                width=3,
+                color="#00c6ff",
+            ),
+        )
+    )
+    
+    fig.add_trace(
+        go.Scatter(
+            x=np.arange(96),
+            y=Final_Smooth_Sym,
+            name="Sym Profile",
+            line=dict(
+                width=3,
+                color="#0072ff",
+            ),
+        )
+    )
+    
+    fig.update_layout(
+        height=550,
+        hovermode="x unified",
+    
+        # Theme-friendly
+        template="streamlit",
+    
+        legend=dict(
+            orientation="h",
+            y=1.08,
+            x=0,
+        ),
+    
+        margin=dict(
+            l=20,
+            r=20,
+            t=60,
+            b=20,
+        ),
+    )
+    
+    st.plotly_chart(
+        fig,
+        use_container_width=True,
+    )
     output = pd.DataFrame({"Power": ap, "Profile": Final_Smooth, "Sym Profile": Final_Smooth_Sym})
     st.dataframe(output, use_container_width=True)
 
@@ -243,16 +293,82 @@ else:
     s   *= power_availability / 100; sym *= power_availability / 100
 
     fig = go.Figure()
-    fig.add_trace(go.Scatter(x=np.arange(96), y=sym, name="Sym Profile",    line=dict(color="#00c6ff", width=4)))
-    fig.add_trace(go.Scatter(x=np.arange(96), y=s,   name="Profile",        line=dict(color="#22c55e", width=4)))
-    fig.add_trace(go.Scatter(x=np.arange(96), y=ap,  name="95th Percentile",line=dict(color="#ef4444", width=4)))
-    fig.update_layout(height=550, hovermode="x unified",
-                      xaxis_title="Block", yaxis_title="Power",
-                      paper_bgcolor="#111827", plot_bgcolor="#111827",
-                      legend=dict(orientation="h", y=1.08, x=0),
-                      margin=dict(l=20, r=20, t=60, b=20))
-    st.plotly_chart(fig, use_container_width=True)
 
-    result = pd.DataFrame({"Percentile": ap, "Profile": s, "Sym Profile": sym})
+    fig.add_trace(
+        go.Scatter(
+            x=np.arange(96),
+            y=sym,
+            name="Sym Profile",
+            line=dict(
+                color="#00c6ff",
+                width=4,
+            ),
+        )
+    )
+    
+    fig.add_trace(
+        go.Scatter(
+            x=np.arange(96),
+            y=s,
+            name="Profile",
+            line=dict(
+                color="#22c55e",
+                width=4,
+            ),
+        )
+    )
+    
+    fig.add_trace(
+        go.Scatter(
+            x=np.arange(96),
+            y=ap,
+            name="95th Percentile",
+            line=dict(
+                color="#ef4444",
+                width=4,
+            ),
+        )
+    )
+    
+    fig.update_layout(
+        height=550,
+        hovermode="x unified",
+    
+        xaxis_title="Block",
+        yaxis_title="Power",
+    
+        # Let Streamlit/Plotly handle the theme
+        template="streamlit",
+    
+        legend=dict(
+            orientation="h",
+            y=1.08,
+            x=0,
+        ),
+    
+        margin=dict(
+            l=20,
+            r=20,
+            t=60,
+            b=20,
+        ),
+    )
+    
+    st.plotly_chart(
+        fig,
+        use_container_width=True,
+    )
+    
+    result = pd.DataFrame({
+        "Percentile": ap,
+        "Profile": s,
+        "Sym Profile": sym,
+    })
+    
     st.subheader("Generated Curve")
-    st.dataframe(result, use_container_width=True, hide_index=True)
+    
+    st.dataframe(
+        result,
+        use_container_width=True,
+        hide_index=True,
+    )
