@@ -542,22 +542,19 @@ with st.expander(
 # ==========================================================
 
 st.subheader(
-    "1. Data Cleaning"
+    "Data Cleaning"
 )
 
 col1, col2, col3 = st.columns(3)
 
 with col1:
 
-    min_requirement = st.slider(
+    min_data_requirement = st.slider(
         "Minimum Data Requirement",
-        0.10,
-        1.00,
-        0.30,
-        0.05,
-        format="%.0f%%",
-    )
-
+        0, 100, 30, 5,
+        format="%d%%",
+    ) / 100
+    
 with col2:
 
     upper_limit = st.number_input(
