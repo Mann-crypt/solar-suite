@@ -58,31 +58,126 @@ font-size:48px;font-weight:800;'>⚡ Solar Suite</h1>
 
 st.divider()
 
+st.markdown(
+    """
+    <style>
+    .tool-card {
+        background: #111827;
+        border: 1px solid #1f2937;
+        border-radius: 12px;
+        padding: 24px;
+        min-height: 190px;
+        margin-bottom: 10px;
+    }
+
+    .tool-card h3 {
+        margin-top: 0;
+        color: white;
+    }
+
+    .tool-card p {
+        color: #8b96a8;
+        font-size: 14px;
+        line-height: 1.6;
+    }
+
+    div.stButton > button {
+        width: 100%;
+        border-radius: 10px;
+        height: 45px;
+        font-weight: 600;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+
 col1, col2, col3 = st.columns(3)
+
+# ==========================================================
+# LOSS CORRECTION
+# ==========================================================
+
 with col1:
-    st.markdown("""
-    <div style='background:#111827;border:1px solid #1f2937;border-radius:12px;padding:24px;'>
-    <h3>⛅ Loss Correction</h3>
-    <p style='color:#8b96a8;'>Differential evolution optimization for Fixed and Tracking plants.
-    Supports cluster and non-cluster workbooks.</p>
-    </div>""", unsafe_allow_html=True)
+
+    st.markdown(
+        """
+        <div class="tool-card">
+            <h3>⛅ Loss Correction</h3>
+            <p>
+                Differential evolution optimization for Fixed and
+                Tracking plants. Supports cluster and non-cluster
+                workbooks.
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    if st.button(
+        "Open Loss Correction →",
+        key="home_loss_correction",
+        use_container_width=True,
+    ):
+
+        st.session_state["selected_page"] = "Loss Correction"
+        st.rerun()
+
+
+# ==========================================================
+# RT CORRECTION
+# ==========================================================
 
 with col2:
-    st.markdown("""
-    <div style='background:#111827;border:1px solid #1f2937;border-radius:12px;padding:24px;'>
-    <h3>⏰ RT Correction</h3>
-    <p style='color:#8b96a8;'>Parabolic ramp-profile fitting for real-time generation correction
-    with key time block lookup.</p>
-    </div>""", unsafe_allow_html=True)
+
+    st.markdown(
+        """
+        <div class="tool-card">
+            <h3>⏰ RT Correction</h3>
+            <p>
+                Parabolic ramp-profile fitting for real-time
+                generation correction with key time block lookup.
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    if st.button(
+        "Open RT Correction →",
+        key="home_rt_correction",
+        use_container_width=True,
+    ):
+
+        st.session_state["selected_page"] = "RT Correction"
+        st.rerun()
+
+
+# ==========================================================
+# AEROMAL
+# ==========================================================
 
 with col3:
-    st.markdown("""
-    <div style='background:#111827;border:1px solid #1f2937;border-radius:12px;padding:24px;'>
-    <h3>🐱‍🏍 Aeromal</h3>
-    <p style='color:#8b96a8;'>Curtailment shaping and 95th-percentile profile generation
-    using Savitzky-Golay filtering.</p>
-    </div>""", unsafe_allow_html=True)
 
-st.divider()
-st.markdown("<p style='color:#8b96a8;font-size:13px;'>Use the sidebar to navigate between tools.</p>",
-            unsafe_allow_html=True)
+    st.markdown(
+        """
+        <div class="tool-card">
+            <h3>🐱‍🏍 Aeromal</h3>
+            <p>
+                Curtailment shaping and 95th-percentile profile
+                generation using Savitzky-Golay filtering.
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    if st.button(
+        "Open Aeromal →",
+        key="home_aeromal",
+        use_container_width=True,
+    ):
+
+        st.session_state["selected_page"] = "Aeromal"
+        st.rerun()
