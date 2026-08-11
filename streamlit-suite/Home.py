@@ -195,4 +195,4 @@ with col4:
         key="home_cmv_profile_generator",
         use_container_width=True,
     ):
-        st.switch_page("pages/4_CMV_Profile_Generator.py")
+        st.switch_page("pages/4_CMV Profile Generator.py")
