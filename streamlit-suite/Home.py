@@ -113,12 +113,12 @@ with col1:
         unsafe_allow_html=True,
     )
 
-    if st.button(
-        "Open Loss Correction →",
-        key="home_loss_correction",
+    st.page_link(
+        "pages/1_Loss_Correction.py",
+        label="Open Loss Correction →",
+        icon="⛅",
         use_container_width=True,
-    ):
-        st.switch_page("pages/1_Loss_Correction.py")
+    )
 
 
 # ==========================================================
