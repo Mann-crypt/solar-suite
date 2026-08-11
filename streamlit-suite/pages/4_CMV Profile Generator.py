@@ -1397,6 +1397,3 @@ except Exception as e:
         f"Unable to update workbook: {e}"
     )
 
-
-Can you please do it yourself?
-```
