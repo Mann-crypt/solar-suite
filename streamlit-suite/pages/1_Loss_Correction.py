@@ -418,20 +418,24 @@ sheet   = "Fixed-CL1" if is_cluster else "Fixed"
 df_fix  = read_calculation_sheet(file_bytes, sheet)
 
 # Align lengths before applying editor data
-n = min(len(df_fix), len(edited_df), 96)
-df_fix = df_fix.iloc[:n].copy()
+# Use edited_df directly — it already has all the right columns
+# from detect_workbook, cleaned and numeric. No need to merge with df_fix.
+edited_df = edited_df.iloc[:96].reset_index(drop=True)
 
 for col in ghi_cols:
-    if col in edited_df.columns:
-        df_fix[col] = pd.to_numeric(edited_df[col].values[:n], errors="coerce").fillna(0)
-    elif col in df_fix.columns:
-        df_fix[col] = pd.to_numeric(df_fix[col], errors="coerce").fillna(0)
+    edited_df[col] = pd.to_numeric(edited_df[col], errors="coerce").fillna(0)
+edited_df["Actual"] = pd.to_numeric(edited_df["Actual"], errors="coerce").fillna(0)
 
-# Actual may not be in df_fix columns if the sheet uses a different name
-actual_vals = pd.to_numeric(edited_df["Actual"].values[:n], errors="coerce").fillna(0)
-df_fix["Actual"] = actual_vals
-actual = actual_vals
+# df_fix only needed for extra columns (Date, geometry cols etc.)
+# Overwrite its GHI + Actual from the editor so user edits are reflected
+n = min(len(df_fix), len(edited_df))
+df_fix = df_fix.iloc[:n].reset_index(drop=True)
 
+for col in ghi_cols:
+    df_fix[col] = edited_df[col].values[:n]
+df_fix["Actual"] = edited_df["Actual"].values[:n]
+
+actual = df_fix["Actual"].to_numpy(float)
 
 # ==========================================================
 # FIXED PLANT
