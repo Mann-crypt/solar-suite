@@ -101,7 +101,6 @@ def detect_workbook(file_bytes):
 
 @st.cache_data(show_spinner=False)
 def read_area_efficiency(file_bytes):
-    # Try header rows 0, 1, 2 until we find one with numeric efficiency data
     for header_row in [1, 2, 0]:
         df = pd.read_excel(
             io.BytesIO(file_bytes),
@@ -111,14 +110,15 @@ def read_area_efficiency(file_bytes):
         )
         df.columns = df.columns.str.strip()
         df = df[df["Module Type"].notna()].copy()
-        # Force numeric on efficiency and area columns
         for col in df.columns:
             if col != "Module Type":
                 df[col] = pd.to_numeric(df[col], errors="coerce")
         df = df.dropna(subset=["Standard PV Efficiency (%)"])
-        if len(df) > 0 and df["Standard PV Efficiency (%)"].notna().any():
+        # Filter out rows where efficiency is clearly wrong (area values bleeding in)
+        df = df[df["Standard PV Efficiency (%)"].between(1, 50)]
+        if len(df) > 0:
             return df.reset_index(drop=True)
-    # Fallback — return whatever we got from header=1
+    # Fallback
     df = pd.read_excel(
         io.BytesIO(file_bytes),
         sheet_name="Area & Efficiency",
@@ -126,7 +126,6 @@ def read_area_efficiency(file_bytes):
     )
     df.columns = df.columns.str.strip()
     return df[df["Module Type"].notna()].copy()
-
 
 @st.cache_data(show_spinner=False)
 def read_weights(file_bytes):
