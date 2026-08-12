@@ -417,12 +417,18 @@ lat     = read_forecast_config(file_bytes)
 sheet   = "Fixed-CL1" if is_cluster else "Fixed"
 df_fix  = read_calculation_sheet(file_bytes, sheet)
 
-# Apply editor data (not cached — depends on live widget values)
+# Align lengths before applying editor data
+n = min(len(df_fix), len(edited_df), 96)
+df_fix = df_fix.iloc[:n].copy()
+
 for col in ghi_cols:
-    df_fix[col] = pd.to_numeric(edited_df[col].values[:len(df_fix)], errors="coerce")
-df_fix["Actual"] = pd.to_numeric(edited_df["Actual"].values[:len(df_fix)], errors="coerce").fillna(0)
-df_fix = df_fix.iloc[:96].copy()
-actual = df_fix["Actual"].to_numpy(float)
+    if col in df_fix.columns:
+        df_fix[col] = pd.to_numeric(edited_df[col].values[:n], errors="coerce").fillna(0)
+
+# Actual may not be in df_fix columns if the sheet uses a different name
+actual_vals = pd.to_numeric(edited_df["Actual"].values[:n], errors="coerce").fillna(0)
+df_fix["Actual"] = actual_vals
+actual = actual_vals
 
 
 # ==========================================================
