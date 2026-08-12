@@ -56,19 +56,14 @@ st.sidebar.divider()
 
 
 # ==========================================================
-# AUTH
+# AUTHENTICATION
 # ==========================================================
 
 if "aeromal_auth" not in st.session_state:
     st.session_state.aeromal_auth = False
 
-if st.session_state.aeromal_auth:
 
-    if st.sidebar.button("🚪 Logout", use_container_width=True):
-        st.session_state.aeromal_auth = False
-        st.rerun()
-
-else:
+if not st.session_state.aeromal_auth:
 
     st.title("🔒 Access bas bade logo ke paas hai")
 
@@ -82,13 +77,30 @@ else:
         type="primary",
         use_container_width=True,
     ):
+
         if password == AEROMAL_PASSWORD:
+
             st.session_state.aeromal_auth = True
             st.rerun()
+
         else:
+
             st.error("Incorrect Password")
 
     st.stop()
+
+
+# ==========================================================
+# LOGOUT
+# ==========================================================
+
+if st.sidebar.button(
+    "🚪 Logout",
+    use_container_width=True,
+):
+
+    st.session_state.aeromal_auth = False
+    st.rerun()
 
 
 # ==========================================================
@@ -96,26 +108,32 @@ else:
 # ==========================================================
 
 @st.cache_data(show_spinner=False)
-def read_excel_file(file_bytes):
-    """Read Excel workbook sheet names."""
-    xls = pd.ExcelFile(io.BytesIO(file_bytes))
-    return xls.sheet_names
+def read_csv_file(file_bytes):
 
-
-@st.cache_data(show_spinner=False)
-def read_excel_sheet(file_bytes, sheet_name):
-    """Read selected Excel sheet."""
-    return pd.read_excel(
-        io.BytesIO(file_bytes),
-        sheet_name=sheet_name,
+    return pd.read_csv(
+        io.BytesIO(file_bytes)
     )
 
 
 @st.cache_data(show_spinner=False)
-def read_csv_file(file_bytes):
-    """Read CSV file."""
-    return pd.read_csv(
+def get_excel_sheet_names(file_bytes):
+
+    xls = pd.ExcelFile(
         io.BytesIO(file_bytes)
+    )
+
+    return xls.sheet_names
+
+
+@st.cache_data(show_spinner=False)
+def read_excel_sheet(
+    file_bytes,
+    sheet_name,
+):
+
+    return pd.read_excel(
+        io.BytesIO(file_bytes),
+        sheet_name=sheet_name,
     )
 
 
@@ -124,23 +142,29 @@ def read_csv_file(file_bytes):
 # ==========================================================
 
 @st.cache_data(show_spinner=False)
-def cached_percentile(power_tuple, days):
+def cached_percentile(
+    power_tuple,
+    days,
+):
+
     power = np.asarray(
         power_tuple,
         dtype=float,
     )
 
-    profile = power.reshape(
+    data = power.reshape(
         days,
         96,
     )
 
+    percentile = np.percentile(
+        data,
+        95,
+        axis=0,
+    )
+
     return tuple(
-        np.percentile(
-            profile,
-            95,
-            axis=0,
-        ).tolist()
+        percentile.tolist()
     )
 
 
@@ -149,7 +173,9 @@ def cached_percentile(power_tuple, days):
 # ==========================================================
 
 @st.cache_data(show_spinner=False)
-def cached_best_shift(profile_tuple):
+def cached_best_shift(
+    profile_tuple,
+):
 
     profile = np.asarray(
         profile_tuple,
@@ -177,6 +203,7 @@ def cached_best_shift(profile_tuple):
         )
 
         if error < best_error:
+
             best_error = error
             best_shift = shift
 
@@ -184,7 +211,7 @@ def cached_best_shift(profile_tuple):
 
 
 # ==========================================================
-# NO CURTAILMENT PIPELINE
+# NO CURTAILMENT
 # ==========================================================
 
 @st.cache_data(show_spinner=False)
@@ -202,11 +229,19 @@ def cached_no_curtailment(
         )
     )
 
+    # ------------------------------------------------------
+    # Initial smoothing
+    # ------------------------------------------------------
+
     smooth = savgol_filter(
         percentile,
         window_length=window,
         polyorder=3,
     )
+
+    # ------------------------------------------------------
+    # Find best symmetry shift
+    # ------------------------------------------------------
 
     best_shift = cached_best_shift(
         tuple(smooth.tolist())
@@ -230,56 +265,59 @@ def cached_no_curtailment(
         percentile > 0.1
     )[0]
 
-    if len(active):
+    if len(active) > 0:
 
         start = active[0]
         end = active[-1]
+
         blend = 8
 
-        end_start = min(
+        # Morning
+        morning_end = min(
             start + 1 + blend,
             96,
         )
 
-        if end_start > start + 1:
+        if morning_end > start + 1:
 
             idx = np.arange(
                 start + 1,
-                end_start,
+                morning_end,
             )
 
-            w = np.linspace(
+            weights = np.linspace(
                 1,
                 0,
                 len(idx),
             )
 
             symmetric[idx] = (
-                w * percentile[idx]
-                + (1 - w) * symmetric[idx]
+                weights * percentile[idx]
+                + (1 - weights) * symmetric[idx]
             )
 
-        begin = max(
+        # Evening
+        evening_start = max(
             end - blend,
             0,
         )
 
-        if end > begin:
+        if end > evening_start:
 
             idx = np.arange(
-                begin,
+                evening_start,
                 end,
             )
 
-            w = np.linspace(
+            weights = np.linspace(
                 0,
                 1,
                 len(idx),
             )
 
             symmetric[idx] = (
-                w * percentile[idx]
-                + (1 - w) * symmetric[idx]
+                weights * percentile[idx]
+                + (1 - weights) * symmetric[idx]
             )
 
     # ------------------------------------------------------
@@ -298,6 +336,7 @@ def cached_no_curtailment(
         polyorder=3,
     )
 
+    # Remove negative values
     smooth = np.clip(
         smooth,
         0,
@@ -310,6 +349,7 @@ def cached_no_curtailment(
         None,
     )
 
+    # Remove very small values
     smooth[
         smooth < 0.1
     ] = 0
@@ -318,6 +358,7 @@ def cached_no_curtailment(
         symmetric < 0.1
     ] = 0
 
+    # Power availability
     factor = (
         power_availability / 100
     )
@@ -334,7 +375,7 @@ def cached_no_curtailment(
 
 
 # ==========================================================
-# MANUAL SHIFT
+# MANUAL SHIFT - NO CURTAILMENT
 # ==========================================================
 
 @st.cache_data(show_spinner=False)
@@ -354,9 +395,8 @@ def cached_sym_shift_nc(
     )
 
     symmetric = (
-        0.50 * smooth
-        + 0.50 * shifted[::-1]
-    )
+        smooth + shifted[::-1]
+    ) / 2
 
     symmetric = savgol_filter(
         symmetric,
@@ -380,7 +420,7 @@ def cached_sym_shift_nc(
 
 
 # ==========================================================
-# CURTAILMENT PIPELINE
+# CURTAILMENT
 # ==========================================================
 
 @st.cache_data(show_spinner=False)
@@ -404,12 +444,13 @@ def cached_curtailment(
     )
 
     y = percentile.copy()
+
     n = len(y)
 
     result = np.zeros(n)
 
     # ------------------------------------------------------
-    # Smooth and gradient
+    # Smooth + gradient
     # ------------------------------------------------------
 
     smooth = savgol_filter(
@@ -423,15 +464,17 @@ def cached_curtailment(
     )
 
     # ------------------------------------------------------
-    # Left side
+    # LEFT SIDE
     # ------------------------------------------------------
 
     left_peak = np.argmax(
         smooth[: n // 2]
     )
 
-    if left_peak < 2:
-        left_peak = 2
+    left_peak = max(
+        left_peak,
+        2,
+    )
 
     left_start = np.argmax(
         gradient[:left_peak]
@@ -449,17 +492,21 @@ def cached_curtailment(
         left_start:left_peak
     ]
 
-    if len(x_left) < 2:
-        m1, c1 = 1, 0
-    else:
+    if len(x_left) >= 2:
+
         m1, c1 = np.polyfit(
             x_left,
             y_left,
             1,
         )
 
+    else:
+
+        m1 = 1
+        c1 = 0
+
     # ------------------------------------------------------
-    # Right side
+    # RIGHT SIDE
     # ------------------------------------------------------
 
     right_peak = (
@@ -477,12 +524,16 @@ def cached_curtailment(
         smooth > threshold
     )[0]
 
-    if len(active):
+    if len(active) > 0:
+
         right_end = active[-1]
+
     else:
+
         right_end = n - 1
 
     if right_end <= right_peak:
+
         right_end = min(
             n - 1,
             right_peak + 2,
@@ -497,17 +548,21 @@ def cached_curtailment(
         right_peak:right_end
     ]
 
-    if len(x_right) < 2:
-        m2, c2 = -1, smooth[right_peak]
-    else:
+    if len(x_right) >= 2:
+
         m2, c2 = np.polyfit(
             x_right,
             y_right,
             1,
         )
 
+    else:
+
+        m2 = -1
+        c2 = smooth[right_peak]
+
     # ------------------------------------------------------
-    # Trip point
+    # Avoid division by zero
     # ------------------------------------------------------
 
     if abs(m1) < 1e-9:
@@ -515,6 +570,10 @@ def cached_curtailment(
 
     if abs(m2) < 1e-9:
         m2 = -1e-9
+
+    # ------------------------------------------------------
+    # Calculate trip
+    # ------------------------------------------------------
 
     A = (
         1 / m2
@@ -527,10 +586,13 @@ def cached_curtailment(
     )
 
     if abs(A) < 1e-9:
+
         trip = float(
             target_width
         )
+
     else:
+
         trip = max(
             0,
             (target_width - B) / A,
@@ -538,7 +600,9 @@ def cached_curtailment(
 
     left_idx = int(
         np.clip(
-            round((trip - c1) / m1),
+            round(
+                (trip - c1) / m1
+            ),
             0,
             n - 1,
         )
@@ -546,21 +610,24 @@ def cached_curtailment(
 
     right_idx = int(
         np.clip(
-            round((trip - c2) / m2),
+            round(
+                (trip - c2) / m2
+            ),
             0,
             n - 1,
         )
     )
 
     if right_idx <= left_idx:
+
         right_idx = min(
             n - 1,
             left_idx + 1,
         )
 
-    # ------------------------------------------------------
-    # Dome mode
-    # ------------------------------------------------------
+    # ======================================================
+    # DOME MODE
+    # ======================================================
 
     if peak_cap >= trip:
 
@@ -578,6 +645,7 @@ def cached_curtailment(
             )
 
             if value >= trip:
+
                 left_idx = i
                 break
 
@@ -599,6 +667,7 @@ def cached_curtailment(
             )
 
             if value >= trip:
+
                 right_idx = i
                 break
 
@@ -646,7 +715,7 @@ def cached_curtailment(
         result[
             left_idx:end_idx
         ] = dome[
-            :end_idx-left_idx
+            :end_idx - left_idx
         ]
 
         result = savgol_filter(
@@ -661,11 +730,15 @@ def cached_curtailment(
             None,
         )
 
-        result[:left_start] = smooth[
+        result[
+            :left_start
+        ] = smooth[
             :left_start
         ]
 
-        result[right_end:] = smooth[
+        result[
+            right_end:
+        ] = smooth[
             right_end:
         ]
 
@@ -689,9 +762,9 @@ def cached_curtailment(
             result < 0.2
         ] = 0
 
-    # ------------------------------------------------------
-    # Flat peak mode
-    # ------------------------------------------------------
+    # ======================================================
+    # FLAT PEAK MODE
+    # ======================================================
 
     else:
 
@@ -704,6 +777,7 @@ def cached_curtailment(
             result[i] = value
 
             if value >= peak_cap:
+
                 left_idx = i
                 break
 
@@ -722,6 +796,7 @@ def cached_curtailment(
             right_curve[i] = value
 
             if value >= peak_cap:
+
                 right_idx = i
                 break
 
@@ -748,11 +823,15 @@ def cached_curtailment(
             3,
         )
 
-        result[:left_start] = smooth[
+        result[
+            :left_start
+        ] = smooth[
             :left_start
         ]
 
-        result[right_end:] = smooth[
+        result[
+            right_end:
+        ] = smooth[
             right_end:
         ]
 
@@ -793,300 +872,27 @@ def cached_curtailment(
 
 @st.cache_data(show_spinner=False)
 def cached_sym_shift_c(
-    final_smooth_tuple,
+    final_profile_tuple,
     shift,
 ):
 
-    smooth = np.asarray(
-        final_smooth_tuple,
+    profile = np.asarray(
+        final_profile_tuple,
         dtype=float,
     )
 
     shifted = np.roll(
-        smooth,
+        profile,
         -int(shift),
     )
 
     symmetric = (
-        smooth + shifted[::-1]
+        profile + shifted[::-1]
     ) / 2
 
     return tuple(
         symmetric.tolist()
     )
-
-
-# ==========================================================
-# REPORT CREATION
-# ==========================================================
-
-def style_report_sheet(ws):
-
-    header_fill = PatternFill(
-        fill_type="solid",
-        fgColor="0072FF",
-    )
-
-    header_font = Font(
-        color="FFFFFF",
-        bold=True,
-    )
-
-    for cell in ws[1]:
-
-        cell.fill = header_fill
-        cell.font = header_font
-        cell.alignment = Alignment(
-            horizontal="center"
-        )
-
-    for column in ws.columns:
-
-        max_length = 0
-        column_letter = get_column_letter(
-            column[0].column
-        )
-
-        for cell in column:
-
-            try:
-                max_length = max(
-                    max_length,
-                    len(str(cell.value))
-                )
-            except Exception:
-                pass
-
-        ws.column_dimensions[
-            column_letter
-        ].width = min(
-            max_length + 2,
-            35,
-        )
-
-
-def build_excel_report(
-    original_bytes,
-    file_type,
-    source_df,
-    selected_column,
-    mode,
-    result_df,
-    parameters,
-):
-
-    output = io.BytesIO()
-
-    # ------------------------------------------------------
-    # Excel input
-    # ------------------------------------------------------
-
-    if file_type == "xlsx":
-
-        output.write(
-            original_bytes
-        )
-        output.seek(0)
-
-        wb = load_workbook(
-            output
-        )
-
-        # Remove previous Final Report
-        if "Final Report" in wb.sheetnames:
-            del wb["Final Report"]
-
-        ws = wb.create_sheet(
-            "Final Report"
-        )
-
-        # Report title
-        ws["A1"] = (
-            "Aeromal Solar Suite - Final Report"
-        )
-
-        ws["A1"].font = Font(
-            bold=True,
-            size=16,
-        )
-
-        ws["A3"] = "Selected Column"
-        ws["B3"] = selected_column
-
-        ws["A4"] = "Mode"
-        ws["B4"] = mode
-
-        row = 6
-
-        # Parameters
-        ws.cell(
-            row=row,
-            column=1,
-            value="Parameters",
-        ).font = Font(
-            bold=True,
-            size=12,
-        )
-
-        row += 1
-
-        for key, value in parameters.items():
-
-            ws.cell(
-                row=row,
-                column=1,
-                value=key,
-            )
-
-            ws.cell(
-                row=row,
-                column=2,
-                value=value,
-            )
-
-            row += 1
-
-        row += 1
-
-        # Result table
-        for col_idx, column in enumerate(
-            result_df.columns,
-            start=1,
-        ):
-
-            ws.cell(
-                row=row,
-                column=col_idx,
-                value=column,
-            )
-
-        header_row = row
-
-        for r_idx, values in enumerate(
-            result_df.itertuples(
-                index=False,
-                name=None,
-            ),
-            start=row + 1,
-        ):
-
-            for c_idx, value in enumerate(
-                values,
-                start=1,
-            ):
-
-                ws.cell(
-                    row=r_idx,
-                    column=c_idx,
-                    value=float(value)
-                    if isinstance(
-                        value,
-                        (np.floating, np.integer),
-                    )
-                    else value,
-                )
-
-        # Style result header
-        for cell in ws[header_row]:
-
-            cell.fill = PatternFill(
-                fill_type="solid",
-                fgColor="0072FF",
-            )
-
-            cell.font = Font(
-                color="FFFFFF",
-                bold=True,
-            )
-
-        style_report_sheet(
-            ws
-        )
-
-        wb.save(
-            output
-        )
-
-        output.seek(0)
-
-        return output.getvalue()
-
-    # ------------------------------------------------------
-    # CSV input
-    # ------------------------------------------------------
-
-    with pd.ExcelWriter(
-        output,
-        engine="openpyxl",
-    ) as writer:
-
-        source_df.to_excel(
-            writer,
-            sheet_name="Source Data",
-            index=False,
-        )
-
-        result_df.to_excel(
-            writer,
-            sheet_name="Final Report",
-            index=False,
-        )
-
-    output.seek(0)
-
-    wb = load_workbook(
-        output
-    )
-
-    ws = wb["Final Report"]
-
-    # Add metadata above report
-    ws.insert_rows(1, 5)
-
-    ws["A1"] = (
-        "Aeromal Solar Suite - Final Report"
-    )
-
-    ws["A1"].font = Font(
-        bold=True,
-        size=16,
-    )
-
-    ws["A3"] = "Selected Column"
-    ws["B3"] = selected_column
-
-    ws["A4"] = "Mode"
-    ws["B4"] = mode
-
-    row = 6
-
-    for key, value in parameters.items():
-
-        ws.cell(
-            row=row,
-            column=1,
-            value=key,
-        )
-
-        ws.cell(
-            row=row,
-            column=2,
-            value=value,
-        )
-
-        row += 1
-
-    style_report_sheet(
-        ws
-    )
-
-    wb.save(
-        output
-    )
-
-    output.seek(0)
-
-    return output.getvalue()
 
 
 # ==========================================================
@@ -1096,7 +902,7 @@ def build_excel_report(
 def make_chart(
     x,
     curves,
-    mode,
+    title,
 ):
 
     fig = go.Figure()
@@ -1116,7 +922,7 @@ def make_chart(
         )
 
     fig.update_layout(
-        title=f"Aeromal - {mode}",
+        title=title,
         height=550,
         hovermode="x unified",
         template="streamlit",
@@ -1130,7 +936,7 @@ def make_chart(
         margin=dict(
             l=20,
             r=20,
-            t=60,
+            t=70,
             b=20,
         ),
     )
@@ -1139,7 +945,199 @@ def make_chart(
 
 
 # ==========================================================
-# PAGE
+# EXCEL REPORT
+# ==========================================================
+
+def format_report_sheet(ws):
+
+    header_fill = PatternFill(
+        fill_type="solid",
+        fgColor="0072FF",
+    )
+
+    header_font = Font(
+        color="FFFFFF",
+        bold=True,
+    )
+
+    # Header
+    for cell in ws[1]:
+
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(
+            horizontal="center"
+        )
+
+    # Column widths
+    for column in ws.columns:
+
+        max_length = 0
+
+        column_letter = get_column_letter(
+            column[0].column
+        )
+
+        for cell in column:
+
+            if cell.value is not None:
+
+                max_length = max(
+                    max_length,
+                    len(str(cell.value)),
+                )
+
+        ws.column_dimensions[
+            column_letter
+        ].width = min(
+            max_length + 3,
+            30,
+        )
+
+
+def create_final_report(
+    original_bytes,
+    file_type,
+    source_df,
+    result_df,
+):
+
+    output = io.BytesIO()
+
+    # ======================================================
+    # EXCEL INPUT
+    # ======================================================
+
+    if file_type == "excel":
+
+        output.write(
+            original_bytes
+        )
+
+        output.seek(0)
+
+        workbook = load_workbook(
+            output
+        )
+
+        # Remove old report if it exists
+        if "Final Report" in workbook.sheetnames:
+
+            del workbook["Final Report"]
+
+        # Create clean report sheet
+        ws = workbook.create_sheet(
+            "Final Report"
+        )
+
+        # ONLY these 3 columns go into report
+        clean_report = result_df[
+            [
+                "Block",
+                "Profile",
+                "Sym Profile",
+            ]
+        ]
+
+        # Write header
+        for col_num, column_name in enumerate(
+            clean_report.columns,
+            start=1,
+        ):
+
+            ws.cell(
+                row=1,
+                column=col_num,
+                value=column_name,
+            )
+
+        # Write data
+        for row_num, values in enumerate(
+            clean_report.itertuples(
+                index=False,
+                name=None,
+            ),
+            start=2,
+        ):
+
+            for col_num, value in enumerate(
+                values,
+                start=1,
+            ):
+
+                if isinstance(
+                    value,
+                    (np.integer, np.floating),
+                ):
+
+                    value = float(value)
+
+                ws.cell(
+                    row=row_num,
+                    column=col_num,
+                    value=value,
+                )
+
+        format_report_sheet(ws)
+
+        workbook.save(
+            output
+        )
+
+        output.seek(0)
+
+        return output.getvalue()
+
+    # ======================================================
+    # CSV INPUT
+    # ======================================================
+
+    with pd.ExcelWriter(
+        output,
+        engine="openpyxl",
+    ) as writer:
+
+        source_df.to_excel(
+            writer,
+            sheet_name="Source Data",
+            index=False,
+        )
+
+        result_df[
+            [
+                "Block",
+                "Profile",
+                "Sym Profile",
+            ]
+        ].to_excel(
+            writer,
+            sheet_name="Final Report",
+            index=False,
+        )
+
+    output.seek(0)
+
+    workbook = load_workbook(
+        output
+    )
+
+    ws = workbook[
+        "Final Report"
+    ]
+
+    format_report_sheet(ws)
+
+    workbook.save(
+        output
+    )
+
+    output.seek(0)
+
+    return output.getvalue()
+
+
+# ==========================================================
+# PAGE TITLE
 # ==========================================================
 
 st.title(
@@ -1148,19 +1146,27 @@ st.title(
 
 
 # ==========================================================
-# FILE UPLOADER
+# FILE UPLOAD
 # ==========================================================
 
+st.subheader(
+    "📂 Upload Data"
+)
+
 uploaded_file = st.file_uploader(
-    "📂 Upload CSV or Excel file",
-    type=["csv", "xlsx", "xls"],
+    "Upload CSV or Excel file",
+    type=[
+        "csv",
+        "xlsx",
+        "xls",
+    ],
 )
 
 
 if uploaded_file is None:
 
     st.info(
-        "Pehle CSV ya Excel file upload karo!!!"
+        "Pehle CSV ya Excel file upload karo."
     )
 
     st.stop()
@@ -1172,7 +1178,7 @@ file_name = uploaded_file.name.lower()
 
 
 # ==========================================================
-# LOAD DATA
+# LOAD FILE
 # ==========================================================
 
 if file_name.endswith(".csv"):
@@ -1193,15 +1199,13 @@ if file_name.endswith(".csv"):
 
         st.stop()
 
-    sheet_name = None
-
 else:
 
-    file_type = "xlsx"
+    file_type = "excel"
 
     try:
 
-        sheet_names = read_excel_file(
+        sheet_names = get_excel_sheet_names(
             file_bytes
         )
 
@@ -1213,14 +1217,14 @@ else:
 
         st.stop()
 
-    sheet_name = st.selectbox(
+    selected_sheet = st.selectbox(
         "📑 Select Excel Sheet",
         sheet_names,
     )
 
     source_df = read_excel_sheet(
         file_bytes,
-        sheet_name,
+        selected_sheet,
     )
 
 
@@ -1229,43 +1233,58 @@ else:
 # ==========================================================
 
 source_df.columns = [
-    str(col).strip()
-    for col in source_df.columns
+    str(column).strip()
+    for column in source_df.columns
 ]
+
+
+# ==========================================================
+# FIND VALID COLUMNS
+# ==========================================================
+
+available_columns = [
+    column
+    for column in VALID_COLUMNS
+    if column in source_df.columns
+]
+
+
+# ==========================================================
+# COLUMN ERROR
+# ==========================================================
+
+if not available_columns:
+
+    st.error(
+        "❌ Required generation columns nahi mili."
+    )
+
+    st.markdown(
+        "### Required columns:"
+    )
+
+    for column in VALID_COLUMNS:
+
+        st.write(
+            f"• `{column}`"
+        )
+
+    st.markdown(
+        "### Available columns:"
+    )
+
+    for column in source_df.columns:
+
+        st.write(
+            f"• `{column}`"
+        )
+
+    st.stop()
 
 
 # ==========================================================
 # COLUMN SELECTION
 # ==========================================================
-
-available_columns = [
-    col
-    for col in VALID_COLUMNS
-    if col in source_df.columns
-]
-
-
-if not available_columns:
-
-    st.error(
-        "Required columns nahi mili. "
-        "File mein inmein se koi column hona chahiye:"
-    )
-
-    st.write(
-        VALID_COLUMNS
-    )
-
-    st.write(
-        "Available columns:"
-    )
-
-    st.write(
-        list(source_df.columns)
-    )
-
-    st.stop()
-
 
 st.subheader(
     "⚙️ Calculation Input"
@@ -1282,7 +1301,9 @@ selected_column = st.selectbox(
 # ==========================================================
 
 power_series = pd.to_numeric(
-    source_df[selected_column],
+    source_df[
+        selected_column
+    ],
     errors="coerce",
 ).fillna(0)
 
@@ -1310,21 +1331,24 @@ if len(power_list) == 0:
 # 96 BLOCK VALIDATION
 # ==========================================================
 
-n_rows = len(power_list)
+n_rows = len(
+    power_list
+)
 
 
 if n_rows % 96 != 0:
 
     st.error(
         f"""
-        Number of rows must be divisible by 96.
+        ❌ Number of rows must be divisible by 96.
 
         Current rows: {n_rows}
 
         Required:
-        96 rows = 1 day
-        192 rows = 2 days
-        288 rows = 3 days
+
+        96 rows → 1 day
+        192 rows → 2 days
+        288 rows → 3 days
         """
     )
 
@@ -1335,23 +1359,24 @@ days = n_rows // 96
 
 
 st.success(
-    f"✅ {n_rows} rows detected = {days} day(s)"
+    f"✅ {n_rows} rows detected → {days} day(s)"
 )
 
 
 power_tuple = tuple(
-    float(x)
-    for x in power_list
+    float(value)
+    for value in power_list
 )
 
 
 # ==========================================================
-# MODE
+# MODE TOGGLE
 # ==========================================================
 
 st.markdown(
     """
     <style>
+
     div[data-testid="stToggle"]{
         background:#1f2937;
         border:2px solid #0072ff;
@@ -1364,6 +1389,7 @@ st.markdown(
         font-size:18px !important;
         font-weight:700 !important;
     }
+
     </style>
     """,
     unsafe_allow_html=True,
@@ -1377,7 +1403,7 @@ curtailment = st.toggle(
 
 
 # ==========================================================
-# COMMON X AXIS
+# COMMON BLOCK AXIS
 # ==========================================================
 
 x = np.arange(
@@ -1387,7 +1413,7 @@ x = np.arange(
 
 
 # ==========================================================
-# NO CURTAILMENT
+# NO CURTAILMENT MODE
 # ==========================================================
 
 if not curtailment:
@@ -1399,6 +1425,10 @@ if not curtailment:
     col1, col2, col3 = st.columns(
         3
     )
+
+    # ------------------------------------------------------
+    # Parameters
+    # ------------------------------------------------------
 
     window = col1.number_input(
         "Window Length",
@@ -1415,11 +1445,14 @@ if not curtailment:
         value=100,
     )
 
-    # Get calculated profile
+    # ------------------------------------------------------
+    # Calculate automatically
+    # ------------------------------------------------------
+
     (
-        ap_t,
-        smooth_t,
-        sym_t,
+        percentile_t,
+        profile_t,
+        symmetric_t,
         best_shift,
     ) = cached_no_curtailment(
         power_tuple,
@@ -1428,7 +1461,10 @@ if not curtailment:
         power_availability,
     )
 
-    # Manual shift
+    # ------------------------------------------------------
+    # Shift
+    # ------------------------------------------------------
+
     shift = col3.number_input(
         "Shift",
         min_value=0,
@@ -1437,23 +1473,24 @@ if not curtailment:
         step=1,
     )
 
+    # Automatic recalculation
     if shift != best_shift:
 
-        sym_t = cached_sym_shift_nc(
-            smooth_t,
+        symmetric_t = cached_sym_shift_nc(
+            profile_t,
             shift,
         )
 
     percentile = np.asarray(
-        ap_t
+        percentile_t
     )
 
-    smooth = np.asarray(
-        smooth_t
+    profile = np.asarray(
+        profile_t
     )
 
     symmetric = np.asarray(
-        sym_t
+        symmetric_t
     )
 
     # ------------------------------------------------------
@@ -1470,7 +1507,7 @@ if not curtailment:
             ),
             (
                 "Profile",
-                smooth,
+                profile,
                 "#22c55e",
             ),
             (
@@ -1479,7 +1516,7 @@ if not curtailment:
                 "#ef4444",
             ),
         ],
-        "No Curtailment",
+        "Aeromal - No Curtailment",
     )
 
     st.plotly_chart(
@@ -1495,7 +1532,7 @@ if not curtailment:
         {
             "Block": x,
             "Percentile": percentile,
-            "Profile": smooth,
+            "Profile": profile,
             "Sym Profile": symmetric,
         }
     )
@@ -1510,19 +1547,9 @@ if not curtailment:
         hide_index=True,
     )
 
-    parameters = {
-        "Selected Column": selected_column,
-        "Mode": "No Curtailment",
-        "Days": days,
-        "Window Length": window,
-        "Power Availability (%)": power_availability,
-        "Best Shift": best_shift,
-        "Applied Shift": shift,
-    }
-
 
 # ==========================================================
-# CURTAILMENT
+# CURTAILMENT MODE
 # ==========================================================
 
 else:
@@ -1536,14 +1563,19 @@ else:
     ):
 
         st.warning(
-            "Please enter Power values to continue."
+            "Selected column mein positive Power values nahi hain."
         )
 
         st.stop()
 
+
     col1, col2, col3 = st.columns(
         3
     )
+
+    # ------------------------------------------------------
+    # Parameters
+    # ------------------------------------------------------
 
     power_availability = col1.number_input(
         "Power Availability (%)",
@@ -1578,9 +1610,13 @@ else:
         step=2,
     )
 
+    # ------------------------------------------------------
+    # Calculate automatically
+    # ------------------------------------------------------
+
     (
-        ap_t,
-        final_t,
+        percentile_t,
+        profile_t,
         best_shift,
     ) = cached_curtailment(
         power_tuple,
@@ -1591,6 +1627,10 @@ else:
         power_availability,
     )
 
+    # ------------------------------------------------------
+    # Shift
+    # ------------------------------------------------------
+
     shift = col3.number_input(
         "Shift",
         min_value=0,
@@ -1600,16 +1640,16 @@ else:
     )
 
     symmetric_t = cached_sym_shift_c(
-        final_t,
+        profile_t,
         shift,
     )
 
     percentile = np.asarray(
-        ap_t
+        percentile_t
     )
 
-    final_profile = np.asarray(
-        final_t
+    profile = np.asarray(
+        profile_t
     )
 
     symmetric = np.asarray(
@@ -1630,7 +1670,7 @@ else:
             ),
             (
                 "Profile",
-                final_profile,
+                profile,
                 "#00c6ff",
             ),
             (
@@ -1639,7 +1679,7 @@ else:
                 "#0072ff",
             ),
         ],
-        "Curtailment",
+        "Aeromal - Curtailment",
     )
 
     st.plotly_chart(
@@ -1655,7 +1695,7 @@ else:
         {
             "Block": x,
             "Power": percentile,
-            "Profile": final_profile,
+            "Profile": profile,
             "Sym Profile": symmetric,
         }
     )
@@ -1670,18 +1710,6 @@ else:
         hide_index=True,
     )
 
-    parameters = {
-        "Selected Column": selected_column,
-        "Mode": "Curtailment",
-        "Days": days,
-        "Power Availability (%)": power_availability,
-        "Peak Cap": peak_cap,
-        "Target Width": target_width,
-        "Window Length": window,
-        "Best Shift": best_shift,
-        "Applied Shift": shift,
-    }
-
 
 # ==========================================================
 # FINAL REPORT
@@ -1694,48 +1722,28 @@ st.subheader(
 )
 
 st.caption(
-    "The report will be added to the uploaded workbook "
-    "as a new 'Final Report' sheet."
+    "Final Report sheet will contain only Block, "
+    "Profile and Sym Profile."
 )
 
 
 # ==========================================================
-# SOURCE DATA FOR CSV REPORT
-# ==========================================================
-
-if file_type == "csv":
-
-    report_source = source_df.copy()
-
-else:
-
-    report_source = source_df.copy()
-
-
-# ==========================================================
-# BUILD DOWNLOAD FILE
+# CREATE DOWNLOAD
 # ==========================================================
 
 try:
 
-    report_bytes = build_excel_report(
+    report_bytes = create_final_report(
         original_bytes=file_bytes,
         file_type=file_type,
-        source_df=report_source,
-        selected_column=selected_column,
-        mode=(
-            "Curtailment"
-            if curtailment
-            else "No Curtailment"
-        ),
+        source_df=source_df,
         result_df=result_df,
-        parameters=parameters,
     )
 
-    base_name = (
-        uploaded_file.name
-        .rsplit(".", 1)[0]
-    )
+    base_name = uploaded_file.name.rsplit(
+        ".",
+        1,
+    )[0]
 
     output_name = (
         f"{base_name}_Aeromal_Report.xlsx"
@@ -1756,5 +1764,5 @@ try:
 except Exception as e:
 
     st.error(
-        f"Report generate nahi ho payi: {e}"
+        f"❌ Report generate nahi ho payi: {e}"
     )
