@@ -1,3 +1,17 @@
+# Optimized Streamlit Loss Correction app
+# Key fixes:
+# 1. Workbook parsed once per uploaded file.
+# 2. No automatic st.rerun() for a new upload.
+# 3. Tracking Differential Evolution runs only after an explicit button.
+# 4. DE reduced to 30 iterations / population 8 and polish disabled.
+# 5. Tracking objective is vectorized with NumPy.
+# 6. Heavy optimization is never triggered by ordinary parameter changes.
+# 7. Workbook bytes are not passed through every calculation function.
+# 8. Cached calculations use compact tuples/arrays rather than repeatedly
+#    opening the workbook.
+#
+# Replace your current tracking/loss-correction page with the code below.
+
 import io
 import hashlib
 import numpy as np
