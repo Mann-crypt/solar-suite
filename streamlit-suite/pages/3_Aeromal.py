@@ -23,8 +23,8 @@ st.set_page_config(
 AEROMAL_PASSWORD = "asdfghjkl;'"
 
 VALID_COLUMNS = [
-    "Green-Gen-Meter",
-    "Green-Gen Scada",
+    "Green Gen-Meter (Developer)",
+    "Green Gen-SCADA (Developer)",
     "SEMS",
     "Power (MW)",
 ]
