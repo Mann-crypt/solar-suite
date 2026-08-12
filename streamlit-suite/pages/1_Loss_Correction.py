@@ -422,8 +422,10 @@ n = min(len(df_fix), len(edited_df), 96)
 df_fix = df_fix.iloc[:n].copy()
 
 for col in ghi_cols:
-    if col in df_fix.columns:
+    if col in edited_df.columns:
         df_fix[col] = pd.to_numeric(edited_df[col].values[:n], errors="coerce").fillna(0)
+    elif col in df_fix.columns:
+        df_fix[col] = pd.to_numeric(df_fix[col], errors="coerce").fillna(0)
 
 # Actual may not be in df_fix columns if the sheet uses a different name
 actual_vals = pd.to_numeric(edited_df["Actual"].values[:n], errors="coerce").fillna(0)
