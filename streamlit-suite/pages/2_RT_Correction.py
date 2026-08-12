@@ -174,25 +174,54 @@ if st.button("🚀 Dabaiye na!!", use_container_width=True, type="primary"):
     st.session_state.rt_optimized = True
     st.rerun()
 
-# ── Parameter inputs inside a form — zero reruns while typing ──
+# ── Parameter inputs ──────────────────────────────────────
 st.subheader("Parameters")
-st.caption("Adjust values then click Recalculate — chart updates instantly.")
 
 p = st.session_state.rt_params
 
-with st.form("rt_params_form"):
-    col1, col2 = st.columns(2)
-    with col1:
-        w  = st.number_input("Weight", 0.0, 1.0, value=float(p["w"]), step=0.01)
-        n2 = st.number_input("n2",            value=int(p["n2"]),     step=1)
-    with col2:
-        n1 = st.number_input("n1",            value=int(p["n1"]),     step=1)
-        b  = st.number_input("Peak Block",    value=int(p["b"]),      step=1)
-    recalc = st.form_submit_button("🔄 Recalculate", use_container_width=True, type="primary")
+col1, col2 = st.columns(2)
 
-if recalc:
-    st.session_state.rt_params = {"w": w, "n1": n1, "n2": n2, "b": b}
-    p = st.session_state.rt_params
+with col1:
+    w = st.number_input(
+        "Weight",
+        min_value=0.0,
+        max_value=1.0,
+        value=float(p["w"]),
+        step=0.01,
+        key="rt_w",
+    )
+
+    n2 = st.number_input(
+        "n2",
+        value=int(p["n2"]),
+        step=1,
+        key="rt_n2",
+    )
+
+with col2:
+    n1 = st.number_input(
+        "n1",
+        value=int(p["n1"]),
+        step=1,
+        key="rt_n1",
+    )
+
+    b = st.number_input(
+        "Peak Block",
+        value=int(p["b"]),
+        step=1,
+        key="rt_b",
+    )
+
+# Always keep current inputs in session state
+st.session_state.rt_params = {
+    "w": w,
+    "n1": n1,
+    "n2": n2,
+    "b": b,
+}
+
+p = st.session_state.rt_params
 
 # ── Final curve — fully cached, instant ──────────────────
 proj = cached_rt_curve(
