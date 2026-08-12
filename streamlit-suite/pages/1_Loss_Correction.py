@@ -436,8 +436,6 @@ if not st.session_state.lc_run:
 
 # ── Common data ───────────────────────────────────────────
 area_df = read_area_efficiency(file_bytes)
-st.write("Area DF shape:", area_df.shape)
-st.write("Efficiency col:", area_df["Standard PV Efficiency (%)"].tolist())
 lat     = read_forecast_config(file_bytes)
 sheet   = "Fixed-CL1" if is_cluster else "Fixed"
 df_fix  = read_calculation_sheet(file_bytes, sheet)
