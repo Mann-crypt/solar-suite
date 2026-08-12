@@ -101,6 +101,24 @@ def detect_workbook(file_bytes):
 
 @st.cache_data(show_spinner=False)
 def read_area_efficiency(file_bytes):
+    # Try header rows 0, 1, 2 until we find one with numeric efficiency data
+    for header_row in [1, 2, 0]:
+        df = pd.read_excel(
+            io.BytesIO(file_bytes),
+            sheet_name="Area & Efficiency",
+            header=header_row,
+            usecols=range(8),
+        )
+        df.columns = df.columns.str.strip()
+        df = df[df["Module Type"].notna()].copy()
+        # Force numeric on efficiency and area columns
+        for col in df.columns:
+            if col != "Module Type":
+                df[col] = pd.to_numeric(df[col], errors="coerce")
+        df = df.dropna(subset=["Standard PV Efficiency (%)"])
+        if len(df) > 0 and df["Standard PV Efficiency (%)"].notna().any():
+            return df.reset_index(drop=True)
+    # Fallback — return whatever we got from header=1
     df = pd.read_excel(
         io.BytesIO(file_bytes),
         sheet_name="Area & Efficiency",
@@ -202,11 +220,17 @@ def cached_optimize_loss(
     Vectorised peak-match loss scan.
     All inputs are plain tuples so Streamlit can hash them.
     """
-    std_eff = np.array(area_std_eff)
-    area    = np.array(area_m2)
-    actual  = np.array(actual_tuple)
-    actual_peak = actual.max()
+    std_eff = np.array(area_std_eff, dtype=float)
+    area    = np.array(area_m2,      dtype=float)
+    actual  = np.array(actual_tuple, dtype=float)
 
+    # Guard against empty or all-NaN data
+    std_eff = std_eff[~np.isnan(std_eff)]
+    area    = area[~np.isnan(area)]
+    if len(std_eff) == 0 or len(area) == 0 or actual.max() == 0:
+        return 0.0
+
+    actual_peak = actual.max()
     losses    = np.arange(0, std_eff.min() + 0.01, 0.1)
     best_loss = 0.0
     best_err  = np.inf
@@ -413,6 +437,8 @@ if not st.session_state.lc_run:
 
 # ── Common data ───────────────────────────────────────────
 area_df = read_area_efficiency(file_bytes)
+st.write("Area DF shape:", area_df.shape)
+st.write("Efficiency col:", area_df["Standard PV Efficiency (%)"].tolist())
 lat     = read_forecast_config(file_bytes)
 sheet   = "Fixed-CL1" if is_cluster else "Fixed"
 df_fix  = read_calculation_sheet(file_bytes, sheet)
