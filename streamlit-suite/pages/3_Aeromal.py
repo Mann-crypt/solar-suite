@@ -63,7 +63,16 @@ if "aeromal_auth" not in st.session_state:
     st.session_state.aeromal_auth = False
 
 
-if not st.session_state.aeromal_auth:
+if st.session_state.aeromal_auth:
+
+    if st.sidebar.button(
+        "🚪 Logout",
+        use_container_width=True,
+    ):
+        st.session_state.aeromal_auth = False
+        st.rerun()
+
+else:
 
     st.title("🔒 Access bas bade logo ke paas hai")
 
@@ -84,23 +93,9 @@ if not st.session_state.aeromal_auth:
             st.rerun()
 
         else:
-
             st.error("Incorrect Password")
 
     st.stop()
-
-
-# ==========================================================
-# LOGOUT
-# ==========================================================
-
-if st.sidebar.button(
-    "🚪 Logout",
-    use_container_width=True,
-):
-
-    st.session_state.aeromal_auth = False
-    st.rerun()
 
 
 # ==========================================================
@@ -108,15 +103,7 @@ if st.sidebar.button(
 # ==========================================================
 
 @st.cache_data(show_spinner=False)
-def read_csv_file(file_bytes):
-
-    return pd.read_csv(
-        io.BytesIO(file_bytes)
-    )
-
-
-@st.cache_data(show_spinner=False)
-def get_excel_sheet_names(file_bytes):
+def read_excel_sheets(file_bytes):
 
     xls = pd.ExcelFile(
         io.BytesIO(file_bytes)
@@ -137,8 +124,16 @@ def read_excel_sheet(
     )
 
 
+@st.cache_data(show_spinner=False)
+def read_csv(file_bytes):
+
+    return pd.read_csv(
+        io.BytesIO(file_bytes)
+    )
+
+
 # ==========================================================
-# 95TH PERCENTILE
+# PERCENTILE
 # ==========================================================
 
 @st.cache_data(show_spinner=False)
@@ -152,13 +147,13 @@ def cached_percentile(
         dtype=float,
     )
 
-    data = power.reshape(
+    profile = power.reshape(
         days,
         96,
     )
 
     percentile = np.percentile(
-        data,
+        profile,
         95,
         axis=0,
     )
@@ -240,7 +235,7 @@ def cached_no_curtailment(
     )
 
     # ------------------------------------------------------
-    # Find best symmetry shift
+    # Best symmetry shift
     # ------------------------------------------------------
 
     best_shift = cached_best_shift(
@@ -258,7 +253,7 @@ def cached_no_curtailment(
     )
 
     # ------------------------------------------------------
-    # Morning / evening blending
+    # Morning / Evening blending
     # ------------------------------------------------------
 
     active = np.where(
@@ -336,7 +331,6 @@ def cached_no_curtailment(
         polyorder=3,
     )
 
-    # Remove negative values
     smooth = np.clip(
         smooth,
         0,
@@ -349,7 +343,6 @@ def cached_no_curtailment(
         None,
     )
 
-    # Remove very small values
     smooth[
         smooth < 0.1
     ] = 0
@@ -358,7 +351,10 @@ def cached_no_curtailment(
         symmetric < 0.1
     ] = 0
 
+    # ------------------------------------------------------
     # Power availability
+    # ------------------------------------------------------
+
     factor = (
         power_availability / 100
     )
@@ -375,7 +371,7 @@ def cached_no_curtailment(
 
 
 # ==========================================================
-# MANUAL SHIFT - NO CURTAILMENT
+# MANUAL SYMMETRY SHIFT
 # ==========================================================
 
 @st.cache_data(show_spinner=False)
@@ -395,8 +391,9 @@ def cached_sym_shift_nc(
     )
 
     symmetric = (
-        smooth + shifted[::-1]
-    ) / 2
+        0.50 * smooth
+        + 0.50 * shifted[::-1]
+    )
 
     symmetric = savgol_filter(
         symmetric,
@@ -444,13 +441,12 @@ def cached_curtailment(
     )
 
     y = percentile.copy()
-
     n = len(y)
 
     result = np.zeros(n)
 
     # ------------------------------------------------------
-    # Smooth + gradient
+    # Smooth and gradient
     # ------------------------------------------------------
 
     smooth = savgol_filter(
@@ -525,11 +521,8 @@ def cached_curtailment(
     )[0]
 
     if len(active) > 0:
-
         right_end = active[-1]
-
     else:
-
         right_end = n - 1
 
     if right_end <= right_peak:
@@ -572,7 +565,7 @@ def cached_curtailment(
         m2 = -1e-9
 
     # ------------------------------------------------------
-    # Calculate trip
+    # Trip point
     # ------------------------------------------------------
 
     A = (
@@ -597,6 +590,10 @@ def cached_curtailment(
             0,
             (target_width - B) / A,
         )
+
+    # ------------------------------------------------------
+    # Peak indices
+    # ------------------------------------------------------
 
     left_idx = int(
         np.clip(
@@ -855,6 +852,10 @@ def cached_curtailment(
             result < 1
         ] = 0
 
+    # ------------------------------------------------------
+    # Best shift
+    # ------------------------------------------------------
+
     best_shift = cached_best_shift(
         tuple(result.tolist())
     )
@@ -893,6 +894,198 @@ def cached_sym_shift_c(
     return tuple(
         symmetric.tolist()
     )
+
+
+# ==========================================================
+# REPORT STYLING
+# ==========================================================
+
+def style_report_sheet(ws):
+
+    header_fill = PatternFill(
+        fill_type="solid",
+        fgColor="0072FF",
+    )
+
+    header_font = Font(
+        color="FFFFFF",
+        bold=True,
+    )
+
+    # Header
+    for cell in ws[1]:
+
+        cell.fill = header_fill
+        cell.font = header_font
+
+        cell.alignment = Alignment(
+            horizontal="center",
+            vertical="center",
+        )
+
+    # Column widths
+    for column in ws.columns:
+
+        max_length = 0
+
+        column_letter = get_column_letter(
+            column[0].column
+        )
+
+        for cell in column:
+
+            if cell.value is not None:
+
+                max_length = max(
+                    max_length,
+                    len(str(cell.value)),
+                )
+
+        ws.column_dimensions[
+            column_letter
+        ].width = min(
+            max_length + 2,
+            25,
+        )
+
+    ws.freeze_panes = "A2"
+
+    ws.auto_filter.ref = ws.dimensions
+
+
+# ==========================================================
+# BUILD EXCEL REPORT
+# ==========================================================
+
+def build_excel_report(
+    original_bytes,
+    file_type,
+    source_df,
+    result_df,
+):
+
+    output = io.BytesIO()
+
+    # ======================================================
+    # EXCEL INPUT
+    # ======================================================
+
+    if file_type == "excel":
+
+        output.write(
+            original_bytes
+        )
+
+        output.seek(0)
+
+        wb = load_workbook(
+            output
+        )
+
+        # Remove old report
+        if "Final Report" in wb.sheetnames:
+
+            del wb[
+                "Final Report"
+            ]
+
+        # Create clean report
+        ws = wb.create_sheet(
+            "Final Report"
+        )
+
+        # ONLY these columns
+        for col_idx, column in enumerate(
+            result_df.columns,
+            start=1,
+        ):
+
+            ws.cell(
+                row=1,
+                column=col_idx,
+                value=column,
+            )
+
+        for row_idx, values in enumerate(
+            result_df.itertuples(
+                index=False,
+                name=None,
+            ),
+            start=2,
+        ):
+
+            for col_idx, value in enumerate(
+                values,
+                start=1,
+            ):
+
+                if isinstance(
+                    value,
+                    (np.integer, np.floating),
+                ):
+
+                    value = float(value)
+
+                ws.cell(
+                    row=row_idx,
+                    column=col_idx,
+                    value=value,
+                )
+
+        style_report_sheet(
+            ws
+        )
+
+        wb.save(
+            output
+        )
+
+        output.seek(0)
+
+        return output.getvalue()
+
+    # ======================================================
+    # CSV INPUT
+    # ======================================================
+
+    with pd.ExcelWriter(
+        output,
+        engine="openpyxl",
+    ) as writer:
+
+        source_df.to_excel(
+            writer,
+            sheet_name="Source Data",
+            index=False,
+        )
+
+        result_df.to_excel(
+            writer,
+            sheet_name="Final Report",
+            index=False,
+        )
+
+    output.seek(0)
+
+    wb = load_workbook(
+        output
+    )
+
+    ws = wb[
+        "Final Report"
+    ]
+
+    style_report_sheet(
+        ws
+    )
+
+    wb.save(
+        output
+    )
+
+    output.seek(0)
+
+    return output.getvalue()
 
 
 # ==========================================================
@@ -936,7 +1129,7 @@ def make_chart(
         margin=dict(
             l=20,
             r=20,
-            t=70,
+            t=60,
             b=20,
         ),
     )
@@ -945,199 +1138,7 @@ def make_chart(
 
 
 # ==========================================================
-# EXCEL REPORT
-# ==========================================================
-
-def format_report_sheet(ws):
-
-    header_fill = PatternFill(
-        fill_type="solid",
-        fgColor="0072FF",
-    )
-
-    header_font = Font(
-        color="FFFFFF",
-        bold=True,
-    )
-
-    # Header
-    for cell in ws[1]:
-
-        cell.fill = header_fill
-        cell.font = header_font
-        cell.alignment = Alignment(
-            horizontal="center"
-        )
-
-    # Column widths
-    for column in ws.columns:
-
-        max_length = 0
-
-        column_letter = get_column_letter(
-            column[0].column
-        )
-
-        for cell in column:
-
-            if cell.value is not None:
-
-                max_length = max(
-                    max_length,
-                    len(str(cell.value)),
-                )
-
-        ws.column_dimensions[
-            column_letter
-        ].width = min(
-            max_length + 3,
-            30,
-        )
-
-
-def create_final_report(
-    original_bytes,
-    file_type,
-    source_df,
-    result_df,
-):
-
-    output = io.BytesIO()
-
-    # ======================================================
-    # EXCEL INPUT
-    # ======================================================
-
-    if file_type == "excel":
-
-        output.write(
-            original_bytes
-        )
-
-        output.seek(0)
-
-        workbook = load_workbook(
-            output
-        )
-
-        # Remove old report if it exists
-        if "Final Report" in workbook.sheetnames:
-
-            del workbook["Final Report"]
-
-        # Create clean report sheet
-        ws = workbook.create_sheet(
-            "Final Report"
-        )
-
-        # ONLY these 3 columns go into report
-        clean_report = result_df[
-            [
-                "Block",
-                "Profile",
-                "Sym Profile",
-            ]
-        ]
-
-        # Write header
-        for col_num, column_name in enumerate(
-            clean_report.columns,
-            start=1,
-        ):
-
-            ws.cell(
-                row=1,
-                column=col_num,
-                value=column_name,
-            )
-
-        # Write data
-        for row_num, values in enumerate(
-            clean_report.itertuples(
-                index=False,
-                name=None,
-            ),
-            start=2,
-        ):
-
-            for col_num, value in enumerate(
-                values,
-                start=1,
-            ):
-
-                if isinstance(
-                    value,
-                    (np.integer, np.floating),
-                ):
-
-                    value = float(value)
-
-                ws.cell(
-                    row=row_num,
-                    column=col_num,
-                    value=value,
-                )
-
-        format_report_sheet(ws)
-
-        workbook.save(
-            output
-        )
-
-        output.seek(0)
-
-        return output.getvalue()
-
-    # ======================================================
-    # CSV INPUT
-    # ======================================================
-
-    with pd.ExcelWriter(
-        output,
-        engine="openpyxl",
-    ) as writer:
-
-        source_df.to_excel(
-            writer,
-            sheet_name="Source Data",
-            index=False,
-        )
-
-        result_df[
-            [
-                "Block",
-                "Profile",
-                "Sym Profile",
-            ]
-        ].to_excel(
-            writer,
-            sheet_name="Final Report",
-            index=False,
-        )
-
-    output.seek(0)
-
-    workbook = load_workbook(
-        output
-    )
-
-    ws = workbook[
-        "Final Report"
-    ]
-
-    format_report_sheet(ws)
-
-    workbook.save(
-        output
-    )
-
-    output.seek(0)
-
-    return output.getvalue()
-
-
-# ==========================================================
-# PAGE TITLE
+# PAGE
 # ==========================================================
 
 st.title(
@@ -1146,15 +1147,11 @@ st.title(
 
 
 # ==========================================================
-# FILE UPLOAD
+# FILE UPLOADER
 # ==========================================================
 
-st.subheader(
-    "📂 Upload Data"
-)
-
 uploaded_file = st.file_uploader(
-    "Upload CSV or Excel file",
+    "📂 Upload CSV or Excel file",
     type=[
         "csv",
         "xlsx",
@@ -1166,7 +1163,7 @@ uploaded_file = st.file_uploader(
 if uploaded_file is None:
 
     st.info(
-        "Pehle CSV ya Excel file upload karo."
+        "Pehle CSV ya Excel file upload karo!!!"
     )
 
     st.stop()
@@ -1187,7 +1184,7 @@ if file_name.endswith(".csv"):
 
     try:
 
-        source_df = read_csv_file(
+        source_df = read_csv(
             file_bytes
         )
 
@@ -1205,7 +1202,7 @@ else:
 
     try:
 
-        sheet_names = get_excel_sheet_names(
+        sheet_names = read_excel_sheets(
             file_bytes
         )
 
@@ -1217,14 +1214,14 @@ else:
 
         st.stop()
 
-    selected_sheet = st.selectbox(
+    sheet_name = st.selectbox(
         "📑 Select Excel Sheet",
         sheet_names,
     )
 
     source_df = read_excel_sheet(
         file_bytes,
-        selected_sheet,
+        sheet_name,
     )
 
 
@@ -1249,35 +1246,27 @@ available_columns = [
 ]
 
 
-# ==========================================================
-# COLUMN ERROR
-# ==========================================================
-
 if not available_columns:
 
     st.error(
-        "❌ Required generation columns nahi mili."
+        "Required generation column nahi mili."
     )
 
-    st.markdown(
-        "### Required columns:"
+    st.write(
+        "Expected columns:"
     )
 
-    for column in VALID_COLUMNS:
-
-        st.write(
-            f"• `{column}`"
-        )
-
-    st.markdown(
-        "### Available columns:"
+    st.write(
+        VALID_COLUMNS
     )
 
-    for column in source_df.columns:
+    st.write(
+        "Available columns:"
+    )
 
-        st.write(
-            f"• `{column}`"
-        )
+    st.write(
+        list(source_df.columns)
+    )
 
     st.stop()
 
@@ -1297,7 +1286,7 @@ selected_column = st.selectbox(
 
 
 # ==========================================================
-# PREPARE POWER DATA
+# POWER DATA
 # ==========================================================
 
 power_series = pd.to_numeric(
@@ -1331,24 +1320,21 @@ if len(power_list) == 0:
 # 96 BLOCK VALIDATION
 # ==========================================================
 
-n_rows = len(
-    power_list
-)
+n_rows = len(power_list)
 
 
 if n_rows % 96 != 0:
 
     st.error(
         f"""
-        ❌ Number of rows must be divisible by 96.
+        Number of rows must be divisible by 96.
 
         Current rows: {n_rows}
 
         Required:
-
-        96 rows → 1 day
-        192 rows → 2 days
-        288 rows → 3 days
+        96 rows = 1 day
+        192 rows = 2 days
+        288 rows = 3 days
         """
     )
 
@@ -1359,7 +1345,7 @@ days = n_rows // 96
 
 
 st.success(
-    f"✅ {n_rows} rows detected → {days} day(s)"
+    f"✅ {n_rows} rows detected = {days} day(s)"
 )
 
 
@@ -1377,7 +1363,7 @@ st.markdown(
     """
     <style>
 
-    div[data-testid="stToggle"]{
+    div[data-testid="stToggle"] {
         background:#1f2937;
         border:2px solid #0072ff;
         border-radius:14px;
@@ -1385,7 +1371,7 @@ st.markdown(
         margin-bottom:15px;
     }
 
-    div[data-testid="stToggle"] label{
+    div[data-testid="stToggle"] label {
         font-size:18px !important;
         font-weight:700 !important;
     }
@@ -1403,7 +1389,7 @@ curtailment = st.toggle(
 
 
 # ==========================================================
-# COMMON BLOCK AXIS
+# X AXIS
 # ==========================================================
 
 x = np.arange(
@@ -1413,7 +1399,7 @@ x = np.arange(
 
 
 # ==========================================================
-# NO CURTAILMENT MODE
+# NO CURTAILMENT
 # ==========================================================
 
 if not curtailment:
@@ -1446,7 +1432,7 @@ if not curtailment:
     )
 
     # ------------------------------------------------------
-    # Calculate automatically
+    # Calculation
     # ------------------------------------------------------
 
     (
@@ -1473,7 +1459,6 @@ if not curtailment:
         step=1,
     )
 
-    # Automatic recalculation
     if shift != best_shift:
 
         symmetric_t = cached_sym_shift_nc(
@@ -1525,7 +1510,7 @@ if not curtailment:
     )
 
     # ------------------------------------------------------
-    # Result table
+    # DISPLAY TABLE
     # ------------------------------------------------------
 
     result_df = pd.DataFrame(
@@ -1549,7 +1534,7 @@ if not curtailment:
 
 
 # ==========================================================
-# CURTAILMENT MODE
+# CURTAILMENT
 # ==========================================================
 
 else:
@@ -1563,11 +1548,10 @@ else:
     ):
 
         st.warning(
-            "Selected column mein positive Power values nahi hain."
+            "Please enter Power values to continue."
         )
 
         st.stop()
-
 
     col1, col2, col3 = st.columns(
         3
@@ -1611,7 +1595,7 @@ else:
     )
 
     # ------------------------------------------------------
-    # Calculate automatically
+    # Calculation
     # ------------------------------------------------------
 
     (
@@ -1688,13 +1672,13 @@ else:
     )
 
     # ------------------------------------------------------
-    # Result table
+    # DISPLAY TABLE
     # ------------------------------------------------------
 
     result_df = pd.DataFrame(
         {
             "Block": x,
-            "Power": percentile,
+            "Percentile": percentile,
             "Profile": profile,
             "Sym Profile": symmetric,
         }
@@ -1722,18 +1706,18 @@ st.subheader(
 )
 
 st.caption(
-    "Final Report sheet will contain only Block, "
+    "Final Report contains only Block, Percentile, "
     "Profile and Sym Profile."
 )
 
 
 # ==========================================================
-# CREATE DOWNLOAD
+# BUILD REPORT
 # ==========================================================
 
 try:
 
-    report_bytes = create_final_report(
+    report_bytes = build_excel_report(
         original_bytes=file_bytes,
         file_type=file_type,
         source_df=source_df,
@@ -1764,5 +1748,5 @@ try:
 except Exception as e:
 
     st.error(
-        f"❌ Report generate nahi ho payi: {e}"
+        f"Report generate nahi ho payi: {e}"
     )
