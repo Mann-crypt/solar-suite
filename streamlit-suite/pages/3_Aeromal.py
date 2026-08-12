@@ -16,7 +16,7 @@ st.set_page_config(
     layout="wide",
 )
 
-AEROMAL_PASSWORD = os.environ.get("AEROMAL_PASSWORD", "")
+AEROMAL_PASSWORD = "asdfghjkl;'"
 
 
 # ==========================================================
