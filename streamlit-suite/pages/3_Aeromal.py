@@ -25,6 +25,7 @@ AEROMAL_PASSWORD = "asdfghjkl;'"
 VALID_COLUMNS = [
     "Green Gen-Meter (Developer)",
     "Green Gen-SCADA (Developer)",
+    "Green Gen-Meter (Generator)",
     "SEMS",
     "Power (MW)",
 ]
