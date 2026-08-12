@@ -287,64 +287,100 @@ curtailment = st.toggle("⚡ Curtailment Mode", value=False)
 
 
 # ==========================================================
-# NO CURTAILMENT  — params in a form, heavy work cached
+# NO CURTAILMENT
 # ==========================================================
 
 if not curtailment:
 
-    with st.form("am_nc_form"):
-        col1, col2, col3 = st.columns(3)
-        window = col1.number_input(
-            "Window Length", min_value=5, max_value=31, step=2, value=11)
-        power_availability = col2.number_input(
-            "Power Availability (%)", min_value=0, max_value=1000, value=100)
-        apply_btn = st.form_submit_button(
-            "Apply", use_container_width=True, type="primary")
+    col1, col2, col3 = st.columns(3)
 
-    # Compute (cached — instant if params unchanged)
+    window = col1.number_input(
+        "Window Length",
+        min_value=5,
+        max_value=31,
+        step=2,
+        value=11,
+    )
+
+    power_availability = col2.number_input(
+        "Power Availability (%)",
+        min_value=0,
+        max_value=1000,
+        value=100,
+    )
+
+    # Calculate profile
     ap_t, s_t, sym_t, best_shift = cached_no_curtailment(
-        power_tuple, days, window, power_availability)
+        power_tuple,
+        days,
+        window,
+        power_availability,
+    )
 
-    with st.form("am_nc_shift_form"):
-        col1, col2, _ = st.columns(3)
-        shift = col1.number_input(
-            "Shift", min_value=0, max_value=95, value=best_shift, step=1)
-        shift_btn = st.form_submit_button(
-            "Apply Shift", use_container_width=True)
+    # Shift
+    shift = col3.number_input(
+        "Shift",
+        min_value=0,
+        max_value=95,
+        value=best_shift,
+        step=1,
+    )
 
-    # Apply shift override if user changed it
+    # Apply manual shift
     if shift != best_shift:
         sym_t = cached_sym_shift_nc(s_t, shift)
 
-    ap  = list(ap_t)
-    s   = list(s_t)
+    ap = list(ap_t)
+    s = list(s_t)
     sym = list(sym_t)
-    x   = list(range(96))
+    x = list(range(96))
 
     fig = go.Figure()
-    fig.add_trace(go.Scatter(x=x, y=sym, name="Sym Profile",
-                              line=dict(color="#00c6ff", width=4)))
-    fig.add_trace(go.Scatter(x=x, y=s,   name="Profile",
-                              line=dict(color="#22c55e", width=4)))
-    fig.add_trace(go.Scatter(x=x, y=ap,  name="95th Percentile",
-                              line=dict(color="#ef4444", width=4)))
+
+    fig.add_trace(go.Scatter(
+        x=x, y=sym,
+        name="Sym Profile",
+        line=dict(color="#00c6ff", width=4),
+    ))
+
+    fig.add_trace(go.Scatter(
+        x=x, y=s,
+        name="Profile",
+        line=dict(color="#22c55e", width=4),
+    ))
+
+    fig.add_trace(go.Scatter(
+        x=x, y=ap,
+        name="95th Percentile",
+        line=dict(color="#ef4444", width=4),
+    ))
+
     fig.update_layout(
-        height=550, hovermode="x unified", template="streamlit",
-        xaxis_title="Block", yaxis_title="Power",
+        height=550,
+        hovermode="x unified",
+        template="streamlit",
+        xaxis_title="Block",
+        yaxis_title="Power",
         legend=dict(orientation="h", y=1.08, x=0),
         margin=dict(l=20, r=20, t=60, b=20),
     )
+
     st.plotly_chart(fig, use_container_width=True)
 
     st.subheader("Generated Curve")
+
     st.dataframe(
-        pd.DataFrame({"Percentile": ap, "Profile": s, "Sym Profile": sym}),
-        use_container_width=True, hide_index=True,
+        pd.DataFrame({
+            "Percentile": ap,
+            "Profile": s,
+            "Sym Profile": sym,
+        }),
+        use_container_width=True,
+        hide_index=True,
     )
 
-
 # ==========================================================
-# CURTAILMENT  — params in a form, heavy work cached
+# CURTAILMENT
 # ==========================================================
 
 else:
@@ -355,53 +391,100 @@ else:
 
     st.subheader("Parameters")
 
-    with st.form("am_c_form"):
-        col1, col2 = st.columns(2)
-        power_availability = col1.number_input(
-            "Power Availability (%)", value=100, step=1)
-        peak_cap = col1.number_input(
-            "Peak Cap", value=int(max(power_list)), step=1)
-        target_width = col2.number_input(
-            "Target Width", value=25, step=1)
-        window = col2.slider(
-            "Window Length", 5, 31, 11, step=2)
-        apply_btn = st.form_submit_button(
-            "Apply", use_container_width=True, type="primary")
+    col1, col2 = st.columns(2)
 
-    # Compute profile (cached — instant if params unchanged)
+    power_availability = col1.number_input(
+        "Power Availability (%)",
+        value=100,
+        step=1,
+    )
+
+    peak_cap = col1.number_input(
+        "Peak Cap",
+        value=int(max(power_list)),
+        step=1,
+    )
+
+    target_width = col2.number_input(
+        "Target Width",
+        value=25,
+        step=1,
+    )
+
+    window = col2.slider(
+        "Window Length",
+        min_value=5,
+        max_value=31,
+        value=11,
+        step=2,
+    )
+
+    # Calculate profile
     ap_t, fs_t, best_shift = cached_curtailment(
-        power_tuple, days, peak_cap, target_width, window, power_availability)
+        power_tuple,
+        days,
+        peak_cap,
+        target_width,
+        window,
+        power_availability,
+    )
 
-    with st.form("am_c_shift_form"):
-        col1, _, _ = st.columns(3)
-        shift = col1.number_input(
-            "Shift", min_value=0, max_value=95, value=best_shift, step=1)
-        shift_btn = st.form_submit_button(
-            "Apply Shift", use_container_width=True)
+    # Shift
+    shift = st.number_input(
+        "Shift",
+        min_value=0,
+        max_value=95,
+        value=best_shift,
+        step=1,
+    )
 
-    # Apply shift (cached — instant)
+    # Apply shift automatically
     sym_t = cached_sym_shift_c(fs_t, shift)
 
-    ap  = list(ap_t)
-    fs  = list(fs_t)
+    ap = list(ap_t)
+    fs = list(fs_t)
     sym = list(sym_t)
-    x   = list(range(96))
+    x = list(range(96))
 
     fig = go.Figure()
-    fig.add_trace(go.Scatter(x=x, y=ap,  name="Generation",
-                              line=dict(width=3)))
-    fig.add_trace(go.Scatter(x=x, y=fs,  name="Profile",
-                              line=dict(color="#00c6ff", width=3)))
-    fig.add_trace(go.Scatter(x=x, y=sym, name="Sym Profile",
-                              line=dict(color="#0072ff", width=3)))
+
+    fig.add_trace(go.Scatter(
+        x=x,
+        y=ap,
+        name="Generation",
+        line=dict(width=3),
+    ))
+
+    fig.add_trace(go.Scatter(
+        x=x,
+        y=fs,
+        name="Profile",
+        line=dict(color="#00c6ff", width=3),
+    ))
+
+    fig.add_trace(go.Scatter(
+        x=x,
+        y=sym,
+        name="Sym Profile",
+        line=dict(color="#0072ff", width=3),
+    ))
+
     fig.update_layout(
-        height=550, hovermode="x unified", template="streamlit",
+        height=550,
+        hovermode="x unified",
+        template="streamlit",
         legend=dict(orientation="h", y=1.08, x=0),
         margin=dict(l=20, r=20, t=60, b=20),
     )
+
     st.plotly_chart(fig, use_container_width=True)
 
     st.dataframe(
-        pd.DataFrame({"Power": ap, "Profile": fs, "Sym Profile": sym}),
+        pd.DataFrame({
+            "Power": ap,
+            "Profile": fs,
+            "Sym Profile": sym,
+        }),
         use_container_width=True,
+        hide_index=True,
     )
