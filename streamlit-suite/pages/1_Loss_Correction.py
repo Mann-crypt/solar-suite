@@ -1116,12 +1116,12 @@ def show_forecast_chart(
 def plant_selector():
 
     st.markdown(
-        '<div class="section-title">🏭 Plant Type</div>',
+        '<div class="section-title">🏭 Select Plant Type</div>',
         unsafe_allow_html=True,
     )
 
-    selected = st.segmented_control(
-        "Select Plant Type",
+    plant_type = st.segmented_control(
+        "Plant Type",
         options=[
             "🏗️ Fixed",
             "🔄 Tracking",
@@ -1131,17 +1131,7 @@ def plant_selector():
         key="plant_type_selector",
     )
 
-    if selected is None:
-        selected = "🏗️ Fixed"
-
-    st.markdown(
-        f'<div class="selected-plant">'
-        f'Current Selection: {selected}'
-        f'</div>',
-        unsafe_allow_html=True,
-    )
-
-    return selected
+    return plant_type
     
 # ============================================================
 # TRACKING PARAMETERS
