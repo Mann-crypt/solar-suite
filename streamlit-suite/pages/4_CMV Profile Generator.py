@@ -608,56 +608,237 @@ def add_legend_highlight(
     return fig
 
 
+import streamlit.components.v1 as components
+import json
+
+
 def make_percentile_chart(
     percentile_df,
     selected_columns,
 ):
+    """
+    Interactive 95th percentile chart.
 
-    fig = go.Figure()
+    Legend hover:
+    - Hovered profile becomes strongly highlighted.
+    - Other profiles fade.
+    - Selected profiles remain slightly stronger in normal state.
+    """
 
     x = np.arange(
         1,
         len(percentile_df) + 1,
     )
 
-    selected_set = set(
-        selected_columns
-    )
+    traces = []
 
     for col in percentile_df.columns:
 
-        selected = col in selected_set
+        selected = col in selected_columns
 
-        fig.add_trace(
-            go.Scatter(
-                x=x,
-                y=percentile_df[col].to_numpy(),
-                name=str(col),
-                mode="lines",
-                line=dict(
-                    width=3 if selected else 1.2,
-                ),
-                opacity=1 if selected else 0.25,
-                legendgroup=str(col),
-                showlegend=selected,
-            )
-        )
+        traces.append({
+            "x": x.tolist(),
+            "y": percentile_df[col].tolist(),
+            "name": str(col),
+            "type": "scatter",
+            "mode": "lines",
 
-    fig.update_layout(
-        height=550,
-        template="streamlit",
-        xaxis_title="15 Minute Block",
-        yaxis_title="95th Percentile Power",
-        margin=dict(
-            l=20,
-            r=20,
-            t=100,
-            b=20,
-        ),
-    )
+            "line": {
+                "width": 3 if selected else 1.2
+            },
 
-    return add_legend_highlight(
-        fig
+            "opacity": (
+                1.0
+                if selected
+                else 0.25
+            ),
+
+            "legendgroup": str(col),
+
+            "hovertemplate":
+                f"{col}<br>"
+                "Block: %{x}<br>"
+                "Power: %{y:.2f}"
+                "<extra></extra>",
+        })
+
+    chart_data = json.dumps(traces)
+
+    chart_layout = json.dumps({
+        "height": 550,
+
+        "template": "plotly_white",
+
+        "hovermode": "x unified",
+
+        "xaxis": {
+            "title": "15 Minute Block"
+        },
+
+        "yaxis": {
+            "title": "95th Percentile Power"
+        },
+
+        "margin": {
+            "l": 20,
+            "r": 20,
+            "t": 80,
+            "b": 20
+        },
+
+        "legend": {
+            "orientation": "h",
+            "yanchor": "bottom",
+            "y": 1.02,
+            "xanchor": "left",
+            "x": 0,
+
+            "bgcolor": "rgba(0,0,0,0)",
+
+            "itemclick": "toggle",
+            "itemdoubleclick": "toggleothers",
+        },
+
+        "paper_bgcolor": "rgba(0,0,0,0)",
+        "plot_bgcolor": "rgba(0,0,0,0)",
+    })
+
+    html = f"""
+    <!DOCTYPE html>
+
+    <html>
+
+    <head>
+
+        <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+
+        <style>
+
+            html, body {{
+                margin: 0;
+                padding: 0;
+                background: transparent;
+            }}
+
+            #chart {{
+                width: 100%;
+                height: 550px;
+            }}
+
+        </style>
+
+    </head>
+
+    <body>
+
+        <div id="chart"></div>
+
+        <script>
+
+            const data = {chart_data};
+
+            const layout = {chart_layout};
+
+            const config = {{
+                responsive: true,
+                displaylogo: false,
+                modeBarButtonsToRemove: [
+                    "lasso2d",
+                    "select2d"
+                ]
+            }};
+
+            Plotly.newPlot(
+                "chart",
+                data,
+                layout,
+                config
+            ).then(function(gd) {{
+
+                /*
+                 * Save original opacity.
+                 */
+                const originalOpacity =
+                    data.map(trace =>
+                        trace.opacity
+                    );
+
+                const originalWidth =
+                    data.map(trace =>
+                        trace.line.width
+                    );
+
+                /*
+                 * LEGEND HOVER
+                 */
+                gd.on(
+                    "plotly_legendhover",
+                    function(event) {{
+
+                        const index =
+                            event.curveNumber;
+
+                        const opacity =
+                            data.map(
+                                (_, i) =>
+                                    i === index
+                                        ? 1
+                                        : 0.08
+                            );
+
+                        const width =
+                            data.map(
+                                (_, i) =>
+                                    i === index
+                                        ? 5
+                                        : 1
+                            );
+
+                        Plotly.restyle(
+                            gd,
+                            {{
+                                opacity: opacity,
+                                "line.width": width
+                            }}
+                        );
+
+                    }}
+                );
+
+                /*
+                 * LEGEND UNHOVER
+                 */
+                gd.on(
+                    "plotly_legendunhover",
+                    function() {{
+
+                        Plotly.restyle(
+                            gd,
+                            {{
+                                opacity:
+                                    originalOpacity,
+
+                                "line.width":
+                                    originalWidth
+                            }}
+                        );
+
+                    }}
+                );
+
+            }});
+
+        </script>
+
+    </body>
+
+    </html>
+    """
+
+    components.html(
+        html,
+        height=570,
+        scrolling=False,
     )
 
 
