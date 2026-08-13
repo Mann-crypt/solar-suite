@@ -1109,14 +1109,6 @@ def show_forecast_chart(
     )
 
 
-# ============================================================
-# PLANT TYPE SELECTOR
-# ============================================================
-
-# ============================================================
-# PLANT TYPE SELECTOR
-# ============================================================
-
 def plant_selector():
 
     st.markdown(
@@ -1128,18 +1120,51 @@ def plant_selector():
 
     c1, c2 = st.columns(2)
 
+    # --------------------------------------------------------
+    # FIXED BUTTON
+    # --------------------------------------------------------
+
     with c1:
+
+        fixed_class = (
+            "plant-btn selected"
+            if selected == "🏗️ Fixed"
+            else "plant-btn"
+        )
+
+        st.markdown(
+            f"""
+            <style>
+            div[data-testid="stButton"] button[kind="secondary"] {{
+                min-height: 52px;
+                border-radius: 12px;
+                font-size: 16px;
+                font-weight: 650;
+            }}
+            </style>
+
+            <div class="{fixed_class}">
+            """,
+            unsafe_allow_html=True,
+        )
 
         if st.button(
             "🏗️  FIXED PLANT",
             key="fixed_button",
             use_container_width=True,
         ):
+
             if selected != "🏗️ Fixed":
                 st.session_state.plant_type = "🏗️ Fixed"
                 st.session_state.tracking_params = None
                 st.session_state.run_model = False
                 st.rerun()
+
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    # --------------------------------------------------------
+    # TRACKING BUTTON
+    # --------------------------------------------------------
 
     with c2:
 
@@ -1148,44 +1173,12 @@ def plant_selector():
             key="tracking_button",
             use_container_width=True,
         ):
+
             if selected != "🔄 Tracking":
                 st.session_state.plant_type = "🔄 Tracking"
                 st.session_state.tracking_params = None
                 st.session_state.run_model = False
                 st.rerun()
-
-    # Apply selected styling
-    st.markdown(
-        f"""
-        <style>
-
-        /* Fixed button */
-        div[data-testid="stButton"]:has(
-            button[key="fixed_button"]
-        ) button {{
-            border-radius: 12px;
-            height: 54px;
-            font-size: 17px;
-            font-weight: 650;
-        }}
-
-        /* Tracking button */
-        div[data-testid="stButton"]:has(
-            button[key="tracking_button"]
-        ) button {{
-            border-radius: 12px;
-            height: 54px;
-            font-size: 17px;
-            font-weight: 650;
-        }}
-
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    return st.session_state.plant_type
-
 
 # ============================================================
 # TRACKING PARAMETERS
