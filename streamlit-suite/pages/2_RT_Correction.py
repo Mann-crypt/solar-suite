@@ -96,7 +96,7 @@ def cached_rtf_optimize(
         dtype=float,
     )
 
-    mask = actual > (5/100 * max(actual))
+    mask = actual > 5
 
     if not np.any(mask):
         return {
