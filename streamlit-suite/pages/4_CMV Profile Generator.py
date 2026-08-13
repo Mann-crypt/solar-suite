@@ -612,234 +612,101 @@ import streamlit.components.v1 as components
 import json
 
 
+# ----------------------------------------------------------
+# PERCENTILE CHART
+# ----------------------------------------------------------
+
 def make_percentile_chart(
     percentile_df,
     selected_columns,
 ):
     """
-    Interactive 95th percentile chart.
+    Create a lightweight 95th percentile chart.
 
-    Legend hover:
-    - Hovered profile becomes strongly highlighted.
-    - Other profiles fade.
-    - Selected profiles remain slightly stronger in normal state.
+    Selected columns are highlighted initially.
+    Legend click can be used to isolate/highlight profiles.
     """
+
+    fig = go.Figure()
 
     x = np.arange(
         1,
         len(percentile_df) + 1,
     )
 
-    traces = []
+    selected_columns = set(selected_columns)
 
     for col in percentile_df.columns:
 
-        selected = col in selected_columns
+        is_selected = col in selected_columns
 
-        traces.append({
-            "x": x.tolist(),
-            "y": percentile_df[col].tolist(),
-            "name": str(col),
-            "type": "scatter",
-            "mode": "lines",
+        fig.add_trace(
+            go.Scatter(
+                x=x,
+                y=percentile_df[col].to_numpy(
+                    dtype=float
+                ),
+                mode="lines",
+                name=str(col),
 
-            "line": {
-                "width": 3 if selected else 1.2
-            },
+                # Selected profiles are visually stronger
+                opacity=1.0 if is_selected else 0.22,
 
-            "opacity": (
-                1.0
-                if selected
-                else 0.25
-            ),
+                line=dict(
+                    width=3.0 if is_selected else 1.2,
+                ),
 
-            "legendgroup": str(col),
+                hovertemplate=(
+                    f"<b>{col}</b>"
+                    "<br>Block: %{x}"
+                    "<br>Power: %{y:.2f}"
+                    "<extra></extra>"
+                ),
 
-            "hovertemplate":
-                f"{col}<br>"
-                "Block: %{x}<br>"
-                "Power: %{y:.2f}"
-                "<extra></extra>",
-        })
+                connectgaps=True,
+            )
+        )
 
-    chart_data = json.dumps(traces)
+    fig.update_layout(
+        height=500,
+        template="streamlit",
 
-    chart_layout = json.dumps({
-        "height": 550,
+        hovermode="x unified",
 
-        "template": "plotly_white",
+        xaxis=dict(
+            title="15 Minute Block",
+            fixedrange=True,
+        ),
 
-        "hovermode": "x unified",
+        yaxis=dict(
+            title="95th Percentile Power",
+            fixedrange=True,
+        ),
 
-        "xaxis": {
-            "title": "15 Minute Block"
-        },
+        margin=dict(
+            l=20,
+            r=20,
+            t=60,
+            b=20,
+        ),
 
-        "yaxis": {
-            "title": "95th Percentile Power"
-        },
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="left",
+            x=0,
 
-        "margin": {
-            "l": 20,
-            "r": 20,
-            "t": 80,
-            "b": 20
-        },
+            # Clicking a legend item isolates it.
+            itemclick="toggleothers",
+            itemdoubleclick="toggle",
+        ),
 
-        "legend": {
-            "orientation": "h",
-            "yanchor": "bottom",
-            "y": 1.02,
-            "xanchor": "left",
-            "x": 0,
-
-            "bgcolor": "rgba(0,0,0,0)",
-
-            "itemclick": "toggle",
-            "itemdoubleclick": "toggleothers",
-        },
-
-        "paper_bgcolor": "rgba(0,0,0,0)",
-        "plot_bgcolor": "rgba(0,0,0,0)",
-    })
-
-    html = f"""
-    <!DOCTYPE html>
-
-    <html>
-
-    <head>
-
-        <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
-
-        <style>
-
-            html, body {{
-                margin: 0;
-                padding: 0;
-                background: transparent;
-            }}
-
-            #chart {{
-                width: 100%;
-                height: 550px;
-            }}
-
-        </style>
-
-    </head>
-
-    <body>
-
-        <div id="chart"></div>
-
-        <script>
-
-            const data = {chart_data};
-
-            const layout = {chart_layout};
-
-            const config = {{
-                responsive: true,
-                displaylogo: false,
-                modeBarButtonsToRemove: [
-                    "lasso2d",
-                    "select2d"
-                ]
-            }};
-
-            Plotly.newPlot(
-                "chart",
-                data,
-                layout,
-                config
-            ).then(function(gd) {{
-
-                /*
-                 * Save original opacity.
-                 */
-                const originalOpacity =
-                    data.map(trace =>
-                        trace.opacity
-                    );
-
-                const originalWidth =
-                    data.map(trace =>
-                        trace.line.width
-                    );
-
-                /*
-                 * LEGEND HOVER
-                 */
-                gd.on(
-                    "plotly_legendhover",
-                    function(event) {{
-
-                        const index =
-                            event.curveNumber;
-
-                        const opacity =
-                            data.map(
-                                (_, i) =>
-                                    i === index
-                                        ? 1
-                                        : 0.08
-                            );
-
-                        const width =
-                            data.map(
-                                (_, i) =>
-                                    i === index
-                                        ? 5
-                                        : 1
-                            );
-
-                        Plotly.restyle(
-                            gd,
-                            {{
-                                opacity: opacity,
-                                "line.width": width
-                            }}
-                        );
-
-                    }}
-                );
-
-                /*
-                 * LEGEND UNHOVER
-                 */
-                gd.on(
-                    "plotly_legendunhover",
-                    function() {{
-
-                        Plotly.restyle(
-                            gd,
-                            {{
-                                opacity:
-                                    originalOpacity,
-
-                                "line.width":
-                                    originalWidth
-                            }}
-                        );
-
-                    }}
-                );
-
-            }});
-
-        </script>
-
-    </body>
-
-    </html>
-    """
-
-    components.html(
-        html,
-        height=570,
-        scrolling=False,
+        # Prevent unnecessary interaction state
+        uirevision="percentile_chart",
     )
+
+    return fig
 
 
 def make_final_chart(
