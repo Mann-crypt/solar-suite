@@ -1110,26 +1110,38 @@ def show_forecast_chart(
 
 
 # ============================================================
-# PLANT TYPE
+# PLANT SELECTOR
 # ============================================================
 
-plant_type_label = st.segmented_control(
-    "🏭 Select Plant Type",
-    options=[
-        "🏗️ Fixed Plant",
-        "🔄 Tracking Plant",
-    ],
-    default="🏗️ Fixed Plant",
-    selection_mode="single",
-    key="plant_type_selector",
-)
+def plant_selector():
 
-# Convert UI label to internal model value
-plant_type = (
-    "🏗️ Fixed"
-    if plant_type_label == "🏗️ Fixed Plant"
-    else "🔄 Tracking"
-)
+    st.markdown(
+        '<div class="section-title">🏭 Plant Type</div>',
+        unsafe_allow_html=True,
+    )
+
+    selected = st.segmented_control(
+        "Select Plant Type",
+        options=[
+            "🏗️ Fixed",
+            "🔄 Tracking",
+        ],
+        default="🏗️ Fixed",
+        selection_mode="single",
+        key="plant_type_selector",
+    )
+
+    if selected is None:
+        selected = "🏗️ Fixed"
+
+    st.markdown(
+        f'<div class="selected-plant">'
+        f'Current Selection: {selected}'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
+    return selected
     
 # ============================================================
 # TRACKING PARAMETERS
