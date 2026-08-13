@@ -8,7 +8,7 @@ from scipy.signal import savgol_filter
 
 
 # ==========================================================
-# PAGE
+# PAGE CONFIG
 # ==========================================================
 
 st.set_page_config(
@@ -17,119 +17,156 @@ st.set_page_config(
     layout="wide",
 )
 
-st.markdown("""
-<style>
-.block-container {
-    padding-top: 1.2rem;
-    padding-bottom: 2rem;
-}
 
-.metric-card {
-    background: #111827;
-    border: 1px solid #1f2937;
-    border-radius: 12px;
-    padding: 12px;
-}
+# ==========================================================
+# SIDEBAR
+# ==========================================================
 
-.section {
-    font-size: 1.15rem;
-    font-weight: 700;
-    margin: 18px 0 8px;
-}
+st.sidebar.markdown(
+    """
+    <h1 style='text-align:center;
+    background:linear-gradient(90deg,#00c6ff,#0072ff);
+    -webkit-background-clip:text;
+    -webkit-text-fill-color:transparent;
+    font-size:40px;
+    font-weight:800;'>
+    ⚡ Solar Suite
+    </h1>
 
-div.stButton > button {
-    border-radius: 10px;
-    font-weight: 650;
-    min-height: 42px;
-}
+    <p style='text-align:center;
+    color:gray;
+    font-size:14px;'>
+    Forecast Correction Platform
+    </p>
+    """,
+    unsafe_allow_html=True,
+)
 
-div[data-testid="stDownloadButton"] > button {
-    border-radius: 10px;
-    font-weight: 650;
-}
-
-</style>
-""", unsafe_allow_html=True)
+st.sidebar.divider()
 
 
 # ==========================================================
-# HELPERS
+# GLOBAL CSS
+# ==========================================================
+
+st.markdown(
+    """
+    <style>
+
+    div[data-testid="metric-container"] {
+        background: #111827;
+        border: 1px solid #1f2937;
+        border-radius: 10px;
+        padding: 12px 20px;
+    }
+
+    div.stButton > button {
+        border-radius: 10px;
+        font-weight: 600;
+        min-height: 42px;
+    }
+
+    div[data-testid="stExpander"] {
+        border-radius: 10px;
+    }
+
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+
+# ==========================================================
+# SESSION STATE
+# ==========================================================
+
+DEFAULT_STATE = {
+    "cmv_average": None,
+    "cmv_smooth": None,
+    "cmv_selected_columns": None,
+    "cmv_settings_applied": False,
+    "cmv_generated": False,
+    "cmv_source_sheet": None,
+}
+
+for key, value in DEFAULT_STATE.items():
+
+    if key not in st.session_state:
+        st.session_state[key] = value
+
+
+# ==========================================================
+# BASIC HELPERS
 # ==========================================================
 
 def find_date_column(df):
 
-    names = {
-        "date",
-        "datetime",
-        "date time",
-        "timestamp",
-        "time",
+    possible_names = [
+        "Date",
+        "Datetime",
+        "Date Time",
+        "Timestamp",
+        "Time",
+    ]
+
+    normalized = {
+        str(col).strip().lower().replace("_", " "): col
+        for col in df.columns
     }
 
-    for col in df.columns:
+    for name in possible_names:
 
-        key = str(col).strip().lower().replace("_", " ")
+        key = name.lower()
 
-        if key in names:
-            return col
+        if key in normalized:
+            return normalized[key]
 
     return None
 
 
 # ==========================================================
-# CACHED EXCEL READING
+# DATA CLEANING
 # ==========================================================
 
-@st.cache_data(show_spinner=False, max_entries=10)
-def read_excel_sheet(file_bytes, sheet_name):
-
-    return pd.read_excel(
-        BytesIO(file_bytes),
-        sheet_name=sheet_name,
-    )
-
-
-@st.cache_data(show_spinner=False, max_entries=10)
-def get_sheet_names(file_bytes):
-
-    return pd.ExcelFile(
-        BytesIO(file_bytes)
-    ).sheet_names
-
-
-# ==========================================================
-# CACHED CLEANING
-# ==========================================================
-
-@st.cache_data(show_spinner=False, max_entries=20)
 def prepare_data(
-    raw_df,
+    df,
     min_data_requirement,
     min_cap,
     max_cap,
 ):
 
-    df = raw_df.copy()
+    df = df.copy()
 
-    # Date
+    # ------------------------------------------------------
+    # Date handling
+    # ------------------------------------------------------
+
     date_col = find_date_column(df)
 
-    if date_col:
+    if date_col is not None:
 
-        parsed = pd.to_datetime(
+        parsed_date = pd.to_datetime(
             df[date_col],
             errors="coerce",
         )
 
-        if parsed.notna().any():
+        if parsed_date.notna().any():
 
-            df[date_col] = parsed
-            df = df.set_index(date_col)
+            df[date_col] = parsed_date
 
-    # Convert numeric
+            df = df.set_index(
+                date_col
+            )
+
+    # ------------------------------------------------------
+    # Numeric conversion
+    # ------------------------------------------------------
+
     for col in df.columns:
 
-        if not pd.api.types.is_numeric_dtype(df[col]):
+        if not pd.api.types.is_numeric_dtype(
+            df[col]
+        ):
 
             converted = pd.to_numeric(
                 df[col],
@@ -137,126 +174,189 @@ def prepare_data(
             )
 
             if converted.notna().sum() > 0:
+
                 df[col] = converted
 
-    numeric = df.select_dtypes(
+    # ------------------------------------------------------
+    # Numeric columns
+    # ------------------------------------------------------
+
+    numeric_df = df.select_dtypes(
         include=np.number
     ).copy()
 
-    if numeric.empty:
+    if numeric_df.empty:
+
         raise ValueError(
-            "No numeric columns found."
+            "No numeric columns were found "
+            "in the selected sheet."
         )
+
+    # ------------------------------------------------------
+    # Minimum data requirement
+    # ------------------------------------------------------
 
     threshold = int(
         np.ceil(
-            len(numeric)
+            len(numeric_df)
             * min_data_requirement
             / 100
         )
     )
 
-    numeric = numeric.dropna(
+    numeric_df = numeric_df.dropna(
         axis=1,
         thresh=threshold,
     )
 
-    if numeric.empty:
+    if numeric_df.empty:
+
         raise ValueError(
-            "No columns satisfy the minimum data requirement."
+            f"No columns satisfy the selected "
+            f"{min_data_requirement}% minimum "
+            "data requirement."
         )
 
-    numeric = numeric.fillna(0)
+    # ------------------------------------------------------
+    # Fill missing values
+    # ------------------------------------------------------
 
-    # Generation cap
-    max_values = numeric.max()
+    numeric_df = numeric_df.fillna(0)
 
-    numeric = numeric.loc[
-        :,
-        (max_values >= min_cap)
-        & (max_values <= max_cap),
-    ]
+    # ------------------------------------------------------
+    # Generation cap filtering
+    # ------------------------------------------------------
 
+    columns_to_drop = []
+
+    for col in numeric_df.columns:
+
+        values = numeric_df[col].to_numpy(
+            dtype=float
+        )
+
+        if len(values) == 0:
+
+            columns_to_drop.append(col)
+
+            continue
+
+        maximum = np.nanmax(values)
+
+        if (
+            maximum < min_cap
+            or maximum > max_cap
+        ):
+
+            columns_to_drop.append(col)
+
+    numeric_df = numeric_df.drop(
+        columns=columns_to_drop,
+        errors="ignore",
+    )
+
+    # ------------------------------------------------------
     # Remove zero columns
-    numeric = numeric.loc[
-        :,
-        (numeric != 0).any(),
+    # ------------------------------------------------------
+
+    zero_columns = numeric_df.columns[
+        (numeric_df == 0).all()
     ]
 
-    if numeric.empty:
+    numeric_df = numeric_df.drop(
+        columns=zero_columns,
+        errors="ignore",
+    )
+
+    # ------------------------------------------------------
+    # Validation
+    # ------------------------------------------------------
+
+    if numeric_df.empty:
+
         raise ValueError(
-            "No usable columns remain after cleaning."
+            "No usable generation columns remain "
+            "after applying the cleaning settings."
         )
 
-    return numeric
+    return numeric_df
 
 
 # ==========================================================
-# CACHED PERCENTILE
+# PERCENTILE CALCULATION
 # ==========================================================
 
-@st.cache_data(show_spinner=False, max_entries=20)
 def calculate_percentiles(
     df,
     blocks=96,
 ):
 
-    usable = (
+    usable_rows = (
         len(df) // blocks
     ) * blocks
 
-    if usable < blocks:
+    if usable_rows < blocks:
+
         raise ValueError(
-            f"At least {blocks} rows are required."
+            f"At least {blocks} rows are required "
+            "for percentile calculation."
         )
 
-    arr = df.iloc[:usable].to_numpy(
-        dtype=float
-    )
+    df = df.iloc[
+        :usable_rows
+    ].copy()
 
-    days = usable // blocks
+    days = usable_rows // blocks
 
-    reshaped = arr.reshape(
-        days,
-        blocks,
-        -1,
-    )
+    result = {}
 
-    result = np.percentile(
-        reshaped,
-        95,
-        axis=0,
-    )
+    for col in df.columns:
 
-    return pd.DataFrame(
-        result,
-        columns=df.columns,
-    )
+        values = df[col].to_numpy(
+            dtype=float
+        )
+
+        reshaped = values.reshape(
+            days,
+            blocks,
+        )
+
+        result[col] = np.percentile(
+            reshaped,
+            95,
+            axis=0,
+        )
+
+    return pd.DataFrame(result)
 
 
 # ==========================================================
-# CONSTANT BLOCK REMOVAL
+# REMOVE CONSTANT BLOCKS
 # ==========================================================
 
-@st.cache_data(show_spinner=False, max_entries=20)
-def remove_constant_blocks(df):
+def remove_constant_blocks(
+    percentile_df,
+):
 
-    result = df.copy()
+    result = percentile_df.copy()
 
     for col in result.columns:
 
-        s = result[col]
+        series = result[col]
 
-        groups = s.ne(
-            s.shift()
-        ).cumsum()
+        groups = (
+            series
+            .ne(series.shift())
+            .cumsum()
+        )
 
-        sizes = groups.map(
+        group_size = groups.map(
             groups.value_counts()
         )
 
-        result[col] = s.mask(
-            (sizes > 2) & (s != 0),
+        result[col] = series.mask(
+            (group_size > 2)
+            & (series != 0),
             0,
         )
 
@@ -264,41 +364,47 @@ def remove_constant_blocks(df):
 
 
 # ==========================================================
-# WINDOW VALIDATION
+# SMOOTHING
 # ==========================================================
 
-def valid_window(window, length):
-
-    maximum = min(length, 51)
-
-    if maximum % 2 == 0:
-        maximum -= 1
-
-    maximum = max(3, maximum)
+def validate_window(
+    window,
+    data_length,
+):
 
     window = int(window)
 
     if window % 2 == 0:
         window -= 1
 
-    return max(
-        3,
-        min(window, maximum),
+    max_allowed = min(
+        data_length,
+        51,
     )
 
+    if max_allowed % 2 == 0:
+        max_allowed -= 1
 
-# ==========================================================
-# CACHED SMOOTHING
-# ==========================================================
+    window = min(
+        window,
+        max_allowed,
+    )
 
-@st.cache_data(show_spinner=False, max_entries=30)
-def generate_smooth(
+    window = max(
+        window,
+        3,
+    )
+
+    return window
+
+
+def generate_smooth_profile(
     average,
-    window1,
-    poly1,
-    second,
-    window2,
-    poly2,
+    window_length_1,
+    polynomial_order_1,
+    use_second_smoothing=False,
+    window_length_2=None,
+    polynomial_order_2=None,
     threshold=4.9,
 ):
 
@@ -307,20 +413,24 @@ def generate_smooth(
         dtype=float,
     )
 
-    window1 = valid_window(
-        window1,
+    # ------------------------------------------------------
+    # First smoothing
+    # ------------------------------------------------------
+
+    window_length_1 = validate_window(
+        window_length_1,
         len(values),
     )
 
-    poly1 = min(
-        int(poly1),
-        window1 - 1,
+    polynomial_order_1 = min(
+        int(polynomial_order_1),
+        window_length_1 - 1,
     )
 
     smooth = savgol_filter(
         values,
-        window_length=window1,
-        polyorder=poly1,
+        window_length=window_length_1,
+        polyorder=polynomial_order_1,
     )
 
     smooth = np.clip(
@@ -329,24 +439,40 @@ def generate_smooth(
         None,
     )
 
-    smooth[smooth < threshold] = 0
+    # ------------------------------------------------------
+    # Threshold
+    # ------------------------------------------------------
 
-    if second:
+    smooth = np.where(
+        smooth < threshold,
+        0,
+        smooth,
+    )
 
-        window2 = valid_window(
-            window2,
+    # ------------------------------------------------------
+    # Second smoothing
+    # ------------------------------------------------------
+
+    if (
+        use_second_smoothing
+        and window_length_2 is not None
+        and polynomial_order_2 is not None
+    ):
+
+        window_length_2 = validate_window(
+            window_length_2,
             len(values),
         )
 
-        poly2 = min(
-            int(poly2),
-            window2 - 1,
+        polynomial_order_2 = min(
+            int(polynomial_order_2),
+            window_length_2 - 1,
         )
 
         smooth = savgol_filter(
             smooth,
-            window_length=window2,
-            polyorder=poly2,
+            window_length=window_length_2,
+            polyorder=polynomial_order_2,
         )
 
         smooth = np.clip(
@@ -359,56 +485,183 @@ def generate_smooth(
 
 
 # ==========================================================
-# CHARTS
+# CACHED OPERATIONS
 # ==========================================================
 
-def percentile_chart(
-    df,
-    selected,
+@st.cache_data(
+    show_spinner=False,
+    max_entries=10,
+)
+def get_sheet_names(
+    file_bytes,
 ):
 
-    fig = go.Figure()
-
-    x = np.arange(
-        1,
-        len(df) + 1,
+    excel_file = pd.ExcelFile(
+        BytesIO(file_bytes)
     )
 
-    for col in df.columns:
+    return excel_file.sheet_names
 
-        active = col in selected
 
-        fig.add_trace(
-            go.Scatter(
-                x=x,
-                y=df[col],
-                name=str(col),
-                mode="lines",
-                line=dict(
-                    width=3 if active else 1,
-                ),
-                opacity=1 if active else 0.25,
-            )
-        )
+@st.cache_data(
+    show_spinner=False,
+    max_entries=10,
+)
+def load_source_sheet(
+    file_bytes,
+    sheet_name,
+):
+
+    return pd.read_excel(
+        BytesIO(file_bytes),
+        sheet_name=sheet_name,
+    )
+
+
+@st.cache_data(
+    show_spinner=False,
+    max_entries=10,
+)
+def cached_prepare_data(
+    df,
+    min_data_requirement,
+    min_cap,
+    max_cap,
+):
+
+    return prepare_data(
+        df,
+        min_data_requirement,
+        min_cap,
+        max_cap,
+    )
+
+
+@st.cache_data(
+    show_spinner=False,
+    max_entries=10,
+)
+def cached_percentiles(
+    df,
+):
+
+    percentile_df = calculate_percentiles(
+        df,
+        blocks=96,
+    )
+
+    return remove_constant_blocks(
+        percentile_df
+    )
+
+
+@st.cache_data(
+    show_spinner=False,
+    max_entries=10,
+)
+def cached_smoothing(
+    average,
+    window_length_1,
+    polynomial_order_1,
+    use_second_smoothing,
+    window_length_2,
+    polynomial_order_2,
+):
+
+    return generate_smooth_profile(
+        average=np.asarray(average),
+        window_length_1=window_length_1,
+        polynomial_order_1=polynomial_order_1,
+        use_second_smoothing=use_second_smoothing,
+        window_length_2=window_length_2,
+        polynomial_order_2=polynomial_order_2,
+    )
+
+
+# ==========================================================
+# PLOTLY HELPERS
+# ==========================================================
+
+def add_legend_highlight(
+    fig,
+):
 
     fig.update_layout(
-        height=500,
-        template="streamlit",
-        xaxis_title="15 Minute Block",
-        yaxis_title="95th Percentile Power",
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="left",
+            x=0,
+            bgcolor="rgba(0,0,0,0)",
+        ),
         hovermode="x unified",
-        margin=dict(
-            l=20,
-            r=20,
-            t=30,
-            b=20,
+    )
+
+    fig.update_traces(
+        hoverinfo="x+y+name",
+        selector=dict(
+            type="scatter"
         ),
     )
 
     return fig
 
 
-def final_chart(
+def make_percentile_chart(
+    percentile_df,
+    selected_columns,
+):
+
+    fig = go.Figure()
+
+    x = np.arange(
+        1,
+        len(percentile_df) + 1,
+    )
+
+    selected_set = set(
+        selected_columns
+    )
+
+    for col in percentile_df.columns:
+
+        selected = col in selected_set
+
+        fig.add_trace(
+            go.Scatter(
+                x=x,
+                y=percentile_df[col].to_numpy(),
+                name=str(col),
+                mode="lines",
+                line=dict(
+                    width=3 if selected else 1.2,
+                ),
+                opacity=1 if selected else 0.25,
+                legendgroup=str(col),
+                showlegend=selected,
+            )
+        )
+
+    fig.update_layout(
+        height=550,
+        template="streamlit",
+        xaxis_title="15 Minute Block",
+        yaxis_title="95th Percentile Power",
+        margin=dict(
+            l=20,
+            r=20,
+            t=100,
+            b=20,
+        ),
+    )
+
+    return add_legend_highlight(
+        fig
+    )
+
+
+def make_final_chart(
     average,
     smooth,
 ):
@@ -426,7 +679,9 @@ def final_chart(
             y=average,
             name="95th Percentile Average",
             mode="lines",
-            line=dict(width=3),
+            line=dict(
+                width=3,
+            ),
         )
     )
 
@@ -444,50 +699,52 @@ def final_chart(
     )
 
     fig.update_layout(
-        height=500,
+        height=550,
         template="streamlit",
         xaxis_title="15 Minute Block",
         yaxis_title="Power",
-        hovermode="x unified",
         margin=dict(
             l=20,
             r=20,
-            t=30,
+            t=100,
             b=20,
         ),
     )
 
-    return fig
+    return add_legend_highlight(
+        fig
+    )
 
 
 # ==========================================================
 # HEADER
 # ==========================================================
 
-st.title("📡 CMV Curve Generator")
+st.title(
+    "📡 CMV Curve Generator"
+)
 
 st.caption(
-    "Generate a 95th-percentile CMV generation profile "
-    "from historical generation data."
+    "Generate a 95th-percentile CMV generation "
+    "profile from historical generation data."
 )
 
 
 # ==========================================================
-# UPLOAD
+# 1. EXCEL IMPORT
 # ==========================================================
 
-st.markdown(
-    '<div class="section">📁 Import Workbook</div>',
-    unsafe_allow_html=True,
+st.subheader(
+    "Import Excel Workbook"
 )
 
-uploaded = st.file_uploader(
+uploaded_file = st.file_uploader(
     "Upload Excel Workbook",
     type=["xlsx"],
-    key="cmv_upload",
+    key="cmv_excel_upload",
 )
 
-if uploaded is None:
+if uploaded_file is None:
 
     st.info(
         "Upload an Excel workbook to begin."
@@ -496,16 +753,16 @@ if uploaded is None:
     st.stop()
 
 
-file_bytes = uploaded.getvalue()
+file_bytes = uploaded_file.getvalue()
 
 
 # ==========================================================
-# SHEET
+# SHEET SELECTION
 # ==========================================================
 
 try:
 
-    sheets = get_sheet_names(
+    sheet_names = get_sheet_names(
         file_bytes
     )
 
@@ -519,18 +776,35 @@ except Exception as e:
 
 
 selected_sheet = st.selectbox(
-    "CMV Source Sheet",
-    sheets,
+    "Select CMV source sheet",
+    sheet_names,
 )
 
 
+# Reset results when a new sheet is selected
+
+if (
+    st.session_state.cmv_source_sheet
+    != selected_sheet
+):
+
+    st.session_state.cmv_source_sheet = (
+        selected_sheet
+    )
+
+    st.session_state.cmv_average = None
+    st.session_state.cmv_smooth = None
+    st.session_state.cmv_generated = False
+    st.session_state.cmv_selected_columns = None
+
+
 # ==========================================================
-# READ RAW DATA
+# READ SOURCE SHEET
 # ==========================================================
 
 try:
 
-    raw_df = read_excel_sheet(
+    raw_df = load_source_sheet(
         file_bytes,
         selected_sheet,
     )
@@ -538,7 +812,7 @@ try:
 except Exception as e:
 
     st.error(
-        f"Unable to read sheet: {e}"
+        f"Unable to read selected sheet: {e}"
     )
 
     st.stop()
@@ -547,200 +821,118 @@ except Exception as e:
 if raw_df.empty:
 
     st.error(
-        "Selected sheet is empty."
+        "The selected sheet is empty."
     )
 
     st.stop()
 
 
-# ==========================================================
-# SETTINGS FORM
-# ==========================================================
-
-st.markdown(
-    '<div class="section">⚙️ Processing Settings</div>',
-    unsafe_allow_html=True,
+st.success(
+    f"Loaded {selected_sheet}: "
+    f"{raw_df.shape[0]:,} rows × "
+    f"{raw_df.shape[1]:,} columns."
 )
 
-with st.form("cmv_settings"):
 
-    c1, c2, c3 = st.columns(3)
+# ==========================================================
+# 2. CLEANING SETTINGS
+# ==========================================================
 
-    with c1:
+st.subheader(
+    "Cleaning Settings"
+)
 
-        min_data = st.slider(
-            "Minimum Data",
-            0,
-            100,
-            30,
-            5,
+
+with st.form(
+    "cleaning_settings_form"
+):
+
+    clean_col1, clean_col2, clean_col3 = (
+        st.columns(3)
+    )
+
+    with clean_col1:
+
+        min_data_requirement = st.slider(
+            "Minimum Data Requirement",
+            min_value=0,
+            max_value=100,
+            value=30,
+            step=5,
             format="%d%%",
+            help=(
+                "Minimum percentage of non-empty "
+                "values required for a column."
+            ),
         )
 
-    with c2:
+    with clean_col2:
 
         min_cap = st.number_input(
             "Minimum Generation Cap",
             min_value=0.0,
             value=800.0,
             step=10.0,
+            help=(
+                "Columns whose maximum generation "
+                "is below this value are removed."
+            ),
         )
 
-    with c3:
+    with clean_col3:
 
         max_cap = st.number_input(
             "Maximum Generation Cap",
             min_value=0.0,
             value=1200.0,
             step=10.0,
+            help=(
+                "Columns whose maximum generation "
+                "is above this value are removed."
+            ),
         )
 
-    st.markdown("")
-
-    c1, c2, c3 = st.columns(3)
-
-    with c1:
-
-        first_window = st.number_input(
-            "1st Window",
-            min_value=3,
-            max_value=51,
-            value=15,
-            step=2,
-        )
-
-    with c2:
-
-        first_poly = st.number_input(
-            "1st Polynomial",
-            min_value=1,
-            max_value=10,
-            value=3,
-        )
-
-    with c3:
-
-        second_enabled = st.checkbox(
-            "Apply Second Smoothing",
-            value=True,
-        )
-
-    if second_enabled:
-
-        c1, c2 = st.columns(2)
-
-        with c1:
-
-            second_window = st.number_input(
-                "2nd Window",
-                min_value=3,
-                max_value=51,
-                value=7,
-                step=2,
-            )
-
-        with c2:
-
-            second_poly = st.number_input(
-                "2nd Polynomial",
-                min_value=1,
-                max_value=10,
-                value=3,
-            )
-
-    else:
-
-        second_window = 7
-        second_poly = 3
-
-    generate = st.form_submit_button(
-        "🚀 Generate CMV Curve",
+    apply_cleaning = st.form_submit_button(
+        "🔄 Apply Cleaning Settings",
         type="primary",
         use_container_width=True,
     )
 
 
-# ==========================================================
-# GENERATE ONLY AFTER BUTTON
-# ==========================================================
-
-if not generate:
-
-    st.info(
-        "Configure the settings above and click "
-        "**Generate CMV Curve**."
-    )
-
-    st.stop()
-
-
-# ==========================================================
-# VALIDATION
-# ==========================================================
-
 if min_cap >= max_cap:
 
     st.error(
-        "Minimum Generation Cap must be less than Maximum Generation Cap."
+        "Minimum Generation Cap must be "
+        "less than Maximum Generation Cap."
     )
 
     st.stop()
 
 
 # ==========================================================
-# CLEAN
+# CLEAN DATA
 # ==========================================================
 
-with st.spinner("Cleaning generation data..."):
+try:
 
-    try:
+    clean_df = cached_prepare_data(
+        raw_df,
+        min_data_requirement,
+        min_cap,
+        max_cap,
+    )
 
-        clean_df = prepare_data(
-            raw_df,
-            min_data,
-            min_cap,
-            max_cap,
-        )
+except Exception as e:
 
-    except Exception as e:
+    st.error(
+        f"Cleaning failed: {e}"
+    )
 
-        st.error(
-            f"Cleaning failed: {e}"
-        )
-
-        st.stop()
+    st.stop()
 
 
 # ==========================================================
-# PERCENTILE
-# ==========================================================
-
-with st.spinner("Calculating 95th percentile..."):
-
-    try:
-
-        percentile_df = calculate_percentiles(
-            clean_df,
-            96,
-        )
-
-        percentile_df = (
-            remove_constant_blocks(
-                percentile_df
-            )
-        )
-
-    except Exception as e:
-
-        st.error(
-            f"Percentile calculation failed: {e}"
-        )
-
-        st.stop()
-
-
-# ==========================================================
-# SUMMARY
+# CLEANING SUMMARY
 # ==========================================================
 
 c1, c2, c3, c4 = st.columns(4)
@@ -761,29 +953,152 @@ c3.metric(
 )
 
 c4.metric(
-    "Data Requirement",
-    f"{min_data}%",
+    "Minimum Requirement",
+    f"{min_data_requirement}%",
+)
+
+
+min_data_threshold = int(
+    np.ceil(
+        len(raw_df)
+        * min_data_requirement
+        / 100
+    )
+)
+
+st.caption(
+    f"Minimum data requirement: "
+    f"**{min_data_requirement}%** "
+    f"→ at least "
+    f"**{min_data_threshold:,} / "
+    f"{len(raw_df):,} rows**"
+)
+
+st.caption(
+    f"Generation range: "
+    f"**{min_cap:,.0f} to "
+    f"{max_cap:,.0f}**"
 )
 
 
 # ==========================================================
-# COLUMN SELECTION
+# DATE INFORMATION
 # ==========================================================
 
-st.markdown(
-    '<div class="section">📊 Column Selection</div>',
-    unsafe_allow_html=True,
+if isinstance(
+    clean_df.index,
+    pd.DatetimeIndex,
+):
+
+    st.success(
+        "Date column detected and used "
+        "as the DataFrame index."
+    )
+
+
+# ==========================================================
+# CLEAN DATA PREVIEW
+# ==========================================================
+
+with st.expander(
+    "View Cleaned Data"
+):
+
+    st.dataframe(
+        clean_df.head(20),
+        use_container_width=True,
+    )
+
+
+# ==========================================================
+# PERCENTILE CALCULATION
+# ==========================================================
+
+try:
+
+    percentile_df = cached_percentiles(
+        clean_df
+    )
+
+except Exception as e:
+
+    st.error(
+        f"Unable to calculate 95th percentile: {e}"
+    )
+
+    st.stop()
+
+
+# ==========================================================
+# 3. COLUMN SELECTION
+# ==========================================================
+
+st.subheader(
+    "Select Columns for Average"
 )
 
 all_columns = list(
     percentile_df.columns
 )
 
-selected_columns = st.multiselect(
-    "Columns included in average",
-    all_columns,
-    default=all_columns,
+
+if (
+    st.session_state.cmv_selected_columns
+    is None
+):
+
+    st.session_state.cmv_selected_columns = (
+        all_columns.copy()
+    )
+
+
+with st.form(
+    "column_selection_form"
+):
+
+    selected_columns = st.multiselect(
+        "Columns included in final average",
+        options=all_columns,
+        default=st.session_state.cmv_selected_columns,
+        help=(
+            "Select the generation columns "
+            "that should contribute to the "
+            "final CMV average."
+        ),
+    )
+
+    apply_selection = st.form_submit_button(
+        "✓ Apply Column Selection",
+        type="primary",
+        use_container_width=True,
+    )
+
+
+if apply_selection:
+
+    if not selected_columns:
+
+        st.warning(
+            "Select at least one column."
+        )
+
+    else:
+
+        st.session_state.cmv_selected_columns = (
+            selected_columns
+        )
+
+        # New selection means new average
+
+        st.session_state.cmv_generated = False
+        st.session_state.cmv_average = None
+        st.session_state.cmv_smooth = None
+
+
+selected_columns = (
+    st.session_state.cmv_selected_columns
 )
+
 
 if not selected_columns:
 
@@ -795,232 +1110,539 @@ if not selected_columns:
 
 
 # ==========================================================
-# OPTIONAL PERCENTILE CHART
+# 4. PERCENTILE GRAPH
 # ==========================================================
+
+st.subheader(
+    "95th Percentile Profiles"
+)
+
+st.caption(
+    "All cleaned columns are shown here. "
+    "Selected columns are highlighted."
+)
+
 
 with st.expander(
     "📈 View 95th Percentile Profiles"
 ):
 
-    st.caption(
-        "Selected columns are highlighted."
+    fig_percentile = make_percentile_chart(
+        percentile_df,
+        selected_columns,
     )
 
     st.plotly_chart(
-        percentile_chart(
-            percentile_df,
-            selected_columns,
-        ),
+        fig_percentile,
         use_container_width=True,
+        config={
+            "displayModeBar": False,
+        },
     )
 
 
 # ==========================================================
-# AVERAGE
+# SELECTED DATA
+# ==========================================================
+
+selected_percentile_df = (
+    percentile_df[
+        selected_columns
+    ].copy()
+)
+
+
+# ==========================================================
+# FINAL AVERAGE
 # ==========================================================
 
 average = (
-    percentile_df[
-        selected_columns
-    ]
+    selected_percentile_df
     .mean(axis=1)
     .to_numpy()
 )
 
 
 # ==========================================================
-# SMOOTH
+# 5. SMOOTHING SETTINGS
 # ==========================================================
 
-with st.spinner("Generating smooth CMV profile..."):
+st.subheader(
+    "Smoothing Settings"
+)
 
-    smooth = generate_smooth(
-        tuple(average),
-        first_window,
-        first_poly,
-        second_enabled,
-        second_window,
-        second_poly,
+
+max_window_1 = min(
+    len(average),
+    51,
+)
+
+if max_window_1 % 2 == 0:
+
+    max_window_1 -= 1
+
+
+if max_window_1 < 3:
+
+    st.error(
+        "Not enough blocks for smoothing."
+    )
+
+    st.stop()
+
+
+default_window_1 = min(
+    15,
+    max_window_1,
+)
+
+if default_window_1 % 2 == 0:
+
+    default_window_1 -= 1
+
+
+max_window_2 = min(
+    len(average),
+    51,
+)
+
+if max_window_2 % 2 == 0:
+
+    max_window_2 -= 1
+
+
+default_window_2 = min(
+    7,
+    max_window_2,
+)
+
+if default_window_2 % 2 == 0:
+
+    default_window_2 -= 1
+
+
+with st.form(
+    "smoothing_form"
+):
+
+    use_second_smoothing = st.checkbox(
+        "Apply Second Smoothing",
+        value=True,
+        help=(
+            "Enable a second Savitzky-Golay "
+            "smoothing stage."
+        ),
+    )
+
+    st.markdown("")
+
+    smooth_col1, smooth_col2 = (
+        st.columns(2)
+    )
+
+    # ------------------------------------------------------
+    # FIRST
+    # ------------------------------------------------------
+
+    with smooth_col1:
+
+        st.markdown(
+            "**First Smoothing**"
+        )
+
+        window_length_1 = st.number_input(
+            "Window Length",
+            min_value=3,
+            max_value=max_window_1,
+            value=default_window_1,
+            step=2,
+        )
+
+        polynomial_order_1 = st.number_input(
+            "Polynomial Order",
+            min_value=1,
+            max_value=max(
+                1,
+                window_length_1 - 1,
+            ),
+            value=min(
+                3,
+                window_length_1 - 1,
+            ),
+            step=1,
+        )
+
+    # ------------------------------------------------------
+    # SECOND
+    # ------------------------------------------------------
+
+    with smooth_col2:
+
+        st.markdown(
+            "**Second Smoothing**"
+        )
+
+        if use_second_smoothing:
+
+            window_length_2 = st.number_input(
+                "Second Window Length",
+                min_value=3,
+                max_value=max_window_2,
+                value=default_window_2,
+                step=2,
+            )
+
+            polynomial_order_2 = st.number_input(
+                "Second Polynomial Order",
+                min_value=1,
+                max_value=max(
+                    1,
+                    window_length_2 - 1,
+                ),
+                value=min(
+                    3,
+                    window_length_2 - 1,
+                ),
+                step=1,
+            )
+
+        else:
+
+            window_length_2 = None
+            polynomial_order_2 = None
+
+            st.info(
+                "Second smoothing is disabled."
+            )
+
+    generate_curve = st.form_submit_button(
+        "⚡ Generate CMV Curve",
+        type="primary",
+        use_container_width=True,
     )
 
 
 # ==========================================================
-# FINAL CHART
+# GENERATE ONLY ON BUTTON CLICK
 # ==========================================================
 
-st.markdown(
-    '<div class="section">☀️ Generated CMV Curve</div>',
-    unsafe_allow_html=True,
-)
+if generate_curve:
 
-st.plotly_chart(
-    final_chart(
+    with st.spinner(
+        "⚡ Generating CMV curve..."
+    ):
+
+        smooth = cached_smoothing(
+            tuple(average),
+            int(window_length_1),
+            int(polynomial_order_1),
+            bool(use_second_smoothing),
+            (
+                int(window_length_2)
+                if use_second_smoothing
+                else None
+            ),
+            (
+                int(polynomial_order_2)
+                if use_second_smoothing
+                else None
+            ),
+        )
+
+    st.session_state.cmv_average = (
+        average.copy()
+    )
+
+    st.session_state.cmv_smooth = (
+        smooth.copy()
+    )
+
+    st.session_state.cmv_generated = True
+
+
+# ==========================================================
+# GENERATED RESULT
+# ==========================================================
+
+if st.session_state.cmv_generated:
+
+    average = (
+        st.session_state.cmv_average
+    )
+
+    smooth = (
+        st.session_state.cmv_smooth
+    )
+
+    st.subheader(
+        "Generated CMV Curve"
+    )
+
+    st.caption(
+        "Only the 95th percentile average "
+        "and final smooth profile are shown here."
+    )
+
+    fig_final = make_final_chart(
         average,
         smooth,
-    ),
-    use_container_width=True,
-)
+    )
+
+    st.plotly_chart(
+        fig_final,
+        use_container_width=True,
+        config={
+            "displayModeBar": False,
+        },
+    )
+
+    # ------------------------------------------------------
+    # RESULT TABLE
+    # ------------------------------------------------------
+
+    final_output = pd.DataFrame({
+        "Block": np.arange(
+            1,
+            len(smooth) + 1,
+        ),
+        "95th Percentile Average": average,
+        "Smooth Profile": smooth,
+    })
+
+    with st.expander(
+        "View Generated Curve Data"
+    ):
+
+        st.dataframe(
+            final_output,
+            use_container_width=True,
+            hide_index=True,
+        )
 
 
 # ==========================================================
-# RESULT TABLE
+# COLUMN SELECTION TABLE
 # ==========================================================
 
-final_output = pd.DataFrame({
-    "Block": np.arange(
-        1,
-        len(smooth) + 1,
-    ),
-    "95th Percentile Average": average,
-    "Smooth Profile": smooth,
+selection_df = pd.DataFrame({
+    "Column": all_columns,
+    "Included in Average": [
+        col in selected_columns
+        for col in all_columns
+    ],
 })
 
+
 with st.expander(
-    "🔍 View Generated Curve Data"
+    "View Column Selection"
 ):
 
     st.dataframe(
-        final_output.round(3),
+        selection_df,
         use_container_width=True,
         hide_index=True,
     )
 
 
 # ==========================================================
-# SETTINGS OUTPUT
+# 6. EXCEL OUTPUT
 # ==========================================================
 
-settings_output = pd.DataFrame({
-    "Setting": [
-        "Source Sheet",
-        "Minimum Data Requirement",
-        "Minimum Generation Cap",
-        "Maximum Generation Cap",
-        "First Window Length",
-        "First Polynomial Order",
-        "Second Smoothing",
-        "Second Window Length",
-        "Second Polynomial Order",
-        "Rows",
-        "Original Columns",
-        "Usable Columns",
-    ],
-    "Value": [
-        selected_sheet,
-        f"{min_data}%",
-        min_cap,
-        max_cap,
-        first_window,
-        first_poly,
-        "Enabled" if second_enabled else "Disabled",
-        second_window if second_enabled else "",
-        second_poly if second_enabled else "",
-        len(raw_df),
-        raw_df.shape[1],
-        clean_df.shape[1],
-    ],
-})
+if st.session_state.cmv_generated:
 
-
-# ==========================================================
-# EXCEL DOWNLOAD
-# ==========================================================
-
-st.markdown(
-    '<div class="section">💾 Export</div>',
-    unsafe_allow_html=True,
-)
-
-
-@st.cache_data(show_spinner=False, max_entries=10)
-def create_output_excel(
-    original_bytes,
-    cmv_output,
-    percentile_output,
-    selection_output,
-    settings_output,
-):
-
-    output = BytesIO(
-        original_bytes
+    st.subheader(
+        "Update Original Workbook"
     )
 
-    with pd.ExcelWriter(
-        output,
-        engine="openpyxl",
-        mode="a",
-        if_sheet_exists="replace",
-    ) as writer:
+    st.caption(
+        "The original workbook is preserved. "
+        "The generated CMV results are added "
+        "as separate sheets."
+    )
 
-        cmv_output.to_excel(
-            writer,
-            sheet_name="CMV_Curve",
-            index=False,
-        )
+    if st.button(
+        "💾 Add CMV Curve & Download Updated Workbook",
+        type="primary",
+        use_container_width=True,
+    ):
 
-        percentile_output.to_excel(
-            writer,
-            sheet_name="Percentile_Data",
-            index=False,
-        )
+        try:
 
-        selection_output.to_excel(
-            writer,
-            sheet_name="Column_Selection",
-            index=False,
-        )
+            with st.spinner(
+                "Preparing updated workbook..."
+            ):
 
-        settings_output.to_excel(
-            writer,
-            sheet_name="CMV_Settings",
-            index=False,
-        )
+                output = BytesIO(
+                    uploaded_file.getvalue()
+                )
 
-    return output.getvalue()
+                # --------------------------------------------------
+                # CMV
+                # --------------------------------------------------
 
+                cmv_output = pd.DataFrame({
+                    "Block": np.arange(
+                        1,
+                        len(smooth) + 1,
+                    ),
+                    "95th Percentile Average": average,
+                    "Smooth Profile": smooth,
+                })
 
-cmv_output = final_output.copy()
+                # --------------------------------------------------
+                # PERCENTILE
+                # --------------------------------------------------
 
-percentile_output = percentile_df.copy()
+                percentile_output = (
+                    percentile_df.copy()
+                )
 
-percentile_output.insert(
-    0,
-    "Block",
-    np.arange(
-        1,
-        len(percentile_output) + 1,
-    ),
-)
+                percentile_output.insert(
+                    0,
+                    "Block",
+                    np.arange(
+                        1,
+                        len(percentile_output) + 1,
+                    ),
+                )
 
-selection_output = pd.DataFrame({
-    "Column": all_columns,
-    "Included in Average": [
-        c in selected_columns
-        for c in all_columns
-    ],
-})
+                # --------------------------------------------------
+                # SELECTION
+                # --------------------------------------------------
 
+                selection_output = pd.DataFrame({
+                    "Column": all_columns,
+                    "Included in Average": [
+                        col in selected_columns
+                        for col in all_columns
+                    ],
+                })
 
-excel_output = create_output_excel(
-    file_bytes,
-    cmv_output,
-    percentile_output,
-    selection_output,
-    settings_output,
-)
+                # --------------------------------------------------
+                # SETTINGS
+                # --------------------------------------------------
 
-download_name = (
-    uploaded.name.rsplit(".", 1)[0]
-    + "_Updated.xlsx"
-)
+                settings_output = pd.DataFrame({
+                    "Setting": [
+                        "Source Sheet",
+                        "Minimum Data Requirement",
+                        "Minimum Generation Cap",
+                        "Maximum Generation Cap",
+                        "First Window Length",
+                        "First Polynomial Order",
+                        "Second Smoothing",
+                        "Second Window Length",
+                        "Second Polynomial Order",
+                        "Rows",
+                        "Original Columns",
+                        "Usable Columns",
+                    ],
+                    "Value": [
+                        selected_sheet,
+                        f"{min_data_requirement}%",
+                        min_cap,
+                        max_cap,
+                        window_length_1,
+                        polynomial_order_1,
+                        (
+                            "Enabled"
+                            if use_second_smoothing
+                            else "Disabled"
+                        ),
+                        (
+                            window_length_2
+                            if use_second_smoothing
+                            else ""
+                        ),
+                        (
+                            polynomial_order_2
+                            if use_second_smoothing
+                            else ""
+                        ),
+                        len(raw_df),
+                        raw_df.shape[1],
+                        clean_df.shape[1],
+                    ],
+                })
 
-st.download_button(
-    "⬇️ Download Updated Workbook",
-    data=excel_output,
-    file_name=download_name,
-    mime=(
-        "application/vnd.openxmlformats-officedocument."
-        "spreadsheetml.sheet"
-    ),
-    use_container_width=True,
-)
+                # --------------------------------------------------
+                # WRITE
+                # --------------------------------------------------
+
+                with pd.ExcelWriter(
+                    output,
+                    engine="openpyxl",
+                    mode="a",
+                    if_sheet_exists="replace",
+                ) as writer:
+
+                    cmv_output.to_excel(
+                        writer,
+                        sheet_name="CMV_Curve",
+                        index=False,
+                    )
+
+                    percentile_output.to_excel(
+                        writer,
+                        sheet_name="Percentile_Data",
+                        index=False,
+                    )
+
+                    selection_output.to_excel(
+                        writer,
+                        sheet_name="Column_Selection",
+                        index=False,
+                    )
+
+                    settings_output.to_excel(
+                        writer,
+                        sheet_name="CMV_Settings",
+                        index=False,
+                    )
+
+                output.seek(0)
+
+            # ------------------------------------------------------
+            # DOWNLOAD NAME
+            # ------------------------------------------------------
+
+            original_name = uploaded_file.name
+
+            if original_name.lower().endswith(
+                ".xlsx"
+            ):
+
+                download_name = (
+                    original_name[:-5]
+                    + "_Updated.xlsx"
+                )
+
+            else:
+
+                download_name = (
+                    original_name
+                    + "_Updated.xlsx"
+                )
+
+            st.success(
+                "CMV Curve added successfully. "
+                "All existing workbook sheets "
+                "were preserved."
+            )
+
+            st.download_button(
+                "⬇️ Download Updated Workbook",
+                data=output.getvalue(),
+                file_name=download_name,
+                mime=(
+                    "application/vnd.openxmlformats-officedocument."
+                    "spreadsheetml.sheet"
+                ),
+                use_container_width=True,
+            )
+
+        except Exception as e:
+
+            st.error(
+                f"Unable to update workbook: {e}"
+            )
