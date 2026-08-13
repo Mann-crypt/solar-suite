@@ -1113,6 +1113,10 @@ def show_forecast_chart(
 # PLANT SELECTOR
 # ============================================================
 
+# ============================================================
+# PLANT SELECTOR
+# ============================================================
+
 def plant_selector():
 
     st.markdown(
@@ -1120,38 +1124,17 @@ def plant_selector():
         unsafe_allow_html=True,
     )
 
-    st.markdown(
-        """
-        <style>
-        div[role="radiogroup"] {
-            gap: 0 !important;
-            border: 1px solid rgba(128,128,128,0.30);
-            border-radius: 12px;
-            padding: 4px;
-            width: fit-content;
-        }
-
-        div[role="radiogroup"] > label {
-            padding: 9px 24px;
-            border-radius: 9px;
-            margin: 0 !important;
-            cursor: pointer;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    plant_type = st.radio(
+    plant_type = st.segmented_control(
         "Plant Type",
-        [
+        options=[
             "🏗️ Fixed",
             "🔄 Tracking",
         ],
-        index=0,
-        horizontal=True,
-        label_visibility="collapsed",
+        default="🏗️ Fixed",
+        selection_mode="single",
         key="plant_type_selector",
+        label_visibility="collapsed",
+        width="stretch",
     )
 
     return plant_type
