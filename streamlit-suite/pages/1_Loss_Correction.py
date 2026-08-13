@@ -1113,10 +1113,6 @@ def show_forecast_chart(
 # PLANT SELECTOR
 # ============================================================
 
-# ============================================================
-# PLANT SELECTOR
-# ============================================================
-
 def plant_selector():
 
     st.markdown(
@@ -1124,20 +1120,45 @@ def plant_selector():
         unsafe_allow_html=True,
     )
 
-    plant_type = st.segmented_control(
-        "Plant Type",
-        options=[
-            "🏗️ Fixed",
-            "🔄 Tracking",
-        ],
-        default="🏗️ Fixed",
-        selection_mode="single",
-        key="plant_type_selector",
-        label_visibility="collapsed",
-        width="stretch",
-    )
+    # Initialize
+    if "plant_type" not in st.session_state:
+        st.session_state.plant_type = "🏗️ Fixed"
 
-    return plant_type
+    col1, col2 = st.columns(2)
+
+    with col1:
+
+        fixed_selected = (
+            st.session_state.plant_type == "🏗️ Fixed"
+        )
+
+        if st.button(
+            "🏗️  Fixed Plant",
+            use_container_width=True,
+            type="primary" if fixed_selected else "secondary",
+            key="fixed_plant_btn",
+        ):
+            st.session_state.plant_type = "🏗️ Fixed"
+            st.session_state.tracking_params = None
+            st.rerun()
+
+    with col2:
+
+        tracking_selected = (
+            st.session_state.plant_type == "🔄 Tracking"
+        )
+
+        if st.button(
+            "🔄  Tracking Plant",
+            use_container_width=True,
+            type="primary" if tracking_selected else "secondary",
+            key="tracking_plant_btn",
+        ):
+            st.session_state.plant_type = "🔄 Tracking"
+            st.session_state.tracking_params = None
+            st.rerun()
+
+    return st.session_state.plant_type
     
 # ============================================================
 # TRACKING PARAMETERS
