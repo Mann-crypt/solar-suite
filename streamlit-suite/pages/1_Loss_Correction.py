@@ -986,18 +986,6 @@ def efficiency_control(
         help="Automatically calculated initially. You can manually change it.",
     )
 
-    c1, c2 = st.columns(2)
-
-    c1.metric(
-        "Auto Efficiency Loss",
-        f"{auto_loss:.2f}%",
-    )
-
-    c2.metric(
-        "Current Efficiency Loss",
-        f"{loss:.2f}%",
-    )
-
     return apply_efficiency_loss(
         df,
         loss,
