@@ -1109,6 +1109,10 @@ def show_forecast_chart(
     )
 
 
+# ============================================================
+# PLANT TYPE SELECTOR
+# ============================================================
+
 def plant_selector():
 
     st.markdown(
@@ -1116,65 +1120,128 @@ def plant_selector():
         unsafe_allow_html=True,
     )
 
+    # --------------------------------------------------------
+    # Custom selected/unselected button styling
+    # --------------------------------------------------------
+
+    st.markdown(
+        """
+        <style>
+
+        /* Plant selector container */
+        .plant-selector {
+            display: flex;
+            gap: 14px;
+            margin-bottom: 8px;
+        }
+
+        /* Common button appearance */
+        .plant-btn {
+            width: 100%;
+            min-height: 58px;
+            border-radius: 14px;
+            padding: 10px 18px;
+            font-size: 16px;
+            font-weight: 700;
+            text-align: center;
+            border: 1px solid rgba(128,128,128,0.30);
+            transition: all 0.2s ease;
+        }
+
+        /* Selected */
+        .plant-selected {
+            background: rgba(37, 99, 235, 0.18);
+            border: 2px solid #3b82f6;
+            color: #3b82f6;
+            box-shadow: 0 0 0 2px rgba(59,130,246,0.10);
+        }
+
+        /* Unselected */
+        .plant-unselected {
+            background: rgba(128,128,128,0.08);
+            color: inherit;
+            opacity: 0.72;
+        }
+
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
     selected = st.session_state.plant_type
 
     c1, c2 = st.columns(2)
 
-    # --------------------------------------------------------
-    # FIXED BUTTON
-    # --------------------------------------------------------
+    # ========================================================
+    # FIXED
+    # ========================================================
 
     with c1:
 
-        fixed_class = (
-            "plant-btn selected"
-            if selected == "🏗️ Fixed"
-            else "plant-btn"
-        )
+        if selected == "🏗️ Fixed":
 
-        st.markdown(
-            f"""
-            <style>
-            div[data-testid="stButton"] button[kind="secondary"] {{
-                min-height: 52px;
-                border-radius: 12px;
-                font-size: 16px;
-                font-weight: 650;
-            }}
-            </style>
+            st.markdown(
+                """
+                <div class="plant-btn plant-selected">
+                    🏗️ &nbsp; FIXED PLANT
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
 
-            <div class="{fixed_class}">
-            """,
-            unsafe_allow_html=True,
-        )
+            # Invisible interaction button
+            if st.button(
+                "Selected",
+                key="fixed_select_hidden",
+                use_container_width=True,
+            ):
+                pass
 
-        if st.button(
-            "🏗️  FIXED PLANT",
-            key="fixed_button",
-            use_container_width=True,
-        ):
+        else:
 
-            if selected != "🏗️ Fixed":
+            if st.button(
+                "🏗️  FIXED PLANT",
+                key="fixed_button",
+                use_container_width=True,
+            ):
+
                 st.session_state.plant_type = "🏗️ Fixed"
                 st.session_state.tracking_params = None
                 st.session_state.run_model = False
                 st.rerun()
 
-        st.markdown("</div>", unsafe_allow_html=True)
-
-    # --------------------------------------------------------
-    # TRACKING BUTTON
-    # --------------------------------------------------------
+    # ========================================================
+    # TRACKING
+    # ========================================================
 
     with c2:
 
-        if st.button(
-            "🔄  TRACKING PLANT",
-            key="tracking_button",
-            use_container_width=True,
-        ):
+        if selected == "🔄 Tracking":
 
-            if selected != "🔄 Tracking":
+            st.markdown(
+                """
+                <div class="plant-btn plant-selected">
+                    🔄 &nbsp; TRACKING PLANT
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+            if st.button(
+                "Selected",
+                key="tracking_select_hidden",
+                use_container_width=True,
+            ):
+                pass
+
+        else:
+
+            if st.button(
+                "🔄  TRACKING PLANT",
+                key="tracking_button",
+                use_container_width=True,
+            ):
+
                 st.session_state.plant_type = "🔄 Tracking"
                 st.session_state.tracking_params = None
                 st.session_state.run_model = False
