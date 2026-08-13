@@ -1133,35 +1133,68 @@ def plant_selector():
         """
         <style>
 
+        .plant-wrapper {
+            position: relative;
+            margin-bottom: 10px;
+        }
+
         .plant-card {
-            border-radius: 16px;
-            padding: 18px 20px;
-            margin-bottom: 8px;
             min-height: 125px;
+            padding: 18px 20px;
+            border-radius: 16px;
             border: 1px solid rgba(128,128,128,0.25);
             transition: all 0.2s ease;
+            cursor: pointer;
         }
 
-        .plant-card-title {
-            font-size: 20px;
-            font-weight: 700;
-            margin-bottom: 7px;
-        }
-
-        .plant-card-description {
-            font-size: 14px;
-            line-height: 1.45;
-            opacity: 0.72;
+        .plant-card:hover {
+            border-color: #3b82f6;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 18px rgba(59,130,246,0.12);
         }
 
         .plant-selected {
             border: 2px solid #3b82f6;
             background: rgba(59,130,246,0.10);
-            box-shadow: 0 4px 16px rgba(59,130,246,0.15);
+            box-shadow: 0 4px 18px rgba(59,130,246,0.15);
         }
 
         .plant-unselected {
             background: rgba(128,128,128,0.04);
+        }
+
+        .plant-title {
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .plant-description {
+            font-size: 14px;
+            line-height: 1.5;
+            opacity: 0.72;
+        }
+
+        /* Make Streamlit button cover the whole card */
+        .plant-wrapper div.stButton {
+            position: absolute;
+            inset: 0;
+        }
+
+        .plant-wrapper div.stButton > button {
+            width: 100%;
+            height: 100%;
+            min-height: 125px;
+            background: transparent !important;
+            border: none !important;
+            box-shadow: none !important;
+            color: transparent !important;
+            padding: 0 !important;
+        }
+
+        .plant-wrapper div.stButton > button:hover {
+            background: transparent !important;
+            border: none !important;
         }
 
         </style>
@@ -1172,7 +1205,7 @@ def plant_selector():
     c1, c2 = st.columns(2, gap="medium")
 
     # ========================================================
-    # FIXED PLANT
+    # FIXED
     # ========================================================
 
     with c1:
@@ -1185,22 +1218,29 @@ def plant_selector():
 
         st.markdown(
             f"""
-            <div class="plant-card {fixed_class}">
-                <div class="plant-card-title">
-                    🏗️ Fixed Plant
+            <div class="plant-wrapper">
+
+                <div class="plant-card {fixed_class}">
+
+                    <div class="plant-title">
+                        🏗️ Fixed Plant
+                    </div>
+
+                    <div class="plant-description">
+                        Panels remain at a fixed tilt angle
+                        throughout the day. The model calculates
+                        generation using the fixed-panel orientation.
+                    </div>
+
                 </div>
-                <div class="plant-card-description">
-                    Panels remain at a fixed tilt angle throughout
-                    the day. The model calculates the solar
-                    generation using the fixed-panel orientation.
-                </div>
+
             </div>
             """,
             unsafe_allow_html=True,
         )
 
         if st.button(
-            "Select Fixed Plant",
+            "Fixed",
             key="fixed_button",
             use_container_width=True,
         ):
@@ -1214,7 +1254,7 @@ def plant_selector():
                 st.rerun()
 
     # ========================================================
-    # TRACKING PLANT
+    # TRACKING
     # ========================================================
 
     with c2:
@@ -1227,23 +1267,30 @@ def plant_selector():
 
         st.markdown(
             f"""
-            <div class="plant-card {tracking_class}">
-                <div class="plant-card-title">
-                    🔄 Tracking Plant
+            <div class="plant-wrapper">
+
+                <div class="plant-card {tracking_class}">
+
+                    <div class="plant-title">
+                        🔄 Tracking Plant
+                    </div>
+
+                    <div class="plant-description">
+                        Panels follow the sun during the day.
+                        The model optimizes tracking parameters
+                        such as start, end, maximum block and
+                        east/west tracking limits.
+                    </div>
+
                 </div>
-                <div class="plant-card-description">
-                    Panels follow the sun during the day using
-                    optimized tracking parameters such as
-                    start block, end block, maximum block and
-                    east/west tracking limits.
-                </div>
+
             </div>
             """,
             unsafe_allow_html=True,
         )
 
         if st.button(
-            "Select Tracking Plant",
+            "Tracking",
             key="tracking_button",
             use_container_width=True,
         ):
@@ -1257,7 +1304,6 @@ def plant_selector():
                 st.rerun()
 
     return st.session_state.plant_type
-
 # ============================================================
 # TRACKING PARAMETERS
 # ============================================================
