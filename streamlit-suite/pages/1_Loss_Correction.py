@@ -167,74 +167,198 @@ def detect_workbook(file_bytes):
 
 
 @st.cache_data(show_spinner=False)
-def read_area_efficiency(
-    file_bytes
-):
+def read_area_efficiency(file_bytes):
 
-    for header in [
-        1,
-        2,
-        0,
-    ]:
+    # ======================================================
+    # IMPORTANT:
+    # Area & Efficiency sheet contains multiple tables.
+    #
+    # We ONLY want the FIRST table at the TOP-LEFT.
+    #
+    # Excel:
+    # Row 1 -> Step-10 / Fixed
+    # Row 2 -> actual column headers
+    # Row 3 onward -> module data
+    #
+    # We stop at the FIRST blank Module Type row.
+    # This prevents the Tracking table from being included.
+    # ======================================================
 
-        df = pd.read_excel(
-            io.BytesIO(file_bytes),
-            sheet_name="Area & Efficiency",
-            header=header,
-            usecols=range(8),
-        )
+    df = pd.read_excel(
+        io.BytesIO(file_bytes),
+        sheet_name="Area & Efficiency",
+        header=1,          # Excel row 2
+        usecols=range(8),  # A:H
+    )
 
-        df.columns = (
-            df.columns
-            .astype(str)
-            .str.strip()
-        )
+    # ------------------------------------------------------
+    # Clean column names
+    # ------------------------------------------------------
+
+    df.columns = (
+        df.columns
+        .astype(str)
+        .str.strip()
+        .str.replace("\n", " ", regex=False)
+        .str.replace(r"\s+", " ", regex=True)
+    )
+
+    # ------------------------------------------------------
+    # Required columns
+    # ------------------------------------------------------
+
+    required_columns = [
+        "Module Type",
+        "Nominal Power(Wp)",
+        "Standard PV Efficiency (%)",
+        "Area of 1 Module (m²)",
+        "Total area(m2)",
+    ]
+
+    # Check that top-left table was read correctly
+    missing = [
+        col
+        for col in required_columns
+        if col not in df.columns
+    ]
+
+    if missing:
+        return pd.DataFrame()
+
+    # ------------------------------------------------------
+    # Find FIRST actual module row
+    # ------------------------------------------------------
+
+    module_col = df["Module Type"].astype(str).str.strip()
+
+    valid_module = (
+        df["Module Type"].notna()
+        & module_col.ne("")
+        & module_col.str.lower().ne("nan")
+        & module_col.str.lower().ne("tracking")
+        & module_col.str.lower().ne("fixed")
+    )
+
+    valid_indices = np.where(
+        valid_module.to_numpy()
+    )[0]
+
+    if len(valid_indices) == 0:
+        return pd.DataFrame()
+
+    first_row = valid_indices[0]
+
+    # ------------------------------------------------------
+    # Read ONLY the first contiguous module block
+    #
+    # Example:
+    #
+    # Hareon-305
+    # Hareon-310
+    # blank row       <- STOP HERE
+    # blank row
+    # Tracking
+    # Hareon-305      <- DO NOT READ
+    # Hareon-310
+    # ------------------------------------------------------
+
+    selected_rows = []
+
+    for i in range(
+        first_row,
+        len(df),
+    ):
+
+        module_value = df.iloc[
+            i
+        ]["Module Type"]
+
+        # Stop at first blank row
+        if pd.isna(module_value):
+
+            break
+
+        module_value = str(
+            module_value
+        ).strip()
 
         if (
-            "Module Type"
-            not in df.columns
+            module_value == ""
+            or module_value.lower() == "nan"
         ):
-            continue
 
-        df = df[
-            df["Module Type"]
-            .notna()
-        ].copy()
+            break
 
-        for col in df.columns:
+        # Safety: don't accidentally enter another section
+        if module_value.lower() in {
+            "fixed",
+            "tracking",
+        }:
 
-            if col != "Module Type":
+            break
 
-                df[col] = pd.to_numeric(
-                    df[col],
-                    errors="coerce",
-                )
+        selected_rows.append(i)
 
-        if (
+    if not selected_rows:
+        return pd.DataFrame()
+
+    df = df.iloc[
+        selected_rows
+    ].copy()
+
+    # ------------------------------------------------------
+    # Convert numeric columns
+    # ------------------------------------------------------
+
+    numeric_columns = [
+        col
+        for col in df.columns
+        if col != "Module Type"
+    ]
+
+    for col in numeric_columns:
+
+        df[col] = pd.to_numeric(
+            df[col],
+            errors="coerce",
+        )
+
+    # ------------------------------------------------------
+    # Validate Standard PV Efficiency
+    # ------------------------------------------------------
+
+    df = df.dropna(
+        subset=[
             "Standard PV Efficiency (%)"
-            not in df.columns
-        ):
-            continue
+        ]
+    )
 
-        df = df.dropna(
-            subset=[
-                "Standard PV Efficiency (%)"
-            ]
-        )
+    df = df[
+        df[
+            "Standard PV Efficiency (%)"
+        ].between(1, 50)
+    ].copy()
+
+    # ------------------------------------------------------
+    # Validate Total Area
+    # ------------------------------------------------------
+
+    if "Total area(m2)" in df.columns:
 
         df = df[
-            df[
-                "Standard PV Efficiency (%)"
-            ].between(1, 50)
+            pd.to_numeric(
+                df["Total area(m2)"],
+                errors="coerce",
+            ).notna()
         ]
 
-        if len(df):
+    # ------------------------------------------------------
+    # Final clean dataframe
+    # ------------------------------------------------------
 
-            return df.reset_index(
-                drop=True
-            )
-
-    return pd.DataFrame()
+    return df.reset_index(
+        drop=True
+    )
 
 
 @st.cache_data(show_spinner=False)
