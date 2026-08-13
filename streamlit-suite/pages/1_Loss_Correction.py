@@ -1129,40 +1129,32 @@ def plant_selector():
     # --------------------------------------------------------
 
     with c1:
-
-        if selected == "🏗️ Fixed":
-
-            st.markdown(
-                """
-                <div style="
-                    border: 2px solid #3b82f6;
-                    background: rgba(59,130,246,0.15);
-                    border-radius: 14px;
-                    padding: 16px;
-                    text-align: center;
-                    font-size: 17px;
-                    font-weight: 700;
-                    color: #3b82f6;
-                    margin-bottom: 8px;
-                ">
-                    🏗️ FIXED PLANT
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-
-        else:
-
+    if selected == "🏗️ Fixed":
+        st.markdown(
+            """
+            <div style="border: 2px solid #3b82f6; background: rgba(59,130,246,0.15); 
+            border-radius: 14px; padding: 16px; text-align: center; font-size: 17px; 
+            font-weight: 700; color: #3b82f6; margin-bottom: 8px;">
+                🏗️ FIXED PLANT
+            </div>
+            """, 
+            unsafe_allow_html=True,
+        )
+    else:
+        # Create a container to hold the button and caption together
+        with st.container():
             if st.button(
-                "🏗️  FIXED PLANT",
-                key="fixed_button",
+                "🏗️ FIXED PLANT", 
+                key="fixed_button", 
                 use_container_width=True,
             ):
-
                 st.session_state.plant_type = "🏗️ Fixed"
                 st.session_state.tracking_params = None
                 st.session_state.run_model = False
                 st.rerun()
+            
+            # Add the small caption text right under the button
+            st.caption("Panels remain at a fixed tilt angle throughout the day.")
 
     # --------------------------------------------------------
     # TRACKING
