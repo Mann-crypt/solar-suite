@@ -1148,6 +1148,7 @@ def tracking_parameter_controls(params, prefix):
         int(params["DHI"]),
         1,
         key=f"{prefix}_dhi",
+        help="Automatically calculated initially. You can manually change it."
     )
 
     start = c2.number_input(
@@ -1157,6 +1158,7 @@ def tracking_parameter_controls(params, prefix):
         int(params["start"]),
         1,
         key=f"{prefix}_start",
+        help="Automatically calculated initially. You can manually change it."
     )
 
     end = c3.number_input(
@@ -1166,6 +1168,7 @@ def tracking_parameter_controls(params, prefix):
         int(params["end"]),
         1,
         key=f"{prefix}_end",
+        help="Automatically calculated initially. You can manually change it."
     )
 
     c1, c2, c3 = st.columns(3)
@@ -1177,6 +1180,7 @@ def tracking_parameter_controls(params, prefix):
         int(params["max"]),
         1,
         key=f"{prefix}_max",
+        help="Automatically calculated initially. You can manually change it."
     )
 
     east = c2.number_input(
@@ -1186,6 +1190,7 @@ def tracking_parameter_controls(params, prefix):
         int(params["east"]),
         1,
         key=f"{prefix}_east",
+        help="Automatically calculated initially. You can manually change it."
     )
 
     west = c3.number_input(
@@ -1195,6 +1200,7 @@ def tracking_parameter_controls(params, prefix):
         int(params["west"]),
         1,
         key=f"{prefix}_west",
+        help="Automatically calculated initially. You can manually change it."
     )
 
     return {
