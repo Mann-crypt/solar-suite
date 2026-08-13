@@ -1109,7 +1109,11 @@ def show_forecast_chart(
     )
 
 
-plant_type = st.segmented_control(
+# ============================================================
+# PLANT TYPE
+# ============================================================
+
+plant_type_label = st.segmented_control(
     "🏭 Select Plant Type",
     options=[
         "🏗️ Fixed Plant",
@@ -1117,6 +1121,14 @@ plant_type = st.segmented_control(
     ],
     default="🏗️ Fixed Plant",
     selection_mode="single",
+    key="plant_type_selector",
+)
+
+# Convert UI label to internal model value
+plant_type = (
+    "🏗️ Fixed"
+    if plant_type_label == "🏗️ Fixed Plant"
+    else "🔄 Tracking"
 )
     
 # ============================================================
