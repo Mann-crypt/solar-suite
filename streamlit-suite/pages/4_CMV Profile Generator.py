@@ -608,24 +608,10 @@ def add_legend_highlight(
     return fig
 
 
-import streamlit.components.v1 as components
-import json
-
-
-# ----------------------------------------------------------
-# PERCENTILE CHART
-# ----------------------------------------------------------
-
 def make_percentile_chart(
     percentile_df,
     selected_columns,
 ):
-    """
-    Create a lightweight 95th percentile chart.
-
-    Selected columns are highlighted initially.
-    Legend click can be used to isolate/highlight profiles.
-    """
 
     fig = go.Figure()
 
@@ -634,79 +620,45 @@ def make_percentile_chart(
         len(percentile_df) + 1,
     )
 
-    selected_columns = set(selected_columns)
+    selected_set = set(
+        selected_columns
+    )
 
     for col in percentile_df.columns:
 
-        is_selected = col in selected_columns
+        selected = col in selected_set
 
         fig.add_trace(
             go.Scatter(
                 x=x,
-                y=percentile_df[col].to_numpy(
-                    dtype=float
-                ),
-                mode="lines",
+                y=percentile_df[col].to_numpy(),
                 name=str(col),
-
-                # Selected profiles are visually stronger
-                opacity=1.0 if is_selected else 0.22,
-
+                mode="lines",
                 line=dict(
-                    width=3.0 if is_selected else 1.2,
+                    width=3 if selected else 1.2,
                 ),
-
-                hovertemplate=(
-                    f"<b>{col}</b>"
-                    "<br>Block: %{x}"
-                    "<br>Power: %{y:.2f}"
-                    "<extra></extra>"
-                ),
-
-                connectgaps=True,
+                opacity=1 if selected else 0.25,
+                legendgroup=str(col),
+                showlegend=selected,
             )
         )
 
     fig.update_layout(
-        height=500,
+        height=550,
         template="streamlit",
-
-        hovermode="x unified",
-
-        xaxis=dict(
-            title="15 Minute Block",
-            fixedrange=True,
-        ),
-
-        yaxis=dict(
-            title="95th Percentile Power",
-            fixedrange=True,
-        ),
-
+        xaxis_title="15 Minute Block",
+        yaxis_title="95th Percentile Power",
         margin=dict(
             l=20,
             r=20,
-            t=60,
+            t=100,
             b=20,
         ),
-
-        legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=1.02,
-            xanchor="left",
-            x=0,
-
-            # Clicking a legend item isolates it.
-            itemclick="toggleothers",
-            itemdoubleclick="toggle",
-        ),
-
-        # Prevent unnecessary interaction state
-        uirevision="percentile_chart",
     )
 
-    return fig
+    return add_legend_highlight(
+        fig
+    )
 
 
 def make_final_chart(
