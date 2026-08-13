@@ -1120,60 +1120,12 @@ def plant_selector():
         unsafe_allow_html=True,
     )
 
-    # --------------------------------------------------------
-    # Custom selected/unselected button styling
-    # --------------------------------------------------------
-
-    st.markdown(
-        """
-        <style>
-
-        /* Plant selector container */
-        .plant-selector {
-            display: flex;
-            gap: 14px;
-            margin-bottom: 8px;
-        }
-
-        /* Common button appearance */
-        .plant-btn {
-            width: 100%;
-            min-height: 58px;
-            border-radius: 14px;
-            padding: 10px 18px;
-            font-size: 16px;
-            font-weight: 700;
-            text-align: center;
-            border: 1px solid rgba(128,128,128,0.30);
-            transition: all 0.2s ease;
-        }
-
-        /* Selected */
-        .plant-selected {
-            background: rgba(37, 99, 235, 0.18);
-            border: 2px solid #3b82f6;
-            color: #3b82f6;
-            box-shadow: 0 0 0 2px rgba(59,130,246,0.10);
-        }
-
-        /* Unselected */
-        .plant-unselected {
-            background: rgba(128,128,128,0.08);
-            color: inherit;
-            opacity: 0.72;
-        }
-
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
-
     selected = st.session_state.plant_type
 
     c1, c2 = st.columns(2)
 
     # ========================================================
-    # FIXED
+    # FIXED PLANT
     # ========================================================
 
     with c1:
@@ -1182,25 +1134,72 @@ def plant_selector():
 
             st.markdown(
                 """
-                <div class="plant-btn plant-selected">
-                    🏗️ &nbsp; FIXED PLANT
+                <div style="
+                    border: 2px solid #3b82f6;
+                    background: rgba(59,130,246,0.15);
+                    border-radius: 14px;
+                    padding: 14px 18px;
+                    margin-bottom: 8px;
+                    min-height: 82px;
+                ">
+                    <div style="
+                        font-size: 17px;
+                        font-weight: 700;
+                        color: #3b82f6;
+                    ">
+                        🏗️ Fixed Plant
+                    </div>
+
+                    <div style="
+                        font-size: 13px;
+                        opacity: 0.75;
+                        margin-top: 5px;
+                    ">
+                        Panels remain at a fixed tilt angle
+                        throughout the day.
+                    </div>
                 </div>
                 """,
                 unsafe_allow_html=True,
             )
 
-            # Invisible interaction button
             if st.button(
-                "Selected",
-                key="fixed_select_hidden",
+                "✓ Selected",
+                key="fixed_active",
                 use_container_width=True,
             ):
                 pass
 
         else:
 
+            st.markdown(
+                """
+                <div style="
+                    padding: 14px 18px 5px 18px;
+                    min-height: 82px;
+                ">
+                    <div style="
+                        font-size: 17px;
+                        font-weight: 700;
+                    ">
+                        🏗️ Fixed Plant
+                    </div>
+
+                    <div style="
+                        font-size: 13px;
+                        opacity: 0.65;
+                        margin-top: 5px;
+                    ">
+                        Panels remain at a fixed tilt angle
+                        throughout the day.
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
             if st.button(
-                "🏗️  FIXED PLANT",
+                "Select Fixed Plant",
                 key="fixed_button",
                 use_container_width=True,
             ):
@@ -1211,7 +1210,7 @@ def plant_selector():
                 st.rerun()
 
     # ========================================================
-    # TRACKING
+    # TRACKING PLANT
     # ========================================================
 
     with c2:
@@ -1220,24 +1219,72 @@ def plant_selector():
 
             st.markdown(
                 """
-                <div class="plant-btn plant-selected">
-                    🔄 &nbsp; TRACKING PLANT
+                <div style="
+                    border: 2px solid #10b981;
+                    background: rgba(16,185,129,0.15);
+                    border-radius: 14px;
+                    padding: 14px 18px;
+                    margin-bottom: 8px;
+                    min-height: 82px;
+                ">
+                    <div style="
+                        font-size: 17px;
+                        font-weight: 700;
+                        color: #10b981;
+                    ">
+                        🔄 Tracking Plant
+                    </div>
+
+                    <div style="
+                        font-size: 13px;
+                        opacity: 0.75;
+                        margin-top: 5px;
+                    ">
+                        Panels adjust their angle during the day
+                        to follow the sun.
+                    </div>
                 </div>
                 """,
                 unsafe_allow_html=True,
             )
 
             if st.button(
-                "Selected",
-                key="tracking_select_hidden",
+                "✓ Selected",
+                key="tracking_active",
                 use_container_width=True,
             ):
                 pass
 
         else:
 
+            st.markdown(
+                """
+                <div style="
+                    padding: 14px 18px 5px 18px;
+                    min-height: 82px;
+                ">
+                    <div style="
+                        font-size: 17px;
+                        font-weight: 700;
+                    ">
+                        🔄 Tracking Plant
+                    </div>
+
+                    <div style="
+                        font-size: 13px;
+                        opacity: 0.65;
+                        margin-top: 5px;
+                    ">
+                        Panels adjust their angle during the day
+                        to follow the sun.
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
             if st.button(
-                "🔄  TRACKING PLANT",
+                "Select Tracking Plant",
                 key="tracking_button",
                 use_container_width=True,
             ):
@@ -1246,6 +1293,8 @@ def plant_selector():
                 st.session_state.tracking_params = None
                 st.session_state.run_model = False
                 st.rerun()
+
+    return selected
 
 # ============================================================
 # TRACKING PARAMETERS
