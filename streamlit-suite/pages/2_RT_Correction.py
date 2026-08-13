@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
+
 from datetime import datetime, timedelta
 from scipy.optimize import differential_evolution
 
@@ -58,14 +59,23 @@ if "rt_params" not in st.session_state:
 
 
 # ==========================================================
-# OPTIMIZATION
+# 1. RTF OPTIMIZATION
+# ==========================================================
+#
+# IMPORTANT:
+# This is RTF optimization.
+#
+# It is NOT the projection calculation.
+#
+# Weight, Trend, etc. belong here and are not used
+# inside the parabolic projection function below.
 # ==========================================================
 
 @st.cache_data(
     show_spinner=False,
     max_entries=10,
 )
-def cached_rt_optimize(
+def cached_rtf_optimize(
     actual_tuple,
     trend_tuple,
 ):
@@ -104,10 +114,18 @@ def cached_rt_optimize(
         n2 = int(round(n2))
         b = int(round(b))
 
+        # ----------------------------------------------
+        # RTF parameter validation
+        # ----------------------------------------------
+
         if not (
             1 <= n1 < b < n2 <= 96
         ):
             return 1e6
+
+        # ----------------------------------------------
+        # Peak value around peak block
+        # ----------------------------------------------
 
         peak_mask = np.isin(
             blocks,
@@ -120,6 +138,10 @@ def cached_rt_optimize(
         peak = actual[
             peak_mask
         ].mean()
+
+        # ----------------------------------------------
+        # RTF / projection used by optimization
+        # ----------------------------------------------
 
         denominator = (
             (n1 - b)
@@ -137,18 +159,23 @@ def cached_rt_optimize(
             / denominator
         )
 
-        projection = np.maximum(
+        proj = np.maximum(
             calc,
             0,
         )
 
-        # --------------------------------------------------
-        # Blend projection with trend
-        # --------------------------------------------------
+        # ----------------------------------------------
+        # RTF correction
+        #
+        # This remains separate from the projection
+        # function used for normal UI interaction.
+        # ----------------------------------------------
 
-        prediction = (
-            w * projection
-            + (1 - w) * trend
+        prediction = np.where(
+            blocks > b,
+            w * proj
+            + (1 - w) * trend,
+            proj,
         )
 
         pred = prediction[mask]
@@ -162,6 +189,10 @@ def cached_rt_optimize(
 
         if actual_max <= 0:
             return 1e6
+
+        # ----------------------------------------------
+        # Error components
+        # ----------------------------------------------
 
         block_error = (
             np.mean(
@@ -188,20 +219,28 @@ def cached_rt_optimize(
             / actual_sum
         )
 
-        return (
+        score = (
             0.80 * block_error
             + 0.10 * peak_error
             + 0.10 * energy_error
         )
 
+        return score
+
+    # ----------------------------------------------
+    # Differential Evolution
+    # ----------------------------------------------
+
     result = differential_evolution(
         objective,
+
         bounds=[
-            (0.30, 0.30),
+            (0.3, 0.3),
             (5, 40),
             (55, 95),
             (35, 40),
         ],
+
         popsize=12,
         maxiter=50,
         polish=True,
@@ -220,17 +259,31 @@ def cached_rt_optimize(
 
 
 # ==========================================================
-# CURVE CALCULATION
+# 2. PARABOLIC PROJECTION
+# ==========================================================
+#
+# IMPORTANT:
+#
+# This function is ONLY projection.
+#
+# No Weight.
+# No Trend.
+# No RTF blending.
+#
+# Projection depends only on:
+#
+# Actual
+# n1
+# n2
+# Peak Block
 # ==========================================================
 
 @st.cache_data(
     show_spinner=False,
     max_entries=50,
 )
-def cached_rt_curve(
+def cached_projection(
     actual_tuple,
-    trend_tuple,
-    w,
     n1,
     n2,
     b,
@@ -241,20 +294,15 @@ def cached_rt_curve(
         dtype=float,
     )
 
-    trend = np.asarray(
-        trend_tuple,
-        dtype=float,
-    )
-
     blocks = np.arange(
         1,
         97,
         dtype=float,
     )
 
-    # ------------------------------------------------------
-    # Peak
-    # ------------------------------------------------------
+    # ----------------------------------------------
+    # Peak block
+    # ----------------------------------------------
 
     peak_mask = np.isin(
         blocks,
@@ -262,11 +310,15 @@ def cached_rt_curve(
     )
 
     if not np.any(peak_mask):
-        return trend.tolist()
+        return actual.tolist()
 
     peak = actual[
         peak_mask
     ].mean()
+
+    # ----------------------------------------------
+    # Parabolic denominator
+    # ----------------------------------------------
 
     denominator = (
         (n1 - b)
@@ -274,11 +326,11 @@ def cached_rt_curve(
     )
 
     if denominator == 0:
-        return trend.tolist()
+        return actual.tolist()
 
-    # ------------------------------------------------------
+    # ----------------------------------------------
     # Parabolic projection
-    # ------------------------------------------------------
+    # ----------------------------------------------
 
     calc = peak * (
         (
@@ -293,23 +345,71 @@ def cached_rt_curve(
         0,
     )
 
-    # ------------------------------------------------------
-    # Blend with trend
-    # ------------------------------------------------------
+    return projection.tolist()
 
-    final_curve = (
-        w * projection
-        + (1 - w) * trend
+
+# ==========================================================
+# 3. RTF CURVE
+# ==========================================================
+#
+# This is kept separate from projection.
+#
+# It uses:
+#   Projection
+#   Trend
+#   Weight
+#
+# The projection itself is NEVER modified.
+# ==========================================================
+
+@st.cache_data(
+    show_spinner=False,
+    max_entries=50,
+)
+def cached_rtf_curve(
+    projection_tuple,
+    trend_tuple,
+    w,
+    b,
+):
+
+    projection = np.asarray(
+        projection_tuple,
+        dtype=float,
     )
 
-    return final_curve.tolist()
+    trend = np.asarray(
+        trend_tuple,
+        dtype=float,
+    )
+
+    blocks = np.arange(
+        1,
+        97,
+        dtype=float,
+    )
+
+    # ----------------------------------------------
+    # RTF correction
+    # ----------------------------------------------
+
+    rtf_curve = np.where(
+        blocks > b,
+        w * projection
+        + (1 - w) * trend,
+        projection,
+    )
+
+    return rtf_curve.tolist()
 
 
 # ==========================================================
-# TIME BLOCK LOOKUP
+# 4. TIME BLOCK LOOKUP
 # ==========================================================
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(
+    show_spinner=False,
+)
 def time_block_lookup(
     n1,
     n2,
@@ -321,13 +421,19 @@ def time_block_lookup(
     )
 
     time_blocks = [
-        f"{(
+        (
             start
-            + timedelta(minutes=15 * i)
-        ).strftime('%H:%M')} - {(
+            + timedelta(
+                minutes=15 * i
+            )
+        ).strftime("%H:%M")
+        + " - "
+        + (
             start
-            + timedelta(minutes=15 * (i + 1))
-        ).strftime('%H:%M')}"
+            + timedelta(
+                minutes=15 * (i + 1)
+            )
+        ).strftime("%H:%M")
         for i in range(96)
     ]
 
@@ -376,7 +482,7 @@ def time_block_lookup(
 
 
 # ==========================================================
-# HEADER
+# PAGE HEADER
 # ==========================================================
 
 st.title(
@@ -385,13 +491,18 @@ st.title(
 
 
 # ==========================================================
-# DATA EDITOR
+# DATA INPUT
 # ==========================================================
 
 input_df = pd.DataFrame({
     "Actual": st.session_state.rt_actual,
     "Trend": st.session_state.rt_trend,
 })
+
+
+# ==========================================================
+# DATA EDITOR
+# ==========================================================
 
 edited_df = st.data_editor(
     input_df,
@@ -401,6 +512,11 @@ edited_df = st.data_editor(
     height=420,
     key="rt_editor",
 )
+
+
+# ==========================================================
+# CLEAN EDITED DATA
+# ==========================================================
 
 edited_df = (
     edited_df
@@ -419,11 +535,6 @@ edited_df["Trend"] = pd.to_numeric(
 ).fillna(0)
 
 
-# ==========================================================
-# LIVE DATA UPDATE
-# No Apply button
-# ==========================================================
-
 actual_list = (
     edited_df["Actual"]
     .round(6)
@@ -436,20 +547,23 @@ trend_list = (
     .tolist()
 )
 
-data_changed = (
-    actual_list != st.session_state.rt_actual
-    or trend_list != st.session_state.rt_trend
-)
 
-if data_changed:
+# ==========================================================
+# LIVE DATA STATE
+# ==========================================================
+#
+# No Apply button.
+# No st.rerun().
+#
+# Streamlit automatically reruns when the editor changes.
+# ==========================================================
 
-    st.session_state.rt_actual = actual_list
-    st.session_state.rt_trend = trend_list
+st.session_state.rt_actual = actual_list
+st.session_state.rt_trend = trend_list
 
 
 # ==========================================================
-# OPTIMIZATION BUTTON
-# This is the ONLY expensive operation.
+# OPTIMIZE RTF
 # ==========================================================
 
 if st.button(
@@ -459,21 +573,35 @@ if st.button(
 ):
 
     with st.spinner(
-        "Optimizing RT correction parameters..."
+        "Optimizing RTF parameters..."
     ):
 
-        optimized = cached_rt_optimize(
+        optimized = cached_rtf_optimize(
             tuple(actual_list),
             tuple(trend_list),
         )
 
     st.session_state.rt_params = optimized
 
-    # Update visible parameter widgets
-    st.session_state.rt_w = optimized["w"]
-    st.session_state.rt_n1 = optimized["n1"]
-    st.session_state.rt_n2 = optimized["n2"]
-    st.session_state.rt_b = optimized["b"]
+    # ----------------------------------------------
+    # Store widget values
+    # ----------------------------------------------
+
+    st.session_state.rt_w = (
+        optimized["w"]
+    )
+
+    st.session_state.rt_n1 = (
+        optimized["n1"]
+    )
+
+    st.session_state.rt_n2 = (
+        optimized["n2"]
+    )
+
+    st.session_state.rt_b = (
+        optimized["b"]
+    )
 
 
 # ==========================================================
@@ -484,12 +612,13 @@ st.subheader(
     "Parameters"
 )
 
+
 p = st.session_state.rt_params
 
 
-# ----------------------------------------------------------
-# Parameter widgets
-# ----------------------------------------------------------
+# ==========================================================
+# PARAMETER INPUTS
+# ==========================================================
 
 col1, col2, col3, col4 = st.columns(4)
 
@@ -563,31 +692,35 @@ st.session_state.rt_params = {
 
 
 # ==========================================================
-# LIGHT VALIDATION
+# PARAMETER VALIDATION
 # ==========================================================
 
-valid_parameters = (
+parameters_valid = (
     n1 < b < n2
 )
 
-if not valid_parameters:
+
+if not parameters_valid:
 
     st.warning(
-        "For a valid parabolic curve: "
-        "`n1 < Peak Block < n2`"
+        "Required relationship: "
+        "**n1 < Peak Block < n2**"
     )
 
     st.stop()
 
 
 # ==========================================================
-# LIVE CURVE
+# PROJECTION
+# ==========================================================
+#
+# ONLY n1 / n2 / b affect projection.
+#
+# Weight and Trend do NOT enter here.
 # ==========================================================
 
-proj = cached_rt_curve(
+projection = cached_projection(
     tuple(actual_list),
-    tuple(trend_list),
-    float(w),
     int(n1),
     int(n2),
     int(b),
@@ -595,7 +728,22 @@ proj = cached_rt_curve(
 
 
 # ==========================================================
-# TIME BLOCKS
+# RTF CURVE
+# ==========================================================
+#
+# Separate calculation.
+# ==========================================================
+
+rtf_curve = cached_rtf_curve(
+    tuple(projection),
+    tuple(trend_list),
+    float(w),
+    int(b),
+)
+
+
+# ==========================================================
+# TIME BLOCK INFORMATION
 # ==========================================================
 
 with st.expander(
@@ -604,8 +752,8 @@ with st.expander(
 
     st.dataframe(
         time_block_lookup(
-            n1,
-            n2,
+            int(n1),
+            int(n2),
         ),
         use_container_width=True,
         hide_index=True,
@@ -620,30 +768,36 @@ blocks = list(
     range(1, 97)
 )
 
+
 fig = go.Figure()
 
 
-# ----------------------------------------------------------
-# Projection
-# ----------------------------------------------------------
+# ==========================================================
+# PROJECTION
+# ==========================================================
 
 fig.add_trace(
     go.Scatter(
         x=blocks,
-        y=proj,
+        y=projection,
         name="Projection",
         mode="lines",
         line=dict(
             color="#00c6ff",
             width=3,
         ),
+        hovertemplate=(
+            "Block: %{x}<br>"
+            "Projection: %{y:.2f}"
+            "<extra></extra>"
+        ),
     )
 )
 
 
-# ----------------------------------------------------------
-# Actual
-# ----------------------------------------------------------
+# ==========================================================
+# ACTUAL
+# ==========================================================
 
 fig.add_trace(
     go.Scatter(
@@ -655,18 +809,55 @@ fig.add_trace(
             color="#ef4444",
             width=3,
         ),
+        hovertemplate=(
+            "Block: %{x}<br>"
+            "Actual: %{y:.2f}"
+            "<extra></extra>"
+        ),
     )
 )
 
 
+# ==========================================================
+# RTF
+# ==========================================================
+
+fig.add_trace(
+    go.Scatter(
+        x=blocks,
+        y=rtf_curve,
+        name="RTF",
+        mode="lines",
+        line=dict(
+            color="#22c55e",
+            width=3,
+            dash="dash",
+        ),
+        hovertemplate=(
+            "Block: %{x}<br>"
+            "RTF: %{y:.2f}"
+            "<extra></extra>"
+        ),
+    )
+)
+
+
+# ==========================================================
+# CHART LAYOUT
+# ==========================================================
+
 fig.update_layout(
     height=550,
+
     template="streamlit",
+
     hovermode="x unified",
 
     legend=dict(
         orientation="h",
-        y=1.08,
+        yanchor="bottom",
+        y=1.02,
+        xanchor="left",
         x=0,
     ),
 
@@ -676,8 +867,22 @@ fig.update_layout(
         t=60,
         b=20,
     ),
+
+    xaxis=dict(
+        title="15 Minute Block",
+        fixedrange=True,
+    ),
+
+    yaxis=dict(
+        title="Power",
+        fixedrange=True,
+    ),
 )
 
+
+# ==========================================================
+# DISPLAY
+# ==========================================================
 
 st.plotly_chart(
     fig,
