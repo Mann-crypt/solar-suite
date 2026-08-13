@@ -1126,15 +1126,15 @@ def plant_selector():
     tracking_selected = selected == "🔄 Tracking"
 
     # --------------------------------------------------------
-    # COMPACT BUTTON STYLE
+    # COMPACT PLANT BUTTON STYLE
     # --------------------------------------------------------
 
     st.markdown(
         """
         <style>
 
-        /* Plant selector buttons */
-        .plant-selector div.stButton > button {
+        /* All plant selector buttons */
+        .plant-btn div.stButton > button {
             height: 48px !important;
             min-height: 48px !important;
             padding: 0 18px !important;
@@ -1144,6 +1144,35 @@ def plant_selector():
             transition: all 0.2s ease !important;
         }
 
+        /* Selected button */
+        .plant-selected div.stButton > button {
+            background: #2563EB !important;
+            color: white !important;
+            border: 2px solid #2563EB !important;
+            box-shadow: 0 3px 10px rgba(37, 99, 235, 0.25) !important;
+        }
+
+        /* Selected button hover */
+        .plant-selected div.stButton > button:hover {
+            background: #1D4ED8 !important;
+            border-color: #1D4ED8 !important;
+            color: white !important;
+        }
+
+        /* Unselected button */
+        .plant-unselected div.stButton > button {
+            background: transparent !important;
+            color: inherit !important;
+            border: 1px solid rgba(128,128,128,0.35) !important;
+        }
+
+        /* Unselected hover */
+        .plant-unselected div.stButton > button:hover {
+            border-color: #2563EB !important;
+            color: #2563EB !important;
+            background: rgba(37, 99, 235, 0.06) !important;
+        }
+
         </style>
         """,
         unsafe_allow_html=True,
@@ -1151,13 +1180,27 @@ def plant_selector():
 
     c1, c2 = st.columns(2, gap="medium")
 
+    # ========================================================
+    # FIXED
+    # ========================================================
+
     with c1:
+
+        css_class = (
+            "plant-selected"
+            if fixed_selected
+            else "plant-unselected"
+        )
+
+        st.markdown(
+            f'<div class="{css_class}">',
+            unsafe_allow_html=True,
+        )
 
         if st.button(
             "🏗️  Fixed Plant",
             key="fixed_button",
             use_container_width=True,
-            type="primary" if fixed_selected else "secondary",
         ):
 
             if not fixed_selected:
@@ -1168,13 +1211,32 @@ def plant_selector():
 
                 st.rerun()
 
+        st.markdown(
+            "</div>",
+            unsafe_allow_html=True,
+        )
+
+    # ========================================================
+    # TRACKING
+    # ========================================================
+
     with c2:
+
+        css_class = (
+            "plant-selected"
+            if tracking_selected
+            else "plant-unselected"
+        )
+
+        st.markdown(
+            f'<div class="{css_class}">',
+            unsafe_allow_html=True,
+        )
 
         if st.button(
             "🔄  Tracking Plant",
             key="tracking_button",
             use_container_width=True,
-            type="primary" if tracking_selected else "secondary",
         ):
 
             if not tracking_selected:
@@ -1185,7 +1247,12 @@ def plant_selector():
 
                 st.rerun()
 
-    return selected
+        st.markdown(
+            "</div>",
+            unsafe_allow_html=True,
+        )
+
+    return st.session_state.plant_type
     
 # ============================================================
 # TRACKING PARAMETERS
