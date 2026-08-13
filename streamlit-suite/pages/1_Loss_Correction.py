@@ -1116,86 +1116,147 @@ def show_forecast_chart(
 def plant_selector():
 
     st.markdown(
-        '<div class="section-title">🏭 Plant Type</div>',
+        '<div class="section-title">🏭 Select Plant Type</div>',
         unsafe_allow_html=True,
     )
 
     selected = st.session_state.plant_type
 
-    c1, c2 = st.columns(2)
+    fixed_selected = selected == "🏗️ Fixed"
+    tracking_selected = selected == "🔄 Tracking"
 
     # --------------------------------------------------------
-    # FIXED
+    # CARD CSS
     # --------------------------------------------------------
+
+    st.markdown(
+        """
+        <style>
+
+        .plant-card {
+            border-radius: 16px;
+            padding: 18px 20px;
+            margin-bottom: 8px;
+            min-height: 125px;
+            border: 1px solid rgba(128,128,128,0.25);
+            transition: all 0.2s ease;
+        }
+
+        .plant-card-title {
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 7px;
+        }
+
+        .plant-card-description {
+            font-size: 14px;
+            line-height: 1.45;
+            opacity: 0.72;
+        }
+
+        .plant-selected {
+            border: 2px solid #3b82f6;
+            background: rgba(59,130,246,0.10);
+            box-shadow: 0 4px 16px rgba(59,130,246,0.15);
+        }
+
+        .plant-unselected {
+            background: rgba(128,128,128,0.04);
+        }
+
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    c1, c2 = st.columns(2, gap="medium")
+
+    # ========================================================
+    # FIXED PLANT
+    # ========================================================
 
     with c1:
-    if selected == "🏗️ Fixed":
+
+        fixed_class = (
+            "plant-selected"
+            if fixed_selected
+            else "plant-unselected"
+        )
+
         st.markdown(
-            """
-            <div style="border: 2px solid #3b82f6; background: rgba(59,130,246,0.15); 
-            border-radius: 14px; padding: 16px; text-align: center; font-size: 17px; 
-            font-weight: 700; color: #3b82f6; margin-bottom: 8px;">
-                🏗️ FIXED PLANT
+            f"""
+            <div class="plant-card {fixed_class}">
+                <div class="plant-card-title">
+                    🏗️ Fixed Plant
+                </div>
+                <div class="plant-card-description">
+                    Panels remain at a fixed tilt angle throughout
+                    the day. The model calculates the solar
+                    generation using the fixed-panel orientation.
+                </div>
             </div>
-            """, 
+            """,
             unsafe_allow_html=True,
         )
-    else:
-        # Create a container to hold the button and caption together
-        with st.container():
-            if st.button(
-                "🏗️ FIXED PLANT", 
-                key="fixed_button", 
-                use_container_width=True,
-            ):
+
+        if st.button(
+            "Select Fixed Plant",
+            key="fixed_button",
+            use_container_width=True,
+        ):
+
+            if not fixed_selected:
+
                 st.session_state.plant_type = "🏗️ Fixed"
                 st.session_state.tracking_params = None
                 st.session_state.run_model = False
-                st.rerun()
-            
-            # Add the small caption text right under the button
-            st.caption("Panels remain at a fixed tilt angle throughout the day.")
 
-    # --------------------------------------------------------
-    # TRACKING
-    # --------------------------------------------------------
+                st.rerun()
+
+    # ========================================================
+    # TRACKING PLANT
+    # ========================================================
 
     with c2:
 
-        if selected == "🔄 Tracking":
+        tracking_class = (
+            "plant-selected"
+            if tracking_selected
+            else "plant-unselected"
+        )
 
-            st.markdown(
-                """
-                <div style="
-                    border: 2px solid #10b981;
-                    background: rgba(16,185,129,0.15);
-                    border-radius: 14px;
-                    padding: 16px;
-                    text-align: center;
-                    font-size: 17px;
-                    font-weight: 700;
-                    color: #10b981;
-                    margin-bottom: 8px;
-                ">
-                    🔄 TRACKING PLANT
+        st.markdown(
+            f"""
+            <div class="plant-card {tracking_class}">
+                <div class="plant-card-title">
+                    🔄 Tracking Plant
                 </div>
-                """,
-                unsafe_allow_html=True,
-            )
-        else:
+                <div class="plant-card-description">
+                    Panels follow the sun during the day using
+                    optimized tracking parameters such as
+                    start block, end block, maximum block and
+                    east/west tracking limits.
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
-            if st.button(
-                "🔄  TRACKING PLANT",
-                key="tracking_button",
-                use_container_width=True,
-            ):
+        if st.button(
+            "Select Tracking Plant",
+            key="tracking_button",
+            use_container_width=True,
+        ):
+
+            if not tracking_selected:
 
                 st.session_state.plant_type = "🔄 Tracking"
                 st.session_state.tracking_params = None
                 st.session_state.run_model = False
+
                 st.rerun()
 
-    return selected
+    return st.session_state.plant_type
 
 # ============================================================
 # TRACKING PARAMETERS
