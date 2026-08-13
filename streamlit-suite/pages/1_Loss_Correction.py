@@ -566,7 +566,7 @@ def load_input_data(uploaded_file, cluster):
 def input_data_editor(df, cluster):
 
     st.markdown(
-        '<div class="section-title">📊 Input Data</div>',
+        '<div class="section-title">📊 Input GHI and Power</div>',
         unsafe_allow_html=True,
     )
 
@@ -1120,6 +1120,58 @@ def plant_selector():
         unsafe_allow_html=True,
     )
 
+    selected = st.session_state.plant_type
+
+    # Dynamic button styling
+    fixed_class = (
+        "plant-btn selected"
+        if selected == "🏗️ Fixed"
+        else "plant-btn"
+    )
+
+    tracking_class = (
+        "plant-btn selected"
+        if selected == "🔄 Tracking"
+        else "plant-btn"
+    )
+
+    st.markdown(
+        f"""
+        <style>
+
+        div[data-testid="column"]:has(
+            button[kind="secondary"][data-testid="baseButton-secondary"]
+        ) {{
+            min-height: 0;
+        }}
+
+        .plant-btn {{
+            width: 100%;
+            height: 55px;
+            border-radius: 14px;
+            border: 1px solid rgba(128,128,128,0.35);
+            background: rgba(128,128,128,0.08);
+            color: inherit;
+            font-size: 17px;
+            font-weight: 650;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+        }}
+
+        .plant-btn.selected {{
+            border: 2px solid #2563eb;
+            background: rgba(37, 99, 235, 0.15);
+            color: #2563eb;
+            box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.08);
+        }}
+
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
     c1, c2 = st.columns(2)
 
     with c1:
@@ -1131,9 +1183,11 @@ def plant_selector():
         ):
 
             if st.session_state.plant_type != "🏗️ Fixed":
+
                 st.session_state.plant_type = "🏗️ Fixed"
                 st.session_state.tracking_params = None
                 st.session_state.run_model = False
+
                 st.rerun()
 
     with c2:
@@ -1145,26 +1199,12 @@ def plant_selector():
         ):
 
             if st.session_state.plant_type != "🔄 Tracking":
+
                 st.session_state.plant_type = "🔄 Tracking"
                 st.session_state.tracking_params = None
                 st.session_state.run_model = False
+
                 st.rerun()
-
-    selected = st.session_state.plant_type
-
-    if selected == "🏗️ Fixed":
-
-        st.markdown(
-            '<div class="selected-plant">🏗️ Fixed Plant Selected</div>',
-            unsafe_allow_html=True,
-        )
-
-    else:
-
-        st.markdown(
-            '<div class="selected-plant">🔄 Tracking Plant Selected</div>',
-            unsafe_allow_html=True,
-        )
 
     return selected
 
@@ -1653,7 +1693,7 @@ def main():
     # ========================================================
 
     st.markdown(
-        '<div class="section-title">📁 Input Data</div>',
+        '<div class="section-title">📁 Input Sheet</div>',
         unsafe_allow_html=True,
     )
 
@@ -1691,18 +1731,6 @@ def main():
         )
 
         return
-
-    if is_cluster:
-
-        st.info(
-            "🏢 Cluster workbook detected"
-        )
-
-    else:
-
-        st.success(
-            "🏭 Non-cluster workbook detected"
-        )
 
     # ========================================================
     # LOAD EXCEL PARAMETERS
