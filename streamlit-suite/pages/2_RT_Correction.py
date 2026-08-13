@@ -12,7 +12,7 @@ from scipy.optimize import differential_evolution
 # ==========================================================
 
 st.set_page_config(
-    page_title="RT Correction — Solar Suite",
+    page_title="RT Correction - Solar Suite",
     page_icon="⚡",
     layout="wide",
 )
@@ -22,60 +22,337 @@ st.set_page_config(
 # SIDEBAR
 # ==========================================================
 
-st.sidebar.markdown("""
-<h1 style='text-align:center;
-background:linear-gradient(90deg,#00c6ff,#0072ff);
--webkit-background-clip:text;
--webkit-text-fill-color:transparent;
-font-size:40px;font-weight:800;'>
-⚡ Solar Suite
-</h1>
+st.sidebar.markdown(
+    """
+    <h1 style='text-align:center;
+    background:linear-gradient(90deg,#00c6ff,#0072ff);
+    -webkit-background-clip:text;
+    -webkit-text-fill-color:transparent;
+    font-size:40px;font-weight:800;'>
+    ⚡ Solar Suite
+    </h1>
 
-<p style='text-align:center;color:gray;font-size:14px;'>
-Forecast Correction Platform
-</p>
-""", unsafe_allow_html=True)
+    <p style='text-align:center;color:gray;font-size:14px;'>
+    Forecast Correction Platform
+    </p>
+    """,
+    unsafe_allow_html=True,
+)
 
 st.sidebar.divider()
 
 
 # ==========================================================
-# SESSION STATE
+# CUSTOM CSS
 # ==========================================================
 
-if "rt_actual" not in st.session_state:
-    st.session_state.rt_actual = [0.0] * 96
+st.markdown(
+    """
+    <style>
 
-if "rt_trend" not in st.session_state:
-    st.session_state.rt_trend = [0.0] * 96
-
-if "rt_params" not in st.session_state:
-    st.session_state.rt_params = {
-        "w": 0.30,
-        "n1": 29,
-        "n2": 72,
-        "b": 39,
+    div[data-testid="stMetric"] {
+        background: #111827;
+        border: 1px solid #1f2937;
+        border-radius: 10px;
+        padding: 10px 15px;
     }
 
+    .param-card {
+        background: #111827;
+        border: 1px solid #1f2937;
+        border-radius: 12px;
+        padding: 12px 15px;
+        margin-bottom: 8px;
+    }
+
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 
 # ==========================================================
-# 1. RTF OPTIMIZATION
+# CONSTANTS
 # ==========================================================
-#
-# IMPORTANT:
-# This is RTF optimization.
-#
-# It is NOT the projection calculation.
-#
-# Weight, Trend, etc. belong here and are not used
-# inside the parabolic projection function below.
+
+N_BLOCKS = 96
+
+
+# ==========================================================
+# TIME BLOCKS
+# ==========================================================
+
+def create_time_blocks():
+
+    start = datetime.strptime(
+        "00:00",
+        "%H:%M",
+    )
+
+    return [
+        (
+            start
+            + timedelta(minutes=15 * i)
+        ).strftime("%H:%M")
+        + " - "
+        + (
+            start
+            + timedelta(minutes=15 * (i + 1))
+        ).strftime("%H:%M")
+        for i in range(N_BLOCKS)
+    ]
+
+
+TIME_BLOCKS = create_time_blocks()
+
+
+# ==========================================================
+# EXACT RT CALCULATION
+# ==========================================================
+
+def calculate_rt(
+    actual,
+    trend,
+    w,
+    n1,
+    n2,
+    b,
+):
+    """
+    Exact RT / parabolic calculation from
+    the reference code.
+
+    IMPORTANT:
+    Projection and Prediction are intentionally
+    calculated separately.
+    """
+
+    actual = np.asarray(
+        actual,
+        dtype=float,
+    )
+
+    trend = np.asarray(
+        trend,
+        dtype=float,
+    )
+
+    blocks = np.arange(
+        1,
+        N_BLOCKS + 1,
+        dtype=float,
+    )
+
+    # ------------------------------------------------------
+    # Peak value
+    # ------------------------------------------------------
+
+    peak_mask = np.isin(
+        blocks,
+        [b - 1, b, b + 1],
+    )
+
+    p = actual[peak_mask].mean()
+
+    # ------------------------------------------------------
+    # Parabolic calculation
+    # ------------------------------------------------------
+
+    denominator = (
+        (n1 - b)
+        * (n2 - b)
+    )
+
+    # Invalid parameter combination
+    if denominator == 0:
+
+        projection = np.zeros(
+            N_BLOCKS,
+            dtype=float,
+        )
+
+    else:
+
+        calc = p * (
+            (
+                (n1 - blocks)
+                * (n2 - blocks)
+            )
+            /
+            denominator
+        )
+
+        # EXACTLY as reference
+        projection = np.where(
+            calc < 0,
+            0,
+            calc,
+        )
+
+    # ------------------------------------------------------
+    # Prediction
+    # ------------------------------------------------------
+
+    # EXACTLY as reference
+    prediction = np.where(
+        blocks > b,
+        w * projection
+        + (1 - w) * trend,
+        trend,
+    )
+
+    return (
+        projection,
+        prediction,
+    )
+
+
+# ==========================================================
+# OBJECTIVE
+# ==========================================================
+
+def rt_objective(
+    x,
+    actual,
+    trend,
+):
+    """
+    Exact optimization objective from reference code.
+
+    NOTE:
+    The objective compares Projection against Actual.
+    Prediction is NOT used here.
+    """
+
+    w, n1, n2, b = x
+
+    n1 = int(round(n1))
+    n2 = int(round(n2))
+    b = int(round(b))
+
+    # ------------------------------------------------------
+    # Parameter relationship
+    # ------------------------------------------------------
+
+    if not (
+        n1 < b < n2
+    ):
+        return 1e6
+
+    blocks = np.arange(
+        1,
+        N_BLOCKS + 1,
+        dtype=float,
+    )
+
+    # ------------------------------------------------------
+    # Peak value
+    # ------------------------------------------------------
+
+    peak_mask = np.isin(
+        blocks,
+        [b - 1, b, b + 1],
+    )
+
+    p = actual[peak_mask].mean()
+
+    # ------------------------------------------------------
+    # Projection
+    # ------------------------------------------------------
+
+    denominator = (
+        (n1 - b)
+        * (n2 - b)
+    )
+
+    if denominator == 0:
+
+        return 1e6
+
+    calc = p * (
+        (
+            (n1 - blocks)
+            * (n2 - blocks)
+        )
+        /
+        denominator
+    )
+
+    projection = np.where(
+        calc < 0,
+        0,
+        calc,
+    )
+
+    # ------------------------------------------------------
+    # Daylight mask
+    # ------------------------------------------------------
+
+    mask = actual > 0.5
+
+    pred = projection[mask]
+    act = actual[mask]
+
+    if len(act) == 0:
+
+        return 1e6
+
+    if act.max() == 0:
+
+        return 1e6
+
+    if act.sum() == 0:
+
+        return 1e6
+
+    # ------------------------------------------------------
+    # Errors
+    # ------------------------------------------------------
+
+    block_error = (
+        np.mean(
+            np.abs(
+                act - pred
+            )
+        )
+        / act.max()
+    )
+
+    peak_error = (
+        abs(
+            act.max()
+            - pred.max()
+        )
+        / act.max()
+    )
+
+    energy_error = (
+        abs(
+            act.sum()
+            - pred.sum()
+        )
+        / act.sum()
+    )
+
+    # ------------------------------------------------------
+    # EXACT SCORE
+    # ------------------------------------------------------
+
+    return (
+        0.80 * block_error
+        + 0.10 * peak_error
+        + 0.10 * energy_error
+    )
+
+
+# ==========================================================
+# CACHED OPTIMIZATION
 # ==========================================================
 
 @st.cache_data(
     show_spinner=False,
-    max_entries=10,
 )
-def cached_rtf_optimize(
+def optimize_rt(
     actual_tuple,
     trend_tuple,
 ):
@@ -90,162 +367,22 @@ def cached_rtf_optimize(
         dtype=float,
     )
 
-    blocks = np.arange(
-        1,
-        97,
-        dtype=float,
-    )
-
-    mask = actual > 5
-
-    if not np.any(mask):
-        return {
-            "w": 0.30,
-            "n1": 29,
-            "n2": 72,
-            "b": 39,
-        }
-
-    def objective(x):
-
-        w, n1, n2, b = x
-
-        n1 = int(round(n1))
-        n2 = int(round(n2))
-        b = int(round(b))
-
-        # ----------------------------------------------
-        # RTF parameter validation
-        # ----------------------------------------------
-
-        if not (
-            1 <= n1 < b < n2 <= 96
-        ):
-            return 1e6
-
-        # ----------------------------------------------
-        # Peak value around peak block
-        # ----------------------------------------------
-
-        peak_mask = np.isin(
-            blocks,
-            [b - 1, b, b + 1],
-        )
-
-        if not np.any(peak_mask):
-            return 1e6
-
-        peak = actual[
-            peak_mask
-        ].mean()
-
-        # ----------------------------------------------
-        # RTF / projection used by optimization
-        # ----------------------------------------------
-
-        denominator = (
-            (n1 - b)
-            * (n2 - b)
-        )
-
-        if denominator == 0:
-            return 1e6
-
-        calc = peak * (
-            (
-                (n1 - blocks)
-                * (n2 - blocks)
-            )
-            / denominator
-        )
-
-        proj = np.maximum(
-            calc,
-            0,
-        )
-
-        # ----------------------------------------------
-        # RTF correction
-        #
-        # This remains separate from the projection
-        # function used for normal UI interaction.
-        # ----------------------------------------------
-
-        prediction = np.where(
-            blocks > b,
-            w * proj
-            + (1 - w) * trend,
-            proj,
-        )
-
-        pred = prediction[mask]
-        act = actual[mask]
-
-        if len(act) == 0:
-            return 1e6
-
-        actual_max = act.max()
-        actual_sum = act.sum()
-
-        if actual_max <= 0:
-            return 1e6
-
-        # ----------------------------------------------
-        # Error components
-        # ----------------------------------------------
-
-        block_error = (
-            np.mean(
-                np.abs(
-                    act - pred
-                )
-            )
-            / actual_max
-        )
-
-        peak_error = (
-            abs(
-                actual_max
-                - pred.max()
-            )
-            / actual_max
-        )
-
-        energy_error = (
-            abs(
-                actual_sum
-                - pred.sum()
-            )
-            / actual_sum
-        )
-
-        score = (
-            0.80 * block_error
-            + 0.10 * peak_error
-            + 0.10 * energy_error
-        )
-
-        return score
-
-    # ----------------------------------------------
-    # Differential Evolution
-    # ----------------------------------------------
-
     result = differential_evolution(
-        objective,
-
+        lambda x: rt_objective(
+            x,
+            actual,
+            trend,
+        ),
         bounds=[
             (0.3, 0.3),
             (5, 40),
             (55, 95),
             (35, 40),
         ],
-
-        popsize=12,
-        maxiter=50,
+        popsize=20,
+        maxiter=100,
         polish=True,
         seed=42,
-        workers=1,
     )
 
     w, n1, n2, b = result.x
@@ -255,238 +392,133 @@ def cached_rtf_optimize(
         "n1": int(round(n1)),
         "n2": int(round(n2)),
         "b": int(round(b)),
+        "score": float(result.fun),
     }
 
 
 # ==========================================================
-# 2. PARABOLIC PROJECTION
-# ==========================================================
-#
-# IMPORTANT:
-#
-# This function is ONLY projection.
-#
-# No Weight.
-# No Trend.
-# No RTF blending.
-#
-# Projection depends only on:
-#
-# Actual
-# n1
-# n2
-# Peak Block
+# METRICS
 # ==========================================================
 
-@st.cache_data(
-    show_spinner=False,
-    max_entries=50,
-)
-def cached_projection(
-    actual_tuple,
-    n1,
-    n2,
-    b,
+def calculate_metrics(
+    actual,
+    projection,
 ):
 
     actual = np.asarray(
-        actual_tuple,
+        actual,
         dtype=float,
     )
-
-    blocks = np.arange(
-        1,
-        97,
-        dtype=float,
-    )
-
-    # ----------------------------------------------
-    # Peak block
-    # ----------------------------------------------
-
-    peak_mask = np.isin(
-        blocks,
-        [b - 1, b, b + 1],
-    )
-
-    if not np.any(peak_mask):
-        return actual.tolist()
-
-    peak = actual[
-        peak_mask
-    ].mean()
-
-    # ----------------------------------------------
-    # Parabolic denominator
-    # ----------------------------------------------
-
-    denominator = (
-        (n1 - b)
-        * (n2 - b)
-    )
-
-    if denominator == 0:
-        return actual.tolist()
-
-    # ----------------------------------------------
-    # Parabolic projection
-    # ----------------------------------------------
-
-    calc = peak * (
-        (
-            (n1 - blocks)
-            * (n2 - blocks)
-        )
-        / denominator
-    )
-
-    projection = np.maximum(
-        calc,
-        0,
-    )
-
-    return projection.tolist()
-
-
-# ==========================================================
-# 3. RTF CURVE
-# ==========================================================
-#
-# This is kept separate from projection.
-#
-# It uses:
-#   Projection
-#   Trend
-#   Weight
-#
-# The projection itself is NEVER modified.
-# ==========================================================
-
-@st.cache_data(
-    show_spinner=False,
-    max_entries=50,
-)
-def cached_rtf_curve(
-    projection_tuple,
-    trend_tuple,
-    w,
-    b,
-):
 
     projection = np.asarray(
-        projection_tuple,
-        dtype=float,
-    )
-
-    trend = np.asarray(
-        trend_tuple,
-        dtype=float,
-    )
-
-    blocks = np.arange(
-        1,
-        97,
-        dtype=float,
-    )
-
-    # ----------------------------------------------
-    # RTF correction
-    # ----------------------------------------------
-
-    rtf_curve = np.where(
-        blocks > b,
-        w * projection
-        + (1 - w) * trend,
         projection,
+        dtype=float,
     )
 
-    return rtf_curve.tolist()
+    mask = actual > 0.5
 
+    act = actual[mask]
+    pred = projection[mask]
 
-# ==========================================================
-# 4. TIME BLOCK LOOKUP
-# ==========================================================
+    if len(act) == 0:
 
-@st.cache_data(
-    show_spinner=False,
-)
-def time_block_lookup(
-    n1,
-    n2,
-):
+        return {
+            "block_error": 0,
+            "peak_error": 0,
+            "energy_error": 0,
+            "score": 0,
+        }
 
-    start = datetime.strptime(
-        "00:00",
-        "%H:%M",
-    )
+    max_actual = act.max()
 
-    time_blocks = [
-        (
-            start
-            + timedelta(
-                minutes=15 * i
+    if max_actual == 0:
+
+        return {
+            "block_error": 0,
+            "peak_error": 0,
+            "energy_error": 0,
+            "score": 0,
+        }
+
+    block_error = (
+        np.mean(
+            np.abs(
+                act - pred
             )
-        ).strftime("%H:%M")
-        + " - "
-        + (
-            start
-            + timedelta(
-                minutes=15 * (i + 1)
-            )
-        ).strftime("%H:%M")
-        for i in range(96)
-    ]
-
-    rows = [
-        (
-            "Parabolic Power Generation Starting Block",
-            n1,
-            time_blocks[n1 - 1]
-            if 1 <= n1 <= 96
-            else "—",
-        ),
-
-        (
-            "Parabolic Power Generation Ending Block",
-            n2,
-            time_blocks[n2 - 1]
-            if 1 <= n2 <= 96
-            else "—",
-        ),
-
-        (
-            "Actual Generation Available Block (Lower Limit)",
-            n1 + 3,
-            time_blocks[n1 + 2]
-            if n1 + 3 <= 96
-            else "—",
-        ),
-
-        (
-            "Actual Generation Effective Block (Upper Limit)",
-            n2 - 3,
-            time_blocks[n2 - 4]
-            if n2 - 3 >= 1
-            else "—",
-        ),
-    ]
-
-    return pd.DataFrame(
-        rows,
-        columns=[
-            "Parameter",
-            "Block",
-            "Time Block",
-        ],
+        )
+        / max_actual
     )
+
+    peak_error = (
+        abs(
+            act.max()
+            - pred.max()
+        )
+        / max_actual
+    )
+
+    if act.sum() == 0:
+
+        energy_error = 0
+
+    else:
+
+        energy_error = (
+            abs(
+                act.sum()
+                - pred.sum()
+            )
+            / act.sum()
+        )
+
+    score = (
+        0.80 * block_error
+        + 0.10 * peak_error
+        + 0.10 * energy_error
+    )
+
+    return {
+        "block_error": block_error,
+        "peak_error": peak_error,
+        "energy_error": energy_error,
+        "score": score,
+    }
 
 
 # ==========================================================
-# PAGE HEADER
+# SESSION STATE
+# ==========================================================
+
+if "rt_input" not in st.session_state:
+
+    st.session_state.rt_input = pd.DataFrame(
+        {
+            "Actual": np.zeros(N_BLOCKS),
+            "Trend": np.zeros(N_BLOCKS),
+        }
+    )
+
+
+if "rt_params" not in st.session_state:
+
+    st.session_state.rt_params = {
+        "w": 0.3,
+        "n1": 29,
+        "n2": 72,
+        "b": 39,
+    }
+
+
+# ==========================================================
+# HEADER
 # ==========================================================
 
 st.title(
-    "Guruji ne kaha tha RT Correct kardo bhayi 🛐!!"
+    "Guruji ne kaha tha RT Correct kardo bhyii 🛐!!"
+)
+
+st.caption(
+    "RT parabolic projection and trend correction"
 )
 
 
@@ -494,33 +526,22 @@ st.title(
 # DATA INPUT
 # ==========================================================
 
-input_df = pd.DataFrame({
-    "Actual": st.session_state.rt_actual,
-    "Trend": st.session_state.rt_trend,
-})
-
-
-# ==========================================================
-# DATA EDITOR
-# ==========================================================
+st.subheader(
+    "Input Data"
+)
 
 edited_df = st.data_editor(
-    input_df,
+    st.session_state.rt_input,
+    key="rt_editor",
     use_container_width=True,
     hide_index=True,
     num_rows="fixed",
     height=420,
-    key="rt_editor",
 )
-
-
-# ==========================================================
-# CLEAN EDITED DATA
-# ==========================================================
 
 edited_df = (
     edited_df
-    .iloc[:96]
+    .iloc[:N_BLOCKS]
     .reset_index(drop=True)
 )
 
@@ -535,73 +556,105 @@ edited_df["Trend"] = pd.to_numeric(
 ).fillna(0)
 
 
-actual_list = (
+# ----------------------------------------------------------
+# Keep input in session state
+# ----------------------------------------------------------
+
+st.session_state.rt_input = (
+    edited_df.copy()
+)
+
+
+# ==========================================================
+# PREPARE DATA
+# ==========================================================
+
+actual = (
     edited_df["Actual"]
-    .round(6)
-    .tolist()
+    .to_numpy(dtype=float)
 )
 
-trend_list = (
+trend = (
     edited_df["Trend"]
-    .round(6)
-    .tolist()
+    .to_numpy(dtype=float)
+)
+
+blocks = np.arange(
+    1,
+    N_BLOCKS + 1,
 )
 
 
 # ==========================================================
-# LIVE DATA STATE
-# ==========================================================
-#
-# No Apply button.
-# No st.rerun().
-#
-# Streamlit automatically reruns when the editor changes.
+# INPUT SUMMARY
 # ==========================================================
 
-st.session_state.rt_actual = actual_list
-st.session_state.rt_trend = trend_list
+m1, m2, m3 = st.columns(3)
+
+m1.metric(
+    "Actual Peak",
+    f"{actual.max():,.2f}",
+)
+
+m2.metric(
+    "Trend Peak",
+    f"{trend.max():,.2f}",
+)
+
+m3.metric(
+    "Daylight Blocks",
+    int(
+        np.sum(
+            actual > 0.5
+        )
+    ),
+)
 
 
 # ==========================================================
-# OPTIMIZE RTF
+# OPTIMIZATION
 # ==========================================================
+
+st.subheader(
+    "RT Optimization"
+)
 
 if st.button(
     "🚀 Dabaiye na!!",
-    use_container_width=True,
     type="primary",
+    use_container_width=True,
 ):
 
-    with st.spinner(
-        "Optimizing RTF parameters..."
-    ):
+    if np.all(actual <= 0.5):
 
-        optimized = cached_rtf_optimize(
-            tuple(actual_list),
-            tuple(trend_list),
+        st.warning(
+            "Actual data does not contain "
+            "enough daylight values for optimization."
         )
 
-    st.session_state.rt_params = optimized
+    else:
 
-    # ----------------------------------------------
-    # Store widget values
-    # ----------------------------------------------
+        with st.spinner(
+            "Optimizing RT parameters..."
+        ):
 
-    st.session_state.rt_w = (
-        optimized["w"]
-    )
+            optimized = optimize_rt(
+                tuple(actual.tolist()),
+                tuple(trend.tolist()),
+            )
 
-    st.session_state.rt_n1 = (
-        optimized["n1"]
-    )
+        st.session_state.rt_params = {
+            "w": optimized["w"],
+            "n1": optimized["n1"],
+            "n2": optimized["n2"],
+            "b": optimized["b"],
+        }
 
-    st.session_state.rt_n2 = (
-        optimized["n2"]
-    )
+        st.session_state.rt_optimization_score = (
+            optimized["score"]
+        )
 
-    st.session_state.rt_b = (
-        optimized["b"]
-    )
+        st.rerun()
 
 
 # ==========================================================
@@ -612,75 +665,83 @@ st.subheader(
     "Parameters"
 )
 
-
 p = st.session_state.rt_params
 
-
-# ==========================================================
-# PARAMETER INPUTS
-# ==========================================================
-
-col1, col2, col3, col4 = st.columns(4)
+param_col1, param_col2 = st.columns(2)
 
 
-with col1:
+# ----------------------------------------------------------
+# LEFT
+# ----------------------------------------------------------
+
+with param_col1:
 
     w = st.number_input(
         "Weight",
         min_value=0.0,
         max_value=1.0,
-        value=float(
-            p["w"]
-        ),
+        value=float(p["w"]),
         step=0.01,
-        key="rt_w",
+        key="rt_weight",
     )
-
-
-with col2:
-
-    n1 = st.number_input(
-        "n1",
-        min_value=1,
-        max_value=95,
-        value=int(
-            p["n1"]
-        ),
-        step=1,
-        key="rt_n1",
-    )
-
-
-with col3:
 
     n2 = st.number_input(
         "n2",
-        min_value=2,
+        min_value=1,
         max_value=96,
-        value=int(
-            p["n2"]
-        ),
+        value=int(p["n2"]),
         step=1,
         key="rt_n2",
     )
 
 
-with col4:
+# ----------------------------------------------------------
+# RIGHT
+# ----------------------------------------------------------
+
+with param_col2:
+
+    n1 = st.number_input(
+        "n1",
+        min_value=1,
+        max_value=96,
+        value=int(p["n1"]),
+        step=1,
+        key="rt_n1",
+    )
 
     b = st.number_input(
         "Peak Block",
-        min_value=2,
-        max_value=95,
-        value=int(
-            p["b"]
-        ),
+        min_value=1,
+        max_value=96,
+        value=int(p["b"]),
         step=1,
-        key="rt_b",
+        key="rt_peak",
     )
 
 
 # ==========================================================
-# LIVE PARAMETER STATE
+# VALIDATE PARAMETERS
+# ==========================================================
+
+if not (
+    n1 < b < n2
+):
+
+    st.warning(
+        "Parameter relationship must satisfy: "
+        "**n1 < Peak Block < n2**."
+    )
+
+    valid_parameters = False
+
+else:
+
+    valid_parameters = True
+
+
+# ==========================================================
+# SAVE CURRENT PARAMETERS
 # ==========================================================
 
 st.session_state.rt_params = {
@@ -692,89 +753,136 @@ st.session_state.rt_params = {
 
 
 # ==========================================================
-# PARAMETER VALIDATION
+# STOP BEFORE CALCULATION IF INVALID
 # ==========================================================
 
-parameters_valid = (
-    n1 < b < n2
-)
-
-
-if not parameters_valid:
-
-    st.warning(
-        "Required relationship: "
-        "**n1 < Peak Block < n2**"
-    )
+if not valid_parameters:
 
     st.stop()
 
 
 # ==========================================================
-# PROJECTION
-# ==========================================================
-#
-# ONLY n1 / n2 / b affect projection.
-#
-# Weight and Trend do NOT enter here.
+# EXACT FINAL RT CALCULATION
 # ==========================================================
 
-projection = cached_projection(
-    tuple(actual_list),
+projection, prediction = calculate_rt(
+    actual=actual,
+    trend=trend,
+    w=float(w),
+    n1=int(n1),
+    n2=int(n2),
+    b=int(b),
+)
+
+
+# ==========================================================
+# METRICS
+# ==========================================================
+
+metrics = calculate_metrics(
+    actual,
+    projection,
+)
+
+e1, e2, e3, e4 = st.columns(4)
+
+e1.metric(
+    "Block Error",
+    f"{metrics['block_error'] * 100:.2f}%",
+)
+
+e2.metric(
+    "Peak Error",
+    f"{metrics['peak_error'] * 100:.2f}%",
+)
+
+e3.metric(
+    "Energy Error",
+    f"{metrics['energy_error'] * 100:.2f}%",
+)
+
+e4.metric(
+    "RT Score",
+    f"{metrics['score'] * 100:.2f}%",
+)
+
+
+# ==========================================================
+# IMPORTANT TIME BLOCKS
+# ==========================================================
+
+st.subheader(
+    "Important Time Blocks"
+)
+
+lookup_blocks = [
     int(n1),
     int(n2),
-    int(b),
+    int(n1 + 3),
+    int(n2 - 3),
+]
+
+lookup_names = [
+    "Parabolic Power Generation Starting Block",
+    "Parabolic Power Generation Ending Block",
+    "Actual Generation Available Block (Lower Limit)",
+    "Actual Generation Effective Block (Upper Limit)",
+]
+
+lookup_rows = []
+
+for name, block in zip(
+    lookup_names,
+    lookup_blocks,
+):
+
+    if 1 <= block <= 96:
+
+        time_block = TIME_BLOCKS[
+            block - 1
+        ]
+
+    else:
+
+        time_block = "—"
+
+    lookup_rows.append(
+        {
+            "Parameter": name,
+            "Block": block,
+            "Time Block": time_block,
+        }
+    )
+
+lookup_df = pd.DataFrame(
+    lookup_rows
 )
-
-
-# ==========================================================
-# RTF CURVE
-# ==========================================================
-#
-# Separate calculation.
-# ==========================================================
-
-rtf_curve = cached_rtf_curve(
-    tuple(projection),
-    tuple(trend_list),
-    float(w),
-    int(b),
-)
-
-
-# ==========================================================
-# TIME BLOCK INFORMATION
-# ==========================================================
 
 with st.expander(
-    "📅 Important Time Blocks"
+    "📅 View Important Time Blocks"
 ):
 
     st.dataframe(
-        time_block_lookup(
-            int(n1),
-            int(n2),
-        ),
+        lookup_df,
         use_container_width=True,
         hide_index=True,
     )
 
 
 # ==========================================================
-# CHART
+# RT GRAPH
 # ==========================================================
 
-blocks = list(
-    range(1, 97)
+st.subheader(
+    "RT Correction Curve"
 )
-
 
 fig = go.Figure()
 
 
-# ==========================================================
-# PROJECTION
-# ==========================================================
+# ----------------------------------------------------------
+# Projection
+# ----------------------------------------------------------
 
 fig.add_trace(
     go.Scatter(
@@ -786,73 +894,90 @@ fig.add_trace(
             color="#00c6ff",
             width=3,
         ),
-        hovertemplate=(
-            "Block: %{x}<br>"
-            "Projection: %{y:.2f}"
-            "<extra></extra>"
+    )
+)
+
+
+# ----------------------------------------------------------
+# Prediction
+# ----------------------------------------------------------
+
+fig.add_trace(
+    go.Scatter(
+        x=blocks,
+        y=prediction,
+        name="Prediction",
+        mode="lines",
+        line=dict(
+            color="#a855f7",
+            width=3,
+            dash="dash",
         ),
     )
 )
 
 
-# ==========================================================
-# ACTUAL
-# ==========================================================
+# ----------------------------------------------------------
+# Actual
+# ----------------------------------------------------------
 
 fig.add_trace(
     go.Scatter(
         x=blocks,
-        y=actual_list,
+        y=actual,
         name="Actual",
         mode="lines",
         line=dict(
             color="#ef4444",
             width=3,
         ),
-        hovertemplate=(
-            "Block: %{x}<br>"
-            "Actual: %{y:.2f}"
-            "<extra></extra>"
-        ),
     )
 )
 
 
-# ==========================================================
-# RTF
-# ==========================================================
+# ----------------------------------------------------------
+# Trend
+# ----------------------------------------------------------
 
 fig.add_trace(
     go.Scatter(
         x=blocks,
-        y=rtf_curve,
-        name="RTF",
+        y=trend,
+        name="Trend",
         mode="lines",
         line=dict(
             color="#22c55e",
-            width=3,
-            dash="dash",
-        ),
-        hovertemplate=(
-            "Block: %{x}<br>"
-            "RTF: %{y:.2f}"
-            "<extra></extra>"
+            width=2,
+            dash="dot",
         ),
     )
 )
 
 
-# ==========================================================
-# CHART LAYOUT
-# ==========================================================
+# ----------------------------------------------------------
+# Peak block
+# ----------------------------------------------------------
+
+fig.add_vline(
+    x=b,
+    line_width=1.5,
+    line_dash="dash",
+    line_color="#f59e0b",
+    annotation_text=f"Peak Block {b}",
+    annotation_position="top",
+)
+
 
 fig.update_layout(
     height=550,
-
     template="streamlit",
-
     hovermode="x unified",
-
+    margin=dict(
+        l=20,
+        r=20,
+        t=70,
+        b=20,
+    ),
     legend=dict(
         orientation="h",
         yanchor="bottom",
@@ -860,35 +985,54 @@ fig.update_layout(
         xanchor="left",
         x=0,
     ),
-
-    margin=dict(
-        l=20,
-        r=20,
-        t=60,
-        b=20,
-    ),
-
-    xaxis=dict(
-        title="15 Minute Block",
-        fixedrange=True,
-    ),
-
-    yaxis=dict(
-        title="Power",
-        fixedrange=True,
-    ),
+    xaxis_title="15 Minute Block",
+    yaxis_title="Generation",
 )
 
-
-# ==========================================================
-# DISPLAY
-# ==========================================================
 
 st.plotly_chart(
     fig,
     use_container_width=True,
     config={
         "displayModeBar": False,
-        "scrollZoom": False,
     },
 )
+
+
+# ==========================================================
+# OUTPUT DATA
+# ==========================================================
+
+output_df = pd.DataFrame(
+    {
+        "Blocks": blocks,
+        "Time-Blocks": TIME_BLOCKS,
+        "Actual": actual,
+        "Trend": trend,
+        "Projection": projection,
+        "Prediction": prediction,
+    }
+)
+
+
+with st.expander(
+    "📊 View RT Calculation Data"
+):
+
+    st.dataframe(
+        output_df,
+        use_container_width=True,
+        hide_index=True,
+    )
+
+
+# ==========================================================
+# OPTIMIZATION INFORMATION
+# ==========================================================
+
+if "rt_optimization_score" in st.session_state:
+
+    st.caption(
+        "Last optimization score: "
+        f"**{st.session_state.rt_optimization_score:.6f}**"
+    )
