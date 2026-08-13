@@ -1151,13 +1151,6 @@ def plant_selector():
                 unsafe_allow_html=True,
             )
 
-            if st.button(
-                "Keep Fixed",
-                key="fixed_active",
-                use_container_width=True,
-            ):
-                pass
-
         else:
 
             if st.button(
@@ -1197,14 +1190,6 @@ def plant_selector():
                 """,
                 unsafe_allow_html=True,
             )
-
-            if st.button(
-                "Keep Tracking",
-                key="tracking_active",
-                use_container_width=True,
-            ):
-                pass
-
         else:
 
             if st.button(
