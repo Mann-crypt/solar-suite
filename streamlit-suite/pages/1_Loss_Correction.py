@@ -1124,9 +1124,9 @@ def plant_selector():
 
     c1, c2 = st.columns(2)
 
-    # ========================================================
-    # FIXED PLANT
-    # ========================================================
+    # --------------------------------------------------------
+    # FIXED
+    # --------------------------------------------------------
 
     with c1:
 
@@ -1138,33 +1138,21 @@ def plant_selector():
                     border: 2px solid #3b82f6;
                     background: rgba(59,130,246,0.15);
                     border-radius: 14px;
-                    padding: 14px 18px;
+                    padding: 16px;
+                    text-align: center;
+                    font-size: 17px;
+                    font-weight: 700;
+                    color: #3b82f6;
                     margin-bottom: 8px;
-                    min-height: 82px;
                 ">
-                    <div style="
-                        font-size: 17px;
-                        font-weight: 700;
-                        color: #3b82f6;
-                    ">
-                        🏗️ Fixed Plant
-                    </div>
-
-                    <div style="
-                        font-size: 13px;
-                        opacity: 0.75;
-                        margin-top: 5px;
-                    ">
-                        Panels remain at a fixed tilt angle
-                        throughout the day.
-                    </div>
+                    🏗️ FIXED PLANT
                 </div>
                 """,
                 unsafe_allow_html=True,
             )
 
             if st.button(
-                "✓ Selected",
+                "Keep Fixed",
                 key="fixed_active",
                 use_container_width=True,
             ):
@@ -1172,34 +1160,8 @@ def plant_selector():
 
         else:
 
-            st.markdown(
-                """
-                <div style="
-                    padding: 14px 18px 5px 18px;
-                    min-height: 82px;
-                ">
-                    <div style="
-                        font-size: 17px;
-                        font-weight: 700;
-                    ">
-                        🏗️ Fixed Plant
-                    </div>
-
-                    <div style="
-                        font-size: 13px;
-                        opacity: 0.65;
-                        margin-top: 5px;
-                    ">
-                        Panels remain at a fixed tilt angle
-                        throughout the day.
-                    </div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-
             if st.button(
-                "Select Fixed Plant",
+                "🏗️  FIXED PLANT",
                 key="fixed_button",
                 use_container_width=True,
             ):
@@ -1209,9 +1171,9 @@ def plant_selector():
                 st.session_state.run_model = False
                 st.rerun()
 
-    # ========================================================
-    # TRACKING PLANT
-    # ========================================================
+    # --------------------------------------------------------
+    # TRACKING
+    # --------------------------------------------------------
 
     with c2:
 
@@ -1223,33 +1185,21 @@ def plant_selector():
                     border: 2px solid #10b981;
                     background: rgba(16,185,129,0.15);
                     border-radius: 14px;
-                    padding: 14px 18px;
+                    padding: 16px;
+                    text-align: center;
+                    font-size: 17px;
+                    font-weight: 700;
+                    color: #10b981;
                     margin-bottom: 8px;
-                    min-height: 82px;
                 ">
-                    <div style="
-                        font-size: 17px;
-                        font-weight: 700;
-                        color: #10b981;
-                    ">
-                        🔄 Tracking Plant
-                    </div>
-
-                    <div style="
-                        font-size: 13px;
-                        opacity: 0.75;
-                        margin-top: 5px;
-                    ">
-                        Panels adjust their angle during the day
-                        to follow the sun.
-                    </div>
+                    🔄 TRACKING PLANT
                 </div>
                 """,
                 unsafe_allow_html=True,
             )
 
             if st.button(
-                "✓ Selected",
+                "Keep Tracking",
                 key="tracking_active",
                 use_container_width=True,
             ):
@@ -1257,34 +1207,8 @@ def plant_selector():
 
         else:
 
-            st.markdown(
-                """
-                <div style="
-                    padding: 14px 18px 5px 18px;
-                    min-height: 82px;
-                ">
-                    <div style="
-                        font-size: 17px;
-                        font-weight: 700;
-                    ">
-                        🔄 Tracking Plant
-                    </div>
-
-                    <div style="
-                        font-size: 13px;
-                        opacity: 0.65;
-                        margin-top: 5px;
-                    ">
-                        Panels adjust their angle during the day
-                        to follow the sun.
-                    </div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-
             if st.button(
-                "Select Tracking Plant",
+                "🔄  TRACKING PLANT",
                 key="tracking_button",
                 use_container_width=True,
             ):
