@@ -344,9 +344,7 @@ if st.button(
     type="primary",
 ):
 
-    with st.spinner(
-        "Optimizing RT parameters..."
-    ):
+    with st.spinner("Optimizing RT parameters..."):
 
         result = differential_evolution(
             objective,
@@ -364,13 +362,30 @@ if st.button(
 
     w_opt, n1_opt, n2_opt, b_opt = result.x
 
+    # Round optimized parameters
+    w_opt = float(w_opt)
+    n1_opt = int(round(n1_opt))
+    n2_opt = int(round(n2_opt))
+    b_opt = int(round(b_opt))
+
+    # ------------------------------------------------------
+    # Update widget states directly
+    # ------------------------------------------------------
+
+    st.session_state["rt_weight"] = w_opt
+    st.session_state["rt_n1"] = n1_opt
+    st.session_state["rt_n2"] = n2_opt
+    st.session_state["rt_peak_block"] = b_opt
+
+    # Also keep params dictionary updated
     st.session_state.rt_params = {
-        "w": float(w_opt),
-        "n1": int(round(n1_opt)),
-        "n2": int(round(n2_opt)),
-        "b": int(round(b_opt)),
+        "w": w_opt,
+        "n1": n1_opt,
+        "n2": n2_opt,
+        "b": b_opt,
     }
 
+    # Rerun so the number inputs display optimized values
     st.rerun()
 
 
@@ -378,20 +393,40 @@ if st.button(
 # PARAMETERS
 # ==========================================================
 
-st.subheader(
-    "Parameters"
-)
+st.subheader("Parameters")
 
 
-params = st.session_state.rt_params
+# ----------------------------------------------------------
+# Initialize widget values only once
+# ----------------------------------------------------------
 
+if "rt_weight" not in st.session_state:
+    st.session_state["rt_weight"] = float(
+        st.session_state.rt_params["w"]
+    )
+
+if "rt_n1" not in st.session_state:
+    st.session_state["rt_n1"] = int(
+        st.session_state.rt_params["n1"]
+    )
+
+if "rt_n2" not in st.session_state:
+    st.session_state["rt_n2"] = int(
+        st.session_state.rt_params["n2"]
+    )
+
+if "rt_peak_block" not in st.session_state:
+    st.session_state["rt_peak_block"] = int(
+        st.session_state.rt_params["b"]
+    )
+
+
+# ==========================================================
+# PARAMETER INPUTS
+# ==========================================================
 
 col1, col2 = st.columns(2)
 
-
-# ----------------------------------------------------------
-# LEFT
-# ----------------------------------------------------------
 
 with col1:
 
@@ -399,7 +434,6 @@ with col1:
         "Weight",
         min_value=0.0,
         max_value=1.0,
-        value=float(params["w"]),
         step=0.01,
         format="%.2f",
         key="rt_weight",
@@ -409,15 +443,10 @@ with col1:
         "n2",
         min_value=1,
         max_value=96,
-        value=int(params["n2"]),
         step=1,
         key="rt_n2",
     )
 
-
-# ----------------------------------------------------------
-# RIGHT
-# ----------------------------------------------------------
 
 with col2:
 
@@ -425,7 +454,6 @@ with col2:
         "n1",
         min_value=1,
         max_value=96,
-        value=int(params["n1"]),
         step=1,
         key="rt_n1",
     )
@@ -434,14 +462,13 @@ with col2:
         "Peak Block",
         min_value=1,
         max_value=96,
-        value=int(params["b"]),
         step=1,
         key="rt_peak_block",
     )
 
 
 # ==========================================================
-# UPDATE CURRENT PARAMETERS
+# CURRENT PARAMETERS
 # ==========================================================
 
 st.session_state.rt_params = {
