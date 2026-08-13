@@ -1109,6 +1109,10 @@ def show_forecast_chart(
     )
 
 
+# ============================================================
+# PLANT SELECTOR
+# ============================================================
+
 def plant_selector():
 
     st.markdown(
@@ -1126,6 +1130,7 @@ def plant_selector():
         selection_mode="single",
         key="plant_type_selector",
         label_visibility="collapsed",
+        width="stretch",
     )
 
     return plant_type
