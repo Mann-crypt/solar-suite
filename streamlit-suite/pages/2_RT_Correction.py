@@ -273,7 +273,7 @@ def objective(x):
     # Daylight mask
     # ------------------------------------------------------
 
-    mask = actual > 0.5
+    mask = actual > (0.05*max(actual))
 
     pred = projection[mask]
     act = actual[mask]
