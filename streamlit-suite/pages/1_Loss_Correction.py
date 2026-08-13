@@ -1126,43 +1126,22 @@ def plant_selector():
     tracking_selected = selected == "🔄 Tracking"
 
     # --------------------------------------------------------
-    # BUTTON STYLE
+    # COMPACT BUTTON STYLE
     # --------------------------------------------------------
 
     st.markdown(
         """
         <style>
 
-        /* Base buttons */
-        div.stButton > button {
-            height: 54px;
-            border-radius: 12px;
-            font-size: 16px;
-            font-weight: 650;
-            transition: all 0.2s ease;
-        }
-
-        /* Fixed button */
-        .fixed-selected + div.stButton > button {
-            border: 2px solid #3b82f6 !important;
-            background: rgba(59, 130, 246, 0.12) !important;
-            color: #3b82f6 !important;
-        }
-
-        /* Tracking button */
-        .tracking-selected + div.stButton > button {
-            border: 2px solid #3b82f6 !important;
-            background: rgba(59, 130, 246, 0.12) !important;
-            color: #3b82f6 !important;
-        }
-
-        /* Description */
-        .plant-description {
-            margin-top: 8px;
-            padding: 0 4px;
-            font-size: 13px;
-            line-height: 1.45;
-            opacity: 0.65;
+        /* Plant selector buttons */
+        .plant-selector div.stButton > button {
+            height: 48px !important;
+            min-height: 48px !important;
+            padding: 0 18px !important;
+            border-radius: 10px !important;
+            font-size: 15px !important;
+            font-weight: 600 !important;
+            transition: all 0.2s ease !important;
         }
 
         </style>
@@ -1170,24 +1149,15 @@ def plant_selector():
         unsafe_allow_html=True,
     )
 
-    col1, col2 = st.columns(2, gap="medium")
+    c1, c2 = st.columns(2, gap="medium")
 
-    # ========================================================
-    # FIXED
-    # ========================================================
-
-    with col1:
-
-        if fixed_selected:
-            st.markdown(
-                '<div class="fixed-selected"></div>',
-                unsafe_allow_html=True,
-            )
+    with c1:
 
         if st.button(
             "🏗️  Fixed Plant",
             key="fixed_button",
             use_container_width=True,
+            type="primary" if fixed_selected else "secondary",
         ):
 
             if not fixed_selected:
@@ -1198,32 +1168,13 @@ def plant_selector():
 
                 st.rerun()
 
-        st.markdown(
-            """
-            <div class="plant-description">
-                Fixed tilt panels with a constant orientation
-                throughout the day.
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-    # ========================================================
-    # TRACKING
-    # ========================================================
-
-    with col2:
-
-        if tracking_selected:
-            st.markdown(
-                '<div class="tracking-selected"></div>',
-                unsafe_allow_html=True,
-            )
+    with c2:
 
         if st.button(
             "🔄  Tracking Plant",
             key="tracking_button",
             use_container_width=True,
+            type="primary" if tracking_selected else "secondary",
         ):
 
             if not tracking_selected:
@@ -1234,17 +1185,7 @@ def plant_selector():
 
                 st.rerun()
 
-        st.markdown(
-            """
-            <div class="plant-description">
-                Panels track the sun during the day using
-                optimized tracking parameters.
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-    return st.session_state.plant_type
+    return selected
     
 # ============================================================
 # TRACKING PARAMETERS
