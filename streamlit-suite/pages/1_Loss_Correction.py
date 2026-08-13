@@ -1109,10 +1109,6 @@ def show_forecast_chart(
     )
 
 
-# ============================================================
-# PLANT TYPE SELECTOR
-# ============================================================
-
 def plant_selector():
 
     st.markdown(
@@ -1126,48 +1122,93 @@ def plant_selector():
     tracking_selected = selected == "🔄 Tracking"
 
     # --------------------------------------------------------
-    # COMPACT PLANT BUTTON STYLE
+    # PLANT BUTTON CSS
     # --------------------------------------------------------
 
     st.markdown(
         """
         <style>
 
-        /* All plant selector buttons */
-        .plant-btn div.stButton > button {
+        /* Base plant buttons */
+        div[data-testid="column"] div.stButton > button {
             height: 48px !important;
             min-height: 48px !important;
-            padding: 0 18px !important;
             border-radius: 10px !important;
             font-size: 15px !important;
             font-weight: 600 !important;
+            padding: 0 16px !important;
             transition: all 0.2s ease !important;
         }
 
-        /* Selected button */
-        .plant-selected div.stButton > button {
+        /* --------------------------------------------------
+           FIXED SELECTED
+           -------------------------------------------------- */
+
+        div[data-testid="column"]:has(.fixed-selected-marker)
+        div.stButton > button {
+
             background: #2563EB !important;
-            color: white !important;
+            color: #FFFFFF !important;
             border: 2px solid #2563EB !important;
             box-shadow: 0 3px 10px rgba(37, 99, 235, 0.25) !important;
         }
 
-        /* Selected button hover */
-        .plant-selected div.stButton > button:hover {
+        div[data-testid="column"]:has(.fixed-selected-marker)
+        div.stButton > button:hover {
+
             background: #1D4ED8 !important;
+            color: #FFFFFF !important;
             border-color: #1D4ED8 !important;
-            color: white !important;
         }
 
-        /* Unselected button */
-        .plant-unselected div.stButton > button {
+        /* --------------------------------------------------
+           TRACKING SELECTED
+           -------------------------------------------------- */
+
+        div[data-testid="column"]:has(.tracking-selected-marker)
+        div.stButton > button {
+
+            background: #2563EB !important;
+            color: #FFFFFF !important;
+            border: 2px solid #2563EB !important;
+            box-shadow: 0 3px 10px rgba(37, 99, 235, 0.25) !important;
+        }
+
+        div[data-testid="column"]:has(.tracking-selected-marker)
+        div.stButton > button:hover {
+
+            background: #1D4ED8 !important;
+            color: #FFFFFF !important;
+            border-color: #1D4ED8 !important;
+        }
+
+        /* --------------------------------------------------
+           UNSELECTED BUTTON
+           -------------------------------------------------- */
+
+        div[data-testid="column"] div.stButton > button {
+
             background: transparent !important;
             color: inherit !important;
             border: 1px solid rgba(128,128,128,0.35) !important;
         }
 
-        /* Unselected hover */
-        .plant-unselected div.stButton > button:hover {
+        /* Selected rules come after unselected rules */
+        div[data-testid="column"]:has(.fixed-selected-marker)
+        div.stButton > button,
+
+        div[data-testid="column"]:has(.tracking-selected-marker)
+        div.stButton > button {
+
+            background: #2563EB !important;
+            color: white !important;
+            border: 2px solid #2563EB !important;
+        }
+
+        /* Hover for unselected buttons */
+        div[data-testid="column"]:not(:has(.fixed-selected-marker)):not(:has(.tracking-selected-marker))
+        div.stButton > button:hover {
+
             border-color: #2563EB !important;
             color: #2563EB !important;
             background: rgba(37, 99, 235, 0.06) !important;
@@ -1178,6 +1219,10 @@ def plant_selector():
         unsafe_allow_html=True,
     )
 
+    # --------------------------------------------------------
+    # BUTTONS
+    # --------------------------------------------------------
+
     c1, c2 = st.columns(2, gap="medium")
 
     # ========================================================
@@ -1186,16 +1231,11 @@ def plant_selector():
 
     with c1:
 
-        css_class = (
-            "plant-selected"
-            if fixed_selected
-            else "plant-unselected"
-        )
-
-        st.markdown(
-            f'<div class="{css_class}">',
-            unsafe_allow_html=True,
-        )
+        if fixed_selected:
+            st.markdown(
+                '<span class="fixed-selected-marker"></span>',
+                unsafe_allow_html=True,
+            )
 
         if st.button(
             "🏗️  Fixed Plant",
@@ -1211,27 +1251,17 @@ def plant_selector():
 
                 st.rerun()
 
-        st.markdown(
-            "</div>",
-            unsafe_allow_html=True,
-        )
-
     # ========================================================
     # TRACKING
     # ========================================================
 
     with c2:
 
-        css_class = (
-            "plant-selected"
-            if tracking_selected
-            else "plant-unselected"
-        )
-
-        st.markdown(
-            f'<div class="{css_class}">',
-            unsafe_allow_html=True,
-        )
+        if tracking_selected:
+            st.markdown(
+                '<span class="tracking-selected-marker"></span>',
+                unsafe_allow_html=True,
+            )
 
         if st.button(
             "🔄  Tracking Plant",
@@ -1246,11 +1276,6 @@ def plant_selector():
                 st.session_state.run_model = False
 
                 st.rerun()
-
-        st.markdown(
-            "</div>",
-            unsafe_allow_html=True,
-        )
 
     return st.session_state.plant_type
     
