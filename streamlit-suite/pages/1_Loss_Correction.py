@@ -1182,59 +1182,125 @@ def fixed_loss_control(
 
 def show_efficiency_table(
     area_df,
-    net_efficiency,
+    best_loss,
 ):
+    """
+    Display the original Area & Efficiency table.
 
-    display = area_df[
-        [
-            "S.No.",
-            "No of Module",
-            "Area of 1 Module (m2)",
-            "Total area (m2)",
-            "Standard PV Efficiency (%)",
-        ]
-    ].copy()
+    IMPORTANT:
+    - area_df can contain 19 module/component rows.
+    - best_loss is a single scalar efficiency loss.
+    - Do NOT pass the 5 cluster-level net_efficiency array here.
+    """
 
-    display[
-        "Efficiency Losses (%)"
-    ] = (
-        pd.to_numeric(
-            display[
-                "Standard PV Efficiency (%)"
-            ],
+    display = area_df.copy()
+
+    # --------------------------------------------------------
+    # Standard efficiency
+    # --------------------------------------------------------
+
+    if "Standard PV Efficiency (%)" in display.columns:
+
+        standard_eff = pd.to_numeric(
+            display["Standard PV Efficiency (%)"],
             errors="coerce"
         )
-        - np.asarray(
-            net_efficiency
+
+        # Single optimized loss is applied to every
+        # valid module/component row for display.
+        display["Error %"] = float(best_loss)
+
+        display["Net Efficiency (%)"] = (
+            standard_eff - float(best_loss)
+        ).clip(lower=0)
+
+    # --------------------------------------------------------
+    # Total area
+    # --------------------------------------------------------
+
+    if (
+        "No of Module" in display.columns
+        and "Area of 1 Module (m2)" in display.columns
+    ):
+
+        no_module = pd.to_numeric(
+            display["No of Module"],
+            errors="coerce"
+        ).fillna(0)
+
+        module_area = pd.to_numeric(
+            display["Area of 1 Module (m2)"],
+            errors="coerce"
+        ).fillna(0)
+
+        display["Total area (m2)"] = (
+            no_module * module_area
         )
-    )
 
-    display[
-        "Net Efficiency (%)"
-    ] = net_efficiency
+    # --------------------------------------------------------
+    # Effective area
+    # --------------------------------------------------------
 
-    display[
-        "Eff Area"
-    ] = (
-        display[
-            "Total area (m2)"
-        ]
-        * display[
-            "Net Efficiency (%)"
-        ]
-        / 100
-    )
+    if (
+        "Total area (m2)" in display.columns
+        and "Net Efficiency (%)" in display.columns
+    ):
 
-    nums = display.select_dtypes(
+        display["Eff Area"] = (
+            pd.to_numeric(
+                display["Total area (m2)"],
+                errors="coerce"
+            ).fillna(0)
+            *
+            pd.to_numeric(
+                display["Net Efficiency (%)"],
+                errors="coerce"
+            ).fillna(0)
+            / 100
+        )
+
+    # --------------------------------------------------------
+    # Display
+    # --------------------------------------------------------
+
+    preferred_cols = [
+        "S.No.",
+        "Module Type",
+        "No of Module",
+        "Area of 1 Module (m2)",
+        "Total area (m2)",
+        "Standard PV Efficiency (%)",
+        "Error %",
+        "Net Efficiency (%)",
+        "Eff Area",
+    ]
+
+    cols = [
+        c for c in preferred_cols
+        if c in display.columns
+    ]
+
+    # Keep any remaining columns after preferred columns
+    remaining = [
+        c for c in display.columns
+        if c not in cols
+    ]
+
+    display = display[
+        cols + remaining
+    ]
+
+    numeric_cols = display.select_dtypes(
         include="number"
     ).columns
 
-    display[nums] = display[
-        nums
+    display[numeric_cols] = display[
+        numeric_cols
     ].round(4)
 
     with st.expander(
-        "🔍 View Efficiency Calculations"
+        "🔍 View Efficiency Calculations",
+        expanded=False,
     ):
 
         st.dataframe(
@@ -1243,6 +1309,7 @@ def show_efficiency_table(
             hide_index=True,
         )
 
+    return display
 
 # ============================================================
 # TRACKING CALCULATION
