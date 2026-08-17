@@ -215,14 +215,22 @@ def read_input_file(file_bytes):
 # ============================================================
 
 @st.cache_data(show_spinner=False)
-def load_area_efficiency(file_bytes):
+def read_input_file(file_bytes):
 
-    df = pd.read_excel(
-        io.BytesIO(file_bytes),
-        sheet_name="Area & Efficiency",
-        header=1,
-        usecols=range(12)
-    )
+    try:
+        # Read directly from bytes
+        excel_data = pd.ExcelFile(
+            io.BytesIO(file_bytes),
+            engine="openpyxl"
+        )
+
+        # Return only pickle-serializable objects
+        return excel_data.sheet_names
+
+    except Exception as e:
+        raise ValueError(
+            f"Unable to read workbook: {e}"
+        )
 
     df.columns = (
         df.columns
