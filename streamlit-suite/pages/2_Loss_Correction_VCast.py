@@ -1439,7 +1439,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-plant_type = st.radio(
+plant_type = st.segmented_control(
     "Plant Type",
     ["Fixed", "Tracking"],
     horizontal=True,
