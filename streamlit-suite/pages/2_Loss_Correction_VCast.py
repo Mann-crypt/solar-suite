@@ -1443,9 +1443,11 @@ plant_type = st.segmented_control(
     "Plant Type",
     ["Fixed", "Tracking"],
     horizontal=True,
-    index=(0 if st.session_state.plant_type == "Fixed" else 1),
-    #label_visibility="collapsed",
+    # Use 'default' and pass the string directly instead of an index number
+    default=st.session_state.get("plant_type", "Fixed"),
+    # label_visibility="collapsed",
 )
+
 
 st.session_state.plant_type = (
     plant_type
