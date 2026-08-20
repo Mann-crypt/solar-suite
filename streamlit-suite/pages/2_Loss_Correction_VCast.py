@@ -1443,12 +1443,8 @@ plant_type = st.segmented_control(
     "Plant Type",
     ["Fixed", "Tracking"],
     horizontal=True,
-    index=(
-        0
-        if st.session_state.plant_type == "Fixed"
-        else 1
-    ),
-    label_visibility="collapsed",
+    index=(0 if st.session_state.plant_type == "Fixed" else 1),
+    #label_visibility="collapsed",
 )
 
 st.session_state.plant_type = (
