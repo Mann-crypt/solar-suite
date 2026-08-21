@@ -128,7 +128,7 @@ with col2:
     st.markdown(
         """
         <div class="tool-card">
-            <h4>🌤 Loss Correction VCast</h4>
+            <h4>🌅 Loss Correction VCast</h4>
             <p>
                 Differential evolution optimization for Fixed and
                 Tracking plants. Supports VCast
