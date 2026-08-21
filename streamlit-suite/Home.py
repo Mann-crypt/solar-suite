@@ -140,7 +140,7 @@ with col2:
     )
 
     if st.button(
-        "Open Loss Correction →",
+        "Open Loss Correction VCast →",
         key="home_loss_correction",
         use_container_width=True,
     ):
