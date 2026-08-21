@@ -119,12 +119,39 @@ with col1:
     ):
         st.switch_page("pages/1_Loss_Correction.py")
 
+# ==========================================================
+# LOSS CORRECTION VCAST
+# ==========================================================
+
+with col2:
+
+    st.markdown(
+        """
+        <div class="tool-card">
+            <h4>🌤 Loss Correction VCast</h4>
+            <p>
+                Differential evolution optimization for Fixed and
+                Tracking plants. Supports VCast
+                workbooks.
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    if st.button(
+        "Open Loss Correction →",
+        key="home_loss_correction",
+        use_container_width=True,
+    ):
+        st.switch_page("pages/2_Loss_Correction_VCast.py")
+
 
 # ==========================================================
 # RT CORRECTION
 # ==========================================================
 
-with col2:
+with col3:
 
     st.markdown(
         """
@@ -148,10 +175,18 @@ with col2:
 
 
 # ==========================================================
+# CMV PROFILE GENERATOR
+# ==========================================================
+
+st.markdown("<br>", unsafe_allow_html=True)
+
+col4, col5, col6 = st.columns(3)
+
+# ==========================================================
 # AEROMAL
 # ==========================================================
 
-with col3:
+with col4:
 
     st.markdown(
         """
@@ -173,14 +208,10 @@ with col3:
         st.switch_page("pages/3_Aeromal.py")
 
 # ==========================================================
-# CMV PROFILE GENERATOR
+# CMV Profile Generator
 # ==========================================================
 
-st.markdown("<br>", unsafe_allow_html=True)
-
-col4, col5, col6 = st.columns(3)
-
-with col4:
+with col5:
 
     st.markdown(
         """
