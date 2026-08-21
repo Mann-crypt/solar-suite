@@ -1,10 +1,11 @@
 # ============================================================
 # LOSS CORRECTION MODEL
 # Fixed / Tracking
-# Optimized Streamlit Page
+# Stable Streamlit Version
 #
-# Calculation logic preserved
-# UI / execution flow optimized to reduce freezing
+# IMPORTANT:
+# Calculation formulas are preserved.
+# Main changes are state management, rerun handling and caching.
 # ============================================================
 
 import io
@@ -122,17 +123,16 @@ st.markdown(
 
 DEFAULT_STATE = {
     "plant_type": FIXED_PLANT,
+
     "uploaded_signature": None,
 
-    # Input
     "input_df": None,
-    "input_editor_version": 0,
 
-    # Model
+    # Model lifecycle
+    "model_started": False,
     "model_result": None,
-    "run_requested": False,
 
-    # Tracking
+    # Tracking parameters
     "tracking_params": None,
 
     # Efficiency losses
@@ -141,12 +141,15 @@ DEFAULT_STATE = {
     "cluster_fixed_loss": None,
     "cluster_tracking_loss": None,
 
-    # Internal signatures
+    # Prevent unnecessary resets
     "last_plant_type": None,
-    "last_input_signature": None,
+
+    # Input editor
+    "input_editor_version": 0,
 }
 
 for key, value in DEFAULT_STATE.items():
+
     if key not in st.session_state:
         st.session_state[key] = value
 
@@ -156,11 +159,9 @@ for key, value in DEFAULT_STATE.items():
 # ============================================================
 
 def numeric(values):
-    """
-    Safely convert values to numeric.
-    """
 
     if isinstance(values, pd.Series):
+
         return pd.to_numeric(
             values,
             errors="coerce",
@@ -174,10 +175,11 @@ def numeric(values):
     ).fillna(0)
 
 
-def validate_columns(df, required, name="Data"):
-    """
-    Validate required columns.
-    """
+def validate_columns(
+    df,
+    required,
+    name="Data",
+):
 
     missing = [
         col
@@ -186,16 +188,17 @@ def validate_columns(df, required, name="Data"):
     ]
 
     if missing:
+
         raise ValueError(
             f"{name} is missing required column(s): "
             f"{', '.join(missing)}"
         )
 
 
-def clean_data_rows(df, date_column="Date"):
-    """
-    Remove rows after the first blank Date.
-    """
+def clean_data_rows(
+    df,
+    date_column="Date",
+):
 
     result = df.copy()
 
@@ -218,49 +221,13 @@ def clean_data_rows(df, date_column="Date"):
     return result.reset_index(drop=True)
 
 
-def workbook_signature(file_bytes):
-    """
-    Stable workbook signature.
-    """
-
-    return hashlib.md5(
-        file_bytes
-    ).hexdigest()
-
-
-def dataframe_signature(df):
-    """
-    Signature for editable input data.
-
-    Used only to detect actual input changes.
-    """
-
-    if df is None:
-        return None
+def safe_float(
+    value,
+    default=0.0,
+):
 
     try:
-        data = pd.util.hash_pandas_object(
-            df,
-            index=True,
-        ).values
 
-        return hashlib.md5(
-            data.tobytes()
-        ).hexdigest()
-
-    except Exception:
-        return (
-            len(df),
-            tuple(df.columns),
-        )
-
-
-def safe_float(value, default=0.0):
-    """
-    Convert a value to float safely.
-    """
-
-    try:
         result = float(value)
 
         if np.isfinite(result):
@@ -273,38 +240,62 @@ def safe_float(value, default=0.0):
 
 
 def safe_array(values):
-    """
-    Convert values to clean float numpy array.
-    """
 
     if isinstance(values, pd.Series):
 
-        return pd.to_numeric(
+        cleaned = pd.to_numeric(
             values,
             errors="coerce",
-        ).fillna(0).to_numpy(
-            dtype=float
-        )
+        ).fillna(0)
 
-    return pd.to_numeric(
-        pd.Series(values),
-        errors="coerce",
-    ).fillna(0).to_numpy(
-        dtype=float
+    else:
+
+        cleaned = pd.to_numeric(
+            pd.Series(values),
+            errors="coerce",
+        ).fillna(0)
+
+    return np.asarray(
+        cleaned,
+        dtype=float,
     )
+
+
+def workbook_signature(
+    file_bytes,
+):
+
+    return hashlib.md5(
+        file_bytes
+    ).hexdigest()
 
 
 # ============================================================
 # RESET HELPERS
 # ============================================================
 
-def reset_model_state():
-    """
-    Reset only model-dependent state.
-    """
+def reset_calculation_state(
+    keep_tracking_params=False,
+):
 
     st.session_state.model_result = None
-    st.session_state.run_requested = False
+
+    if not keep_tracking_params:
+        st.session_state.tracking_params = None
+
+    st.session_state.fixed_loss = None
+    st.session_state.tracking_loss = None
+    st.session_state.cluster_fixed_loss = None
+    st.session_state.cluster_tracking_loss = None
+
+
+def reset_for_new_workbook():
+
+    st.session_state.input_df = None
+
+    st.session_state.model_started = False
+
+    st.session_state.model_result = None
 
     st.session_state.tracking_params = None
 
@@ -314,20 +305,7 @@ def reset_model_state():
     st.session_state.cluster_fixed_loss = None
     st.session_state.cluster_tracking_loss = None
 
-
-def reset_for_new_workbook(signature):
-    """
-    Reset everything dependent on a new workbook.
-    """
-
-    st.session_state.uploaded_signature = signature
-
-    st.session_state.input_df = None
     st.session_state.input_editor_version += 1
-
-    st.session_state.last_input_signature = None
-
-    reset_model_state()
 
 
 # ============================================================
@@ -338,10 +316,9 @@ def reset_for_new_workbook(signature):
     show_spinner=False,
     max_entries=5,
 )
-def workbook_sheets(file_bytes):
-    """
-    Return workbook sheet names.
-    """
+def workbook_sheets(
+    file_bytes,
+):
 
     excel = pd.ExcelFile(
         io.BytesIO(file_bytes)
@@ -360,9 +337,6 @@ def read_area_efficiency_cached(
     file_bytes,
     cluster,
 ):
-    """
-    Read Area & Efficiency sheet.
-    """
 
     df = pd.read_excel(
         io.BytesIO(file_bytes),
@@ -412,9 +386,7 @@ def read_area_efficiency_cached(
     df[
         "Standard PV Efficiency (%)"
     ] = pd.to_numeric(
-        df[
-            "Standard PV Efficiency (%)"
-        ],
+        df["Standard PV Efficiency (%)"],
         errors="coerce",
     ).fillna(0)
 
@@ -435,9 +407,6 @@ def read_area_efficiency_cached(
 def read_cluster_weights_cached(
     file_bytes,
 ):
-    """
-    Read cluster area weights.
-    """
 
     df = pd.read_excel(
         io.BytesIO(file_bytes),
@@ -483,9 +452,6 @@ def read_cluster_weights_cached(
 def read_latitude_cached(
     file_bytes,
 ):
-    """
-    Read latitude.
-    """
 
     df = pd.read_excel(
         io.BytesIO(file_bytes),
@@ -511,6 +477,7 @@ def read_latitude_cached(
     ).dropna()
 
     if values.empty:
+
         raise ValueError(
             "No valid latitude found in Forecast Config."
         )
@@ -527,9 +494,6 @@ def read_latitude_cached(
 def read_tilt_lookup_cached(
     file_bytes,
 ):
-    """
-    Read monthly fixed tilt values.
-    """
 
     try:
 
@@ -598,6 +562,7 @@ def read_tilt_lookup_cached(
         )
 
     except Exception:
+
         return {}
 
 
@@ -613,15 +578,6 @@ def load_input_data_cached(
     file_bytes,
     cluster,
 ):
-    """
-    Load forecast input.
-
-    Fixed:
-        Fixed
-
-    Cluster:
-        Fixed-CL1
-    """
 
     sheet = (
         "Fixed-CL1"
@@ -641,7 +597,9 @@ def load_input_data_cached(
         .str.strip()
     )
 
-    df = clean_data_rows(df)
+    df = clean_data_rows(
+        df
+    )
 
     validate_columns(
         df,
@@ -712,19 +670,19 @@ def load_input_data_cached(
         df["Actual"]
     ).to_numpy()
 
-    if cluster:
+    if not cluster:
+
+        df["GHI_Forecast"] = numeric(
+            df["GHI_Forecast"]
+        ).to_numpy()
+
+    else:
 
         for col in CLUSTER_GHI_COLUMNS:
 
             df[col] = numeric(
                 df[col]
             ).to_numpy()
-
-    else:
-
-        df["GHI_Forecast"] = numeric(
-            df["GHI_Forecast"]
-        ).to_numpy()
 
     return df
 
@@ -739,11 +697,6 @@ def prepare_solar_angles(
     tilt_lookup=None,
     tracking=False,
 ):
-    """
-    Calculate solar-angle components.
-
-    Existing calculation preserved.
-    """
 
     result = df.copy()
 
@@ -849,9 +802,8 @@ def prepare_solar_angles(
             np.radians(
                 result["Elevation angle a"]
             )
-        ).clip(
-            lower=1e-6
         )
+        .clip(lower=1e-6)
     )
 
     return result
@@ -866,9 +818,6 @@ def calculate_efficiency_loss(
     poa,
     actual,
 ):
-    """
-    Automatically calculate efficiency loss.
-    """
 
     validate_columns(
         df,
@@ -985,9 +934,6 @@ def apply_efficiency_loss(
     df,
     loss,
 ):
-    """
-    Apply efficiency loss.
-    """
 
     result = df.copy()
 
@@ -1032,7 +978,7 @@ def apply_efficiency_loss(
 
 
 # ============================================================
-# TRACKING OPTIMIZER
+# TRACKING OPTIMIZATION
 # ============================================================
 
 @st.cache_data(
@@ -1044,11 +990,6 @@ def optimize_tracking_cached(
     weighted_ghi_tuple,
     actual_tuple,
 ):
-    """
-    Optimize tracking parameters.
-
-    Calculation and objective are unchanged.
-    """
 
     blocks = np.asarray(
         blocks_tuple,
@@ -1072,6 +1013,7 @@ def optimize_tracking_cached(
     )
 
     if n == 0:
+
         raise ValueError(
             "No tracking data available."
         )
@@ -1092,6 +1034,7 @@ def optimize_tracking_cached(
     actual = actual[mask]
 
     if len(actual) == 0:
+
         raise ValueError(
             "No valid Actual power values found."
         )
@@ -1105,11 +1048,13 @@ def optimize_tracking_cached(
     )
 
     if actual_peak <= 0:
+
         raise ValueError(
             "Actual peak power is invalid."
         )
 
     if actual_energy <= 0:
+
         raise ValueError(
             "Actual energy is invalid."
         )
@@ -1227,9 +1172,7 @@ def optimize_tracking_cached(
         peak_error = (
             abs(
                 actual_peak
-                - np.max(
-                    prediction
-                )
+                - np.max(prediction)
             )
             / actual_peak
         )
@@ -1237,9 +1180,7 @@ def optimize_tracking_cached(
         energy_error = (
             abs(
                 actual_energy
-                - np.sum(
-                    prediction
-                )
+                - np.sum(prediction)
             )
             / actual_energy
         )
@@ -1295,39 +1236,20 @@ def tracking_forecast(
     weighted_ghi,
     params,
 ):
-    """
-    Calculate tracking forecast.
-    """
 
-    dhi = int(
-        params["DHI"]
-    )
-
-    start = int(
-        params["start"]
-    )
-
-    end = int(
-        params["end"]
-    )
-
-    max_block = int(
-        params["max"]
-    )
-
-    east = int(
-        params["east"]
-    )
-
-    west = int(
-        params["west"]
-    )
+    dhi = int(params["DHI"])
+    start = int(params["start"])
+    end = int(params["end"])
+    max_block = int(params["max"])
+    east = int(params["east"])
+    west = int(params["west"])
 
     if not (
         start
         < max_block
         < end
     ):
+
         raise ValueError(
             "Starting Block < Max Block < Ending Block is required."
         )
@@ -1348,6 +1270,7 @@ def tracking_forecast(
         d1 == 0
         or d2 == 0
     ):
+
         raise ValueError(
             "Invalid tracking block configuration."
         )
@@ -1433,6 +1356,49 @@ def tracking_forecast(
 
 
 # ============================================================
+# BACKEND BLOCKS
+# ============================================================
+
+@st.cache_data(
+    show_spinner=False,
+    max_entries=5,
+)
+def read_backend_blocks_cached(
+    file_bytes,
+    cluster,
+):
+
+    sheet = (
+        "Backend Cal CL1"
+        if cluster
+        else "Backend Cal"
+    )
+
+    backend = pd.read_excel(
+        io.BytesIO(file_bytes),
+        sheet_name=sheet,
+    )
+
+    backend.columns = (
+        backend.columns
+        .astype(str)
+        .str.strip()
+    )
+
+    validate_columns(
+        backend,
+        ["Block No."],
+        sheet,
+    )
+
+    return numeric(
+        backend["Block No."]
+    ).to_numpy(
+        dtype=float
+    )
+
+
+# ============================================================
 # INPUT EDITOR
 # ============================================================
 
@@ -1440,14 +1406,6 @@ def input_data_editor(
     df,
     cluster,
 ):
-    """
-    Editable input data.
-
-    There is NO Apply/Recalculate button.
-
-    The data editor itself is only used for editing.
-    The model runs only after RUN LOSS CORRECTION.
-    """
 
     st.markdown(
         '<div class="section">📊 Input GHI & Actual Power</div>',
@@ -1455,9 +1413,8 @@ def input_data_editor(
     )
 
     st.caption(
-        "Edit the values directly if required. "
-        "Changes are used the next time you click "
-        "**RUN LOSS CORRECTION**."
+        "Edit GHI forecast and Actual values, then click "
+        "**Update Input Data**."
     )
 
     if cluster:
@@ -1499,31 +1456,68 @@ def input_data_editor(
         f"{st.session_state.input_editor_version}"
     )
 
-    edited = st.data_editor(
-        display,
-        use_container_width=True,
-        hide_index=True,
-        num_rows="fixed",
-        key=editor_key,
-        column_config={
-            col: st.column_config.NumberColumn(
-                col,
-                step=0.01,
-                format="%.2f",
-            )
-            for col in columns
-        },
-    )
+    with st.form(
+        "loss_input_form",
+        clear_on_submit=False,
+        border=False,
+    ):
 
-    result = df.copy()
+        edited = st.data_editor(
+            display,
+            use_container_width=True,
+            hide_index=True,
+            num_rows="fixed",
+            key=editor_key,
+            column_config={
+                col: st.column_config.NumberColumn(
+                    col,
+                    step=0.01,
+                    format="%.2f",
+                )
+                for col in columns
+            },
+        )
 
-    for col in columns:
+        submitted = st.form_submit_button(
+            "✓ Update Input Data",
+            type="secondary",
+        )
 
-        result[col] = numeric(
-            edited[col]
-        ).to_numpy()
+    if submitted:
 
-    return result
+        result = df.copy()
+
+        for col in columns:
+
+            result[col] = numeric(
+                edited[col]
+            ).to_numpy()
+
+        st.session_state.input_df = result
+
+        # Input data changed.
+        # Parameters are deliberately preserved.
+        st.session_state.model_started = False
+        st.session_state.model_result = None
+
+        st.session_state.fixed_loss = None
+        st.session_state.tracking_loss = None
+        st.session_state.cluster_fixed_loss = None
+        st.session_state.cluster_tracking_loss = None
+
+        st.session_state.input_editor_version += 1
+
+        st.success(
+            "Input data updated. Click RUN LOSS CORRECTION."
+        )
+
+        st.rerun()
+
+    if st.session_state.input_df is not None:
+
+        return st.session_state.input_df
+
+    return df.copy()
 
 
 # ============================================================
@@ -1554,16 +1548,13 @@ def plant_selector():
 
 
 # ============================================================
-# TRACKING PARAMETERS
+# TRACKING PARAMETER CONTROLS
 # ============================================================
 
 def tracking_parameter_controls(
     params,
     prefix,
 ):
-    """
-    Editable tracking parameters.
-    """
 
     st.markdown(
         '<div class="section">⚙️ Tracking Parameters</div>',
@@ -1571,8 +1562,7 @@ def tracking_parameter_controls(
     )
 
     st.caption(
-        "Parameters are automatically optimized on the first run. "
-        "After that, you can edit them directly."
+        "Parameters are editable. Forecast and metrics update automatically."
     )
 
     c1, c2, c3 = st.columns(3)
@@ -1633,7 +1623,7 @@ def tracking_parameter_controls(
         key=f"{prefix}_west",
     )
 
-    return {
+    new_params = {
         "DHI": int(dhi),
         "start": int(start),
         "end": int(end),
@@ -1641,6 +1631,8 @@ def tracking_parameter_controls(
         "east": int(east),
         "west": int(west),
     }
+
+    return new_params
 
 
 # ============================================================
@@ -1652,9 +1644,6 @@ def efficiency_control(
     auto_loss,
     key,
 ):
-    """
-    Editable efficiency loss.
-    """
 
     efficiency = pd.to_numeric(
         df[
@@ -1714,7 +1703,9 @@ def efficiency_control(
 # EFFICIENCY TABLE
 # ============================================================
 
-def show_efficiency_table(df):
+def show_efficiency_table(
+    df,
+):
 
     cols = [
         "Module Type",
@@ -1767,9 +1758,6 @@ def calculate_metrics(
     forecast,
     actual,
 ):
-    """
-    Calculate forecast metrics.
-    """
 
     forecast = safe_array(
         forecast
@@ -1961,9 +1949,6 @@ def show_forecast_chart(
     actual,
     title,
 ):
-    """
-    Forecast vs Actual chart.
-    """
 
     forecast = safe_array(
         forecast
@@ -2051,70 +2036,17 @@ def show_forecast_chart(
 
 
 # ============================================================
-# BACKEND BLOCKS
+# FIXED CALCULATION
 # ============================================================
 
-@st.cache_data(
-    show_spinner=False,
-    max_entries=5,
-)
-def read_backend_blocks_cached(
-    file_bytes,
-    cluster,
-):
-    """
-    Read tracking backend block numbers.
-    """
-
-    sheet = (
-        "Backend Cal CL1"
-        if cluster
-        else "Backend Cal"
-    )
-
-    backend = pd.read_excel(
-        io.BytesIO(file_bytes),
-        sheet_name=sheet,
-    )
-
-    backend.columns = (
-        backend.columns
-        .astype(str)
-        .str.strip()
-    )
-
-    validate_columns(
-        backend,
-        ["Block No."],
-        sheet,
-    )
-
-    blocks = numeric(
-        backend["Block No."]
-    ).to_numpy(
-        dtype=float
-    )
-
-    return blocks
-
-
-# ============================================================
-# FIXED FORECAST
-# ============================================================
-
-def run_fixed(
+def calculate_fixed(
     df,
     input_df,
     lat,
     tilt_lookup,
     cluster,
-    weights=None,
+    weights,
 ):
-    """
-    Run Fixed plant forecast.
-
-    Calculation logic preserved.
-    """
 
     solar = prepare_solar_angles(
         input_df,
@@ -2243,53 +2175,30 @@ def run_fixed(
             "🏗️ Fixed Forecast vs Actual"
         )
 
-    show_efficiency_table(
-        df
-    )
-
-    st.markdown(
-        '<div class="section">📈 Forecast Performance</div>',
-        unsafe_allow_html=True,
-    )
-
-    show_metrics(
-        forecast,
-        actual,
-    )
-
-    show_forecast_chart(
-        forecast,
-        actual,
-        title,
-    )
-
     return {
         "forecast": forecast,
         "actual": actual,
         "efficiency": df,
+        "title": title,
     }
 
 
 # ============================================================
-# TRACKING FORECAST
+# TRACKING CALCULATION
 # ============================================================
 
-def run_tracking(
+def calculate_tracking(
     df,
     input_df,
     lat,
-    tilt_lookup,
     file_bytes,
     cluster,
 ):
-    """
-    Run Tracking plant forecast.
-    """
 
     solar = prepare_solar_angles(
         input_df,
         lat,
-        tilt_lookup,
+        None,
         tracking=True,
     )
 
@@ -2427,6 +2336,7 @@ def run_tracking(
     )
 
     if n == 0:
+
         raise ValueError(
             "No matching tracking data found."
         )
@@ -2436,7 +2346,7 @@ def run_tracking(
     actual = actual[:n]
 
     # --------------------------------------------------------
-    # OPTIMIZATION
+    # OPTIMIZE ONLY ONCE
     # --------------------------------------------------------
 
     if st.session_state.tracking_params is None:
@@ -2455,18 +2365,24 @@ def run_tracking(
 
     else:
 
-        params = (
-            st.session_state.tracking_params
-        )
+        params = st.session_state.tracking_params
 
     # --------------------------------------------------------
-    # PARAMETERS
+    # EDITABLE PARAMETERS
     # --------------------------------------------------------
 
     params = tracking_parameter_controls(
         params,
         prefix,
     )
+
+    # --------------------------------------------------------
+    # IMPORTANT
+    #
+    # Store edited parameters immediately.
+    # Do NOT reset model state.
+    # Do NOT require another RUN button.
+    # --------------------------------------------------------
 
     st.session_state.tracking_params = params
 
@@ -2480,35 +2396,12 @@ def run_tracking(
         params,
     )
 
-    # --------------------------------------------------------
-    # OUTPUT
-    # --------------------------------------------------------
-
-    show_efficiency_table(
-        df
-    )
-
-    st.markdown(
-        '<div class="section">📈 Forecast Performance</div>',
-        unsafe_allow_html=True,
-    )
-
-    show_metrics(
-        forecast,
-        actual,
-    )
-
-    show_forecast_chart(
-        forecast,
-        actual,
-        title,
-    )
-
     return {
         "forecast": forecast,
         "actual": actual,
         "efficiency": df,
         "tracking_params": params,
+        "title": title,
     }
 
 
@@ -2581,12 +2474,14 @@ def main():
         != current_signature
     ):
 
-        reset_for_new_workbook(
+        st.session_state.uploaded_signature = (
             current_signature
         )
 
+        reset_for_new_workbook()
+
     # ========================================================
-    # WORKBOOK SHEETS
+    # WORKBOOK
     # ========================================================
 
     try:
@@ -2614,7 +2509,7 @@ def main():
     )
 
     # ========================================================
-    # LOAD WORKBOOK PARAMETERS
+    # LOAD PARAMETERS
     # ========================================================
 
     try:
@@ -2671,54 +2566,17 @@ def main():
     )
 
     # ========================================================
-    # DO NOT CONTINUOUSLY WRITE THE DATAFRAME TO STATE
-    # UNLESS IT ACTUALLY CHANGED
-    # ========================================================
-
-    new_input_signature = dataframe_signature(
-        input_df
-    )
-
-    if (
-        st.session_state.last_input_signature
-        is None
-    ):
-
-        st.session_state.last_input_signature = (
-            new_input_signature
-        )
-
-    elif (
-        new_input_signature
-        != st.session_state.last_input_signature
-    ):
-
-        st.session_state.input_df = (
-            input_df.copy()
-        )
-
-        st.session_state.last_input_signature = (
-            new_input_signature
-        )
-
-        # Do not immediately run the model.
-        # The user controls execution through RUN.
-        reset_model_state()
-
-    else:
-
-        st.session_state.input_df = (
-            input_df
-        )
-
-    # ========================================================
     # PLANT TYPE
     # ========================================================
 
     plant_type = plant_selector()
 
     # ========================================================
-    # PLANT CHANGE
+    # PLANT TYPE CHANGE
+    #
+    # Important:
+    # We clear calculation results but do NOT destroy
+    # widget state unnecessarily.
     # ========================================================
 
     previous_plant = (
@@ -2730,13 +2588,24 @@ def main():
         and previous_plant != plant_type
     ):
 
-        # Keep input data.
-        # Clear only model-specific results.
-        reset_model_state()
+        st.session_state.model_result = None
 
-    st.session_state.last_plant_type = (
-        plant_type
-    )
+        # Only tracking parameters are invalid when moving
+        # between plant modes.
+        st.session_state.tracking_params = None
+
+        # Reset the appropriate efficiency states.
+        if plant_type == FIXED_PLANT:
+
+            st.session_state.fixed_loss = None
+            st.session_state.cluster_fixed_loss = None
+
+        else:
+
+            st.session_state.tracking_loss = None
+            st.session_state.cluster_tracking_loss = None
+
+    st.session_state.last_plant_type = plant_type
 
     # ========================================================
     # RUN BUTTON
@@ -2753,27 +2622,31 @@ def main():
 
     if run_clicked:
 
-        reset_model_state()
+        # Start model lifecycle.
+        st.session_state.model_started = True
 
-        st.session_state.run_requested = True
+        # Clear only things that must be freshly calculated.
+        st.session_state.model_result = None
+
+        # Tracking optimization should happen again
+        # because the user explicitly requested a new run.
+        st.session_state.tracking_params = None
+
+        if plant_type == FIXED_PLANT:
+
+            st.session_state.fixed_loss = None
+            st.session_state.cluster_fixed_loss = None
+
+        else:
+
+            st.session_state.tracking_loss = None
+            st.session_state.cluster_tracking_loss = None
 
     # ========================================================
-    # SHOW LAST RESULT
+    # WAIT FOR FIRST RUN
     # ========================================================
 
-    if (
-        not st.session_state.run_requested
-        and st.session_state.model_result
-        is not None
-    ):
-
-        return
-
-    # ========================================================
-    # NOTHING TO RUN
-    # ========================================================
-
-    if not st.session_state.run_requested:
+    if not st.session_state.model_started:
 
         st.info(
             "Select the plant type and click "
@@ -2783,18 +2656,22 @@ def main():
         return
 
     # ========================================================
-    # MODEL EXECUTION
+    # MODEL
+    #
+    # This executes on every Streamlit rerun AFTER the
+    # model has started.
+    #
+    # That is intentional.
+    #
+    # Changing a parameter therefore updates the graph
+    # immediately without asking the user to press RUN again.
     # ========================================================
 
     try:
 
-        # ----------------------------------------------------
-        # FIXED
-        # ----------------------------------------------------
-
         if plant_type == FIXED_PLANT:
 
-            result = run_fixed(
+            result = calculate_fixed(
                 base_df,
                 input_df,
                 lat,
@@ -2803,33 +2680,19 @@ def main():
                 weights,
             )
 
-        # ----------------------------------------------------
-        # TRACKING
-        # ----------------------------------------------------
-
         else:
 
-            result = run_tracking(
+            result = calculate_tracking(
                 base_df,
                 input_df,
                 lat,
-                tilt_lookup,
                 file_bytes,
                 cluster,
             )
 
-        # ----------------------------------------------------
-        # SAVE RESULT
-        # ----------------------------------------------------
-
         st.session_state.model_result = result
 
-        st.session_state.run_requested = False
-
     except Exception as exc:
-
-        st.session_state.model_result = None
-        st.session_state.run_requested = False
 
         st.error(
             "❌ Loss correction failed."
@@ -2837,9 +2700,42 @@ def main():
 
         st.exception(exc)
 
+        return
+
+    # ========================================================
+    # OUTPUT
+    # ========================================================
+
+    result = st.session_state.model_result
+
+    st.markdown(
+        '<div class="section">📊 Results</div>',
+        unsafe_allow_html=True,
+    )
+
+    show_efficiency_table(
+        result["efficiency"]
+    )
+
+    st.markdown(
+        '<div class="section">📈 Forecast Performance</div>',
+        unsafe_allow_html=True,
+    )
+
+    show_metrics(
+        result["forecast"],
+        result["actual"],
+    )
+
+    show_forecast_chart(
+        result["forecast"],
+        result["actual"],
+        result["title"],
+    )
+
 
 # ============================================================
-# RUN
+# RUN APP
 # ============================================================
 
 if __name__ == "__main__":
