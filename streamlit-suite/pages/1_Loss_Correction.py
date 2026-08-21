@@ -1,11 +1,12 @@
-```python
 # ============================================================
 # LOSS CORRECTION MODEL
 # Fixed / Tracking
-# Compact + Non-Freezing Streamlit Page
+# Cloud-Safe Streamlit Page
 # ============================================================
 
 import io
+import hashlib
+
 import numpy as np
 import pandas as pd
 import streamlit as st
@@ -15,7 +16,7 @@ from scipy.optimize import differential_evolution
 
 
 # ============================================================
-# PAGE
+# PAGE CONFIG
 # ============================================================
 
 st.set_page_config(
@@ -34,11 +35,30 @@ OPT_POPSIZE = 10
 
 PARAM_BOUNDS = [
     (0, 10),      # DHI
-    (0, 30),      # Start
-    (65, 80),     # End
-    (44, 60),     # Max
-    (0, 70),      # East
-    (0, 70),      # West
+    (0, 30),      # Starting Block
+    (65, 80),     # Ending Block
+    (44, 60),     # Max Block
+    (0, 70),      # East Limit
+    (0, 70),      # West Limit
+]
+
+FIXED_PLANT = "🏗️ Fixed"
+TRACKING_PLANT = "🔄 Tracking"
+
+CLUSTER_GHI_COLUMNS = [
+    "CL1-GHI",
+    "CL2-GHI",
+    "CL3-GHI",
+    "CL4-GHI",
+    "CL5-GHI",
+]
+
+CLUSTER_WEIGHT_COLUMNS = [
+    "CL-1",
+    "CL-2",
+    "CL-3",
+    "CL-4",
+    "CL-5",
 ]
 
 
@@ -105,18 +125,20 @@ st.markdown(
 # SESSION STATE
 # ============================================================
 
-DEFAULTS = {
-    "plant_type": "🏗️ Fixed",
+DEFAULT_STATE = {
+    "plant_type": FIXED_PLANT,
+    "uploaded_signature": None,
     "input_df": None,
-    "input_signature": None,
-    "workbook_signature": None,
     "model_result": None,
     "tracking_params": None,
-    "auto_loss": None,
-    "run_id": 0,
+    "fixed_loss": None,
+    "tracking_loss": None,
+    "cluster_fixed_loss": None,
+    "cluster_tracking_loss": None,
+    "run_requested": False,
 }
 
-for key, value in DEFAULTS.items():
+for key, value in DEFAULT_STATE.items():
     if key not in st.session_state:
         st.session_state[key] = value
 
@@ -125,27 +147,38 @@ for key, value in DEFAULTS.items():
 # GENERIC HELPERS
 # ============================================================
 
-def numeric(series):
+def numeric(values):
     """
-    Safe numeric conversion.
-    Handles Series, lists and numpy arrays.
+    Safely convert values to numeric.
+
+    Returns a pandas Series so it can safely be used with
+    pandas and numpy calculations.
     """
-    if isinstance(series, pd.Series):
+
+    if isinstance(values, pd.Series):
         return pd.to_numeric(
-            series,
+            values,
             errors="coerce",
         ).fillna(0)
 
     return pd.Series(
         pd.to_numeric(
-            np.asarray(series),
+            np.asarray(values),
             errors="coerce",
         )
     ).fillna(0)
 
 
 def validate_columns(df, required, name="Data"):
-    missing = [c for c in required if c not in df.columns]
+    """
+    Validate required columns.
+    """
+
+    missing = [
+        col
+        for col in required
+        if col not in df.columns
+    ]
 
     if missing:
         raise ValueError(
@@ -155,36 +188,108 @@ def validate_columns(df, required, name="Data"):
 
 
 def clean_data_rows(df, date_column="Date"):
-    df = df.copy()
+    """
+    Remove rows after the first blank Date.
 
-    if date_column in df.columns:
-        null_rows = df[df[date_column].isna()].index
+    If Date does not exist, the dataframe is returned unchanged.
+    """
+
+    result = df.copy()
+
+    if date_column in result.columns:
+
+        null_rows = result[
+            result[date_column].isna()
+        ].index
 
         if len(null_rows):
-            pos = df.index.get_loc(null_rows[0])
-            df = df.iloc[:pos]
 
-    return df.reset_index(drop=True)
+            first_null = null_rows[0]
+
+            position = result.index.get_loc(
+                first_null
+            )
+
+            result = result.iloc[:position]
+
+    return result.reset_index(drop=True)
 
 
-def signature(df):
+def dataframe_signature(df):
     """
-    Small signature used to detect changed input data.
+    Lightweight signature for detecting changed input data.
     """
+
+    numeric_data = (
+        df.select_dtypes(
+            include=np.number
+        )
+    )
+
+    if numeric_data.empty:
+        numeric_sum = 0.0
+    else:
+        numeric_sum = float(
+            np.nan_to_num(
+                numeric_data.to_numpy(
+                    dtype=float
+                ),
+                nan=0.0,
+                posinf=0.0,
+                neginf=0.0,
+            ).sum()
+        )
+
     return (
         len(df),
         tuple(df.columns),
-        float(
-            pd.to_numeric(
-                df.select_dtypes(include="number"),
-                errors="coerce",
-            )
-            .fillna(0)
-            .to_numpy()
-            .sum()
-        )
-        if not df.select_dtypes(include="number").empty
-        else 0.0,
+        numeric_sum,
+    )
+
+
+def workbook_signature(file_bytes):
+    """
+    Stable signature for the uploaded workbook.
+    """
+
+    return hashlib.md5(
+        file_bytes
+    ).hexdigest()
+
+
+def safe_float(value, default=0.0):
+    """
+    Convert a value to float safely.
+    """
+
+    try:
+        result = float(value)
+
+        if np.isfinite(result):
+            return result
+
+    except Exception:
+        pass
+
+    return float(default)
+
+
+def safe_array(values):
+    """
+    Convert values to a clean float numpy array.
+    """
+
+    return np.asarray(
+        pd.to_numeric(
+            values,
+            errors="coerce",
+        ).fillna(0)
+        if isinstance(values, pd.Series)
+        else pd.to_numeric(
+            pd.Series(values),
+            errors="coerce",
+        ).fillna(0),
+        dtype=float,
     )
 
 
@@ -197,11 +302,15 @@ def signature(df):
     max_entries=5,
 )
 def workbook_sheets(file_bytes):
-    return tuple(
-        pd.ExcelFile(
-            io.BytesIO(file_bytes)
-        ).sheet_names
+    """
+    Return workbook sheet names.
+    """
+
+    excel = pd.ExcelFile(
+        io.BytesIO(file_bytes)
     )
+
+    return tuple(excel.sheet_names)
 
 
 @st.cache_data(
@@ -212,6 +321,10 @@ def read_area_efficiency_cached(
     file_bytes,
     cluster,
 ):
+    """
+    Read Area & Efficiency sheet.
+    """
+
     df = pd.read_excel(
         io.BytesIO(file_bytes),
         sheet_name="Area & Efficiency",
@@ -235,14 +348,19 @@ def read_area_efficiency_cached(
         "Area & Efficiency",
     )
 
-    if "Module Type" in df.columns:
-        null_rows = df[
-            df["Module Type"].isna()
-        ].index
+    null_rows = df[
+        df["Module Type"].isna()
+    ].index
 
-        if len(null_rows):
-            pos = df.index.get_loc(null_rows[0])
-            df = df.iloc[:pos]
+    if len(null_rows):
+
+        first_null = null_rows[0]
+
+        position = df.index.get_loc(
+            first_null
+        )
+
+        df = df.iloc[:position]
 
     df = df.dropna(
         subset=[
@@ -250,6 +368,29 @@ def read_area_efficiency_cached(
             "Total area(m2)",
         ],
         how="all",
+    )
+
+    df[
+        "Standard PV Efficiency (%)"
+    ] = pd.to_numeric(
+        df["Standard PV Efficiency (%)"],
+        errors="coerce",
+    )
+
+    df["Total area(m2)"] = pd.to_numeric(
+        df["Total area(m2)"],
+        errors="coerce",
+    )
+
+    df[
+        "Standard PV Efficiency (%)"
+    ] = df[
+        "Standard PV Efficiency (%)"
+    ].fillna(0)
+
+    df["Total area(m2)"] = (
+        df["Total area(m2)"]
+        .fillna(0)
     )
 
     return df.reset_index(drop=True)
@@ -260,6 +401,9 @@ def read_area_efficiency_cached(
     max_entries=5,
 )
 def read_cluster_weights_cached(file_bytes):
+    """
+    Read cluster area weights.
+    """
 
     df = pd.read_excel(
         io.BytesIO(file_bytes),
@@ -274,29 +418,28 @@ def read_cluster_weights_cached(file_bytes):
         .str.strip()
     )
 
-    cols = [
-        "CL-1",
-        "CL-2",
-        "CL-3",
-        "CL-4",
-        "CL-5",
-    ]
-
     validate_columns(
         df,
-        cols,
+        CLUSTER_WEIGHT_COLUMNS,
         "Cluster Weights",
     )
 
-    return {
-        col: float(
-            pd.to_numeric(
-                df[col],
-                errors="coerce",
-            ).fillna(0).iloc[0]
+    weights = {}
+
+    for col in CLUSTER_WEIGHT_COLUMNS:
+
+        series = pd.to_numeric(
+            df[col],
+            errors="coerce",
+        ).dropna()
+
+        weights[col] = (
+            float(series.iloc[0])
+            if len(series)
+            else 0.0
         )
-        for col in cols
-    }
+
+    return weights
 
 
 @st.cache_data(
@@ -304,6 +447,9 @@ def read_cluster_weights_cached(file_bytes):
     max_entries=5,
 )
 def read_latitude_cached(file_bytes):
+    """
+    Read latitude from Forecast Config.
+    """
 
     df = pd.read_excel(
         io.BytesIO(file_bytes),
@@ -323,12 +469,17 @@ def read_latitude_cached(file_bytes):
         "Forecast Config",
     )
 
-    return float(
-        pd.to_numeric(
-            df["Lat"],
-            errors="coerce",
-        ).dropna().iloc[0]
-    )
+    values = pd.to_numeric(
+        df["Lat"],
+        errors="coerce",
+    ).dropna()
+
+    if values.empty:
+        raise ValueError(
+            "No valid latitude found in Forecast Config."
+        )
+
+    return float(values.iloc[0])
 
 
 @st.cache_data(
@@ -336,8 +487,14 @@ def read_latitude_cached(file_bytes):
     max_entries=5,
 )
 def read_tilt_lookup_cached(file_bytes):
+    """
+    Read monthly fixed tilt values.
+
+    Tracking does not use this lookup.
+    """
 
     try:
+
         df = pd.read_excel(
             io.BytesIO(file_bytes),
             sheet_name="Config Tilt Angle",
@@ -358,8 +515,14 @@ def read_tilt_lookup_cached(file_bytes):
         ].index
 
         if len(null_rows):
-            pos = df.index.get_loc(null_rows[0])
-            df = df.iloc[:pos]
+
+            first_null = null_rows[0]
+
+            position = df.index.get_loc(
+                first_null
+            )
+
+            df = df.iloc[:position]
 
         df = df.dropna(
             axis=1,
@@ -381,12 +544,20 @@ def read_tilt_lookup_cached(file_bytes):
             errors="coerce",
         )
 
-        return (
+        df["Month"] = (
+            df["Month"]
+            .astype(str)
+            .str.strip()
+        )
+
+        result = (
             df.dropna(subset=["Month"])
             .set_index("Month")["Fixed"]
             .dropna()
             .to_dict()
         )
+
+        return result
 
     except Exception:
         return {}
@@ -404,6 +575,17 @@ def load_input_data_cached(
     file_bytes,
     cluster,
 ):
+    """
+    Load the forecast sheet.
+
+    Fixed workbook:
+        Sheet = Fixed
+
+    Cluster workbook:
+        Sheet = Fixed-CL1
+
+    Cluster GHI values are recovered from Result when necessary.
+    """
 
     sheet = (
         "Fixed-CL1"
@@ -433,15 +615,8 @@ def load_input_data_cached(
 
     if cluster:
 
-        ghi_cols = [
-            "CL1-GHI",
-            "CL2-GHI",
-            "CL3-GHI",
-            "CL4-GHI",
-            "CL5-GHI",
-        ]
-
         try:
+
             result = pd.read_excel(
                 io.BytesIO(file_bytes),
                 sheet_name="Result",
@@ -450,35 +625,42 @@ def load_input_data_cached(
 
             result = result.fillna(0)
 
-            for i, col in enumerate(ghi_cols):
+            for i, col in enumerate(
+                CLUSTER_GHI_COLUMNS
+            ):
 
-                if (
-                    col not in df.columns
-                    and i < len(result.columns)
-                ):
+                if col in df.columns:
+                    continue
 
-                    values = pd.to_numeric(
-                        result.iloc[:len(df), i],
-                        errors="coerce",
-                    ).fillna(0).to_numpy()
+                if i >= len(result.columns):
+                    continue
 
-                    if len(values) < len(df):
-                        values = np.pad(
-                            values,
-                            (
-                                0,
-                                len(df) - len(values),
-                            ),
-                        )
+                values = pd.to_numeric(
+                    result.iloc[
+                        :len(df),
+                        i,
+                    ],
+                    errors="coerce",
+                ).fillna(0).to_numpy()
 
-                    df[col] = values
+                if len(values) < len(df):
+
+                    values = np.pad(
+                        values,
+                        (
+                            0,
+                            len(df) - len(values),
+                        ),
+                    )
+
+                df[col] = values
 
         except Exception:
             pass
 
         validate_columns(
             df,
-            ghi_cols,
+            CLUSTER_GHI_COLUMNS,
             "Cluster Forecast",
         )
 
@@ -502,13 +684,8 @@ def load_input_data_cached(
 
     else:
 
-        for col in [
-            "CL1-GHI",
-            "CL2-GHI",
-            "CL3-GHI",
-            "CL4-GHI",
-            "CL5-GHI",
-        ]:
+        for col in CLUSTER_GHI_COLUMNS:
+
             df[col] = numeric(
                 df[col]
             ).to_numpy()
@@ -526,21 +703,65 @@ def prepare_solar_angles(
     tilt_lookup=None,
     tracking=False,
 ):
+    """
+    Calculate solar-angle components.
+
+    IMPORTANT:
+    If Date exists in the uploaded data, use it.
+
+    Do not replace every row with today's date.
+    """
 
     result = df.copy()
 
-    today = pd.Timestamp.today().normalize()
+    if "Date" in result.columns:
 
-    result["Date"] = today
+        dates = pd.to_datetime(
+            result["Date"],
+            errors="coerce",
+        )
 
-    first_date = pd.Timestamp(
-        year=today.year,
-        month=1,
-        day=1,
+        if dates.notna().any():
+
+            valid_dates = dates.dropna()
+
+            fallback_date = (
+                valid_dates.iloc[0]
+                if len(valid_dates)
+                else pd.Timestamp.today()
+            )
+
+            dates = dates.fillna(
+                fallback_date
+            )
+
+        else:
+
+            dates = pd.Series(
+                pd.Timestamp.today(),
+                index=result.index,
+            )
+
+    else:
+
+        dates = pd.Series(
+            pd.Timestamp.today(),
+            index=result.index,
+        )
+
+    dates = pd.to_datetime(
+        dates
+    ).dt.normalize()
+
+    result["Date"] = dates
+
+    first_date = pd.to_datetime(
+        dates.dt.year.astype(str)
+        + "-01-01"
     )
 
     day_number = (
-        result["Date"] - first_date
+        dates - first_date
     ).dt.days + 1
 
     result["Declination Angle ∆"] = (
@@ -556,7 +777,7 @@ def prepare_solar_angles(
 
     result["Elevation angle a"] = (
         90
-        - lat
+        - float(lat)
         + result[
             "Declination Angle ∆"
         ]
@@ -564,7 +785,7 @@ def prepare_solar_angles(
 
     if tracking:
 
-        result["Tilt Angle b"] = 0
+        result["Tilt Angle b"] = 0.0
 
     elif tilt_lookup:
 
@@ -577,7 +798,7 @@ def prepare_solar_angles(
 
     else:
 
-        result["Tilt Angle b"] = 0
+        result["Tilt Angle b"] = 0.0
 
     result["a+b"] = (
         result["Elevation angle a"]
@@ -590,11 +811,14 @@ def prepare_solar_angles(
         )
     )
 
-    result["Sin(a)"] = np.sin(
-        np.radians(
-            result["Elevation angle a"]
+    result["Sin(a)"] = (
+        np.sin(
+            np.radians(
+                result["Elevation angle a"]
+            )
         )
-    ).clip(lower=1e-6)
+        .clip(lower=1e-6)
+    )
 
     return result
 
@@ -608,53 +832,92 @@ def calculate_efficiency_loss(
     poa,
     actual,
 ):
+    """
+    Automatically calculate efficiency loss from peak power.
+    """
+
+    required = [
+        "Standard PV Efficiency (%)",
+        "Total area(m2)",
+    ]
+
+    validate_columns(
+        df,
+        required,
+        "Efficiency Data",
+    )
 
     standard = pd.to_numeric(
-        df["Standard PV Efficiency (%)"],
+        df[
+            "Standard PV Efficiency (%)"
+        ],
         errors="coerce",
-    ).fillna(0).to_numpy(float)
+    ).fillna(0).to_numpy(
+        dtype=float
+    )
 
     area = pd.to_numeric(
         df["Total area(m2)"],
         errors="coerce",
-    ).fillna(0).to_numpy(float)
-
-    actual = np.asarray(
-        actual,
-        dtype=float,
+    ).fillna(0).to_numpy(
+        dtype=float
     )
 
-    poa = np.asarray(
-        poa,
-        dtype=float,
+    actual = safe_array(actual)
+    poa = safe_array(poa)
+
+    n = min(
+        len(actual),
+        len(poa),
     )
 
-    actual = actual[
-        np.isfinite(actual)
-    ]
-
-    poa = poa[
-        np.isfinite(poa)
-    ]
-
-    if not len(actual) or not len(poa):
+    if n == 0:
         return 0.0
 
-    poa_peak = np.nanmax(poa)
-    actual_peak = np.nanmax(actual)
+    actual = actual[:n]
+    poa = poa[:n]
 
-    if poa_peak <= 0 or actual_peak <= 0:
+    valid = (
+        np.isfinite(actual)
+        & np.isfinite(poa)
+    )
+
+    actual = actual[valid]
+    poa = poa[valid]
+
+    if len(actual) == 0:
+        return 0.0
+
+    actual_peak = np.nanmax(
+        actual
+    )
+
+    poa_peak = np.nanmax(
+        poa
+    )
+
+    if (
+        not np.isfinite(actual_peak)
+        or not np.isfinite(poa_peak)
+        or actual_peak <= 0
+        or poa_peak <= 0
+    ):
         return 0.0
 
     base_area = np.sum(
-        area * standard / 100
+        area
+        * standard
+        / 100
     )
 
     loss_coeff = np.sum(
         area / 100
     )
 
-    if loss_coeff <= 0:
+    if (
+        not np.isfinite(loss_coeff)
+        or loss_coeff <= 0
+    ):
         return 0.0
 
     target_area = (
@@ -668,11 +931,20 @@ def calculate_efficiency_loss(
         - target_area
     ) / loss_coeff
 
+    max_loss = (
+        np.nanmin(standard)
+        if len(standard)
+        else 0.0
+    )
+
+    if not np.isfinite(max_loss):
+        max_loss = 0.0
+
     return float(
         np.clip(
             loss,
             0,
-            np.nanmin(standard),
+            max_loss,
         )
     )
 
@@ -681,21 +953,46 @@ def apply_efficiency_loss(
     df,
     loss,
 ):
+    """
+    Apply one scalar efficiency loss to all module rows.
+    """
 
     result = df.copy()
 
-    result["Efficiency Losses(%)"] = loss
+    loss = safe_float(
+        loss,
+        default=0.0,
+    )
 
-    result["Net Efficiency (%)"] = (
+    standard = pd.to_numeric(
         result[
             "Standard PV Efficiency (%)"
-        ]
-        - loss
+        ],
+        errors="coerce",
+    ).fillna(0)
+
+    area = pd.to_numeric(
+        result["Total area(m2)"],
+        errors="coerce",
+    ).fillna(0)
+
+    result[
+        "Efficiency Losses(%)"
+    ] = loss
+
+    result[
+        "Net Efficiency (%)"
+    ] = (
+        standard - loss
+    ).clip(
+        lower=0
     )
 
     result["Eff Area"] = (
-        result["Total area(m2)"]
-        * result["Net Efficiency (%)"]
+        area
+        * result[
+            "Net Efficiency (%)"
+        ]
         / 100
     )
 
@@ -715,6 +1012,11 @@ def optimize_tracking_cached(
     weighted_ghi_tuple,
     actual_tuple,
 ):
+    """
+    Optimize tracking parameters.
+
+    Inputs are tuples so Streamlit can cache the calculation.
+    """
 
     blocks = np.asarray(
         blocks_tuple,
@@ -737,13 +1039,19 @@ def optimize_tracking_cached(
         len(actual),
     )
 
+    if n == 0:
+        raise ValueError(
+            "No tracking data available."
+        )
+
     blocks = blocks[:n]
     weighted_ghi = weighted_ghi[:n]
     actual = actual[:n]
 
     mask = (
-        np.isfinite(actual)
+        np.isfinite(blocks)
         & np.isfinite(weighted_ghi)
+        & np.isfinite(actual)
         & (actual != 0)
     )
 
@@ -756,8 +1064,13 @@ def optimize_tracking_cached(
             "No valid Actual power values found."
         )
 
-    actual_peak = np.max(actual)
-    actual_energy = np.sum(actual)
+    actual_peak = np.max(
+        actual
+    )
+
+    actual_energy = np.sum(
+        actual
+    )
 
     if actual_peak <= 0:
         raise ValueError(
@@ -772,7 +1085,7 @@ def optimize_tracking_cached(
     def objective(x):
 
         (
-            DHI,
+            dhi,
             start,
             end,
             max_block,
@@ -781,7 +1094,9 @@ def optimize_tracking_cached(
         ) = np.rint(x).astype(int)
 
         if not (
-            start < max_block < end
+            start
+            < max_block
+            < end
         ):
             return 1e9
 
@@ -797,7 +1112,10 @@ def optimize_tracking_cached(
             - max_block
         )
 
-        if d1 == 0 or d2 == 0:
+        if (
+            d1 == 0
+            or d2 == 0
+        ):
             return 1e9
 
         m1 = 90 / d1
@@ -808,12 +1126,18 @@ def optimize_tracking_cached(
             np.minimum(
                 89,
                 m1
-                * (blocks - max_block),
+                * (
+                    blocks
+                    - max_block
+                ),
             ),
             np.minimum(
                 89,
                 m2
-                * (blocks - max_block),
+                * (
+                    blocks
+                    - max_block
+                ),
             ),
         )
 
@@ -824,8 +1148,12 @@ def optimize_tracking_cached(
                 abs(east),
             ),
             np.where(
-                (blocks > max_block)
-                & (zenith > west),
+                (
+                    blocks > max_block
+                )
+                & (
+                    zenith > west
+                ),
                 west,
                 zenith,
             ),
@@ -841,7 +1169,10 @@ def optimize_tracking_cached(
 
         prediction = (
             weighted_ghi
-            * (1 - DHI / 100)
+            * (
+                1
+                - dhi / 100
+            )
             / cos_alpha
             / 1_000_000
         )
@@ -854,7 +1185,8 @@ def optimize_tracking_cached(
         block_error = (
             np.mean(
                 np.abs(
-                    actual - prediction
+                    actual
+                    - prediction
                 )
             )
             / actual_peak
@@ -863,7 +1195,9 @@ def optimize_tracking_cached(
         peak_error = (
             abs(
                 actual_peak
-                - np.max(prediction)
+                - np.max(
+                    prediction
+                )
             )
             / actual_peak
         )
@@ -871,7 +1205,9 @@ def optimize_tracking_cached(
         energy_error = (
             abs(
                 actual_energy
-                - np.sum(prediction)
+                - np.sum(
+                    prediction
+                )
             )
             / actual_energy
         )
@@ -927,16 +1263,38 @@ def tracking_forecast(
     weighted_ghi,
     params,
 ):
+    """
+    Calculate tracking forecast from parameters.
+    """
 
-    DHI = int(params["DHI"])
-    start = int(params["start"])
-    end = int(params["end"])
-    max_block = int(params["max"])
-    east = int(params["east"])
-    west = int(params["west"])
+    dhi = int(
+        params["DHI"]
+    )
+
+    start = int(
+        params["start"]
+    )
+
+    end = int(
+        params["end"]
+    )
+
+    max_block = int(
+        params["max"]
+    )
+
+    east = int(
+        params["east"]
+    )
+
+    west = int(
+        params["west"]
+    )
 
     if not (
-        start < max_block < end
+        start
+        < max_block
+        < end
     ):
         raise ValueError(
             "Starting Block < Max Block < Ending Block is required."
@@ -954,10 +1312,31 @@ def tracking_forecast(
         - max_block
     )
 
-    if d1 == 0 or d2 == 0:
+    if (
+        d1 == 0
+        or d2 == 0
+    ):
         raise ValueError(
             "Invalid tracking block configuration."
         )
+
+    blocks = np.asarray(
+        blocks,
+        dtype=float,
+    )
+
+    weighted_ghi = np.asarray(
+        weighted_ghi,
+        dtype=float,
+    )
+
+    n = min(
+        len(blocks),
+        len(weighted_ghi),
+    )
+
+    blocks = blocks[:n]
+    weighted_ghi = weighted_ghi[:n]
 
     m1 = 90 / d1
     m2 = 90 / d2
@@ -966,11 +1345,19 @@ def tracking_forecast(
         blocks <= max_block,
         np.minimum(
             89,
-            m1 * (blocks - max_block),
+            m1
+            * (
+                blocks
+                - max_block
+            ),
         ),
         np.minimum(
             89,
-            m2 * (blocks - max_block),
+            m2
+            * (
+                blocks
+                - max_block
+            ),
         ),
     )
 
@@ -981,8 +1368,12 @@ def tracking_forecast(
             abs(east),
         ),
         np.where(
-            (blocks > max_block)
-            & (zenith > west),
+            (
+                blocks > max_block
+            )
+            & (
+                zenith > west
+            ),
             west,
             zenith,
         ),
@@ -996,12 +1387,17 @@ def tracking_forecast(
         None,
     )
 
-    return (
+    forecast = (
         weighted_ghi
-        * (1 - DHI / 100)
+        * (
+            1
+            - dhi / 100
+        )
         / cos_alpha
         / 1_000_000
     )
+
+    return forecast
 
 
 # ============================================================
@@ -1012,6 +1408,12 @@ def input_data_editor(
     df,
     cluster,
 ):
+    """
+    Editable GHI + Actual table.
+
+    Changes are committed only when the user presses
+    Update Input Data.
+    """
 
     st.markdown(
         '<div class="section">📊 Input GHI & Actual Power</div>',
@@ -1019,11 +1421,12 @@ def input_data_editor(
     )
 
     st.caption(
-        "Edit the GHI forecast and Actual values, then click "
-        "**RUN LOSS CORRECTION**. Excel parameters are calculated automatically."
+        "Edit GHI forecast and Actual values, then click "
+        "**Update Input Data**. Workbook parameters are loaded automatically."
     )
 
     if cluster:
+
         columns = [
             "Actual",
             "CL1-GHI",
@@ -1032,26 +1435,32 @@ def input_data_editor(
             "CL4-GHI",
             "CL5-GHI",
         ]
+
     else:
+
         columns = [
             "GHI_Forecast",
             "Actual",
         ]
 
     columns = [
-        c for c in columns
-        if c in df.columns
+        col
+        for col in columns
+        if col in df.columns
     ]
 
-    display = df[columns].copy()
+    display = df[
+        columns
+    ].copy()
 
     for col in columns:
+
         display[col] = numeric(
             display[col]
         ).to_numpy()
 
     with st.form(
-        "input_data_form",
+        "loss_input_form",
         clear_on_submit=False,
         border=False,
     ):
@@ -1075,21 +1484,30 @@ def input_data_editor(
         submitted = st.form_submit_button(
             "✓ Update Input Data",
             type="secondary",
-            use_container_width=False,
         )
 
     if submitted:
+
         result = df.copy()
 
         for col in columns:
+
             result[col] = numeric(
                 edited[col]
             ).to_numpy()
 
-        st.session_state.input_df = result
+        st.session_state.input_df = (
+            result
+        )
+
+        # Changing input invalidates the previous result.
         st.session_state.model_result = None
         st.session_state.tracking_params = None
-        st.session_state.auto_loss = None
+
+        st.session_state.fixed_loss = None
+        st.session_state.tracking_loss = None
+        st.session_state.cluster_fixed_loss = None
+        st.session_state.cluster_tracking_loss = None
 
         st.success(
             "Input data updated. Click RUN LOSS CORRECTION."
@@ -1097,8 +1515,13 @@ def input_data_editor(
 
         return result
 
-    if st.session_state.input_df is not None:
-        return st.session_state.input_df
+    if (
+        st.session_state.input_df
+        is not None
+    ):
+        return (
+            st.session_state.input_df
+        )
 
     return df.copy()
 
@@ -1114,11 +1537,11 @@ def plant_selector():
         unsafe_allow_html=True,
     )
 
-    return st.segmented_control(
+    selected = st.segmented_control(
         "Plant Type",
         [
-            "🏗️ Fixed",
-            "🔄 Tracking",
+            FIXED_PLANT,
+            TRACKING_PLANT,
         ],
         default=st.session_state.plant_type,
         selection_mode="single",
@@ -1126,6 +1549,8 @@ def plant_selector():
         label_visibility="collapsed",
         width="stretch",
     )
+
+    return selected or FIXED_PLANT
 
 
 # ============================================================
@@ -1136,6 +1561,9 @@ def tracking_parameter_controls(
     params,
     prefix,
 ):
+    """
+    Editable tracking parameters.
+    """
 
     st.markdown(
         '<div class="section">⚙️ Tracking Parameters</div>',
@@ -1143,7 +1571,8 @@ def tracking_parameter_controls(
     )
 
     st.caption(
-        "Values are automatically optimized. You can edit them directly."
+        "Parameters are automatically optimized after RUN LOSS CORRECTION. "
+        "You can then edit them directly."
     )
 
     c1, c2, c3 = st.columns(3)
@@ -1223,32 +1652,63 @@ def efficiency_control(
     auto_loss,
     key,
 ):
+    """
+    Editable efficiency loss.
 
-    max_loss = float(
-        pd.to_numeric(
-            df[
-                "Standard PV Efficiency (%)"
-            ],
-            errors="coerce",
-        ).min()
+    A scalar loss is used for all module rows.
+    """
+
+    efficiency = pd.to_numeric(
+        df[
+            "Standard PV Efficiency (%)"
+        ],
+        errors="coerce",
+    ).dropna()
+
+    if efficiency.empty:
+
+        max_loss = 0.0
+
+    else:
+
+        max_loss = float(
+            efficiency.min()
+        )
+
+        if not np.isfinite(
+            max_loss
+        ):
+            max_loss = 0.0
+
+    default_loss = safe_float(
+        auto_loss,
+        default=0.0,
     )
 
-    if auto_loss is None:
-        auto_loss = 0.0
+    default_loss = float(
+        np.clip(
+            default_loss,
+            0,
+            max_loss,
+        )
+    )
 
     loss = st.number_input(
         "Efficiency Loss (%)",
         min_value=0.0,
         max_value=max_loss,
-        value=float(auto_loss),
+        value=default_loss,
         step=0.1,
         format="%.2f",
         key=key,
     )
 
-    return apply_efficiency_loss(
-        df,
-        loss,
+    return (
+        apply_efficiency_loss(
+            df,
+            loss,
+        ),
+        float(loss),
     )
 
 
@@ -1268,29 +1728,233 @@ def show_efficiency_table(df):
     ]
 
     cols = [
-        c for c in cols
-        if c in df.columns
+        col
+        for col in cols
+        if col in df.columns
     ]
 
-    display = df[cols].copy()
+    display = df[
+        cols
+    ].copy()
 
-    numeric_cols = display.select_dtypes(
-        include="number"
-    ).columns
-
-    display[numeric_cols] = (
-        display[numeric_cols]
-        .round(2)
+    numeric_cols = (
+        display.select_dtypes(
+            include=np.number
+        ).columns
     )
+
+    if len(numeric_cols):
+
+        display[numeric_cols] = (
+            display[numeric_cols]
+            .round(2)
+        )
 
     with st.expander(
         "🔍 View Efficiency Calculations"
     ):
+
         st.dataframe(
             display,
             use_container_width=True,
             hide_index=True,
         )
+
+
+# ============================================================
+# METRICS
+# ============================================================
+
+def calculate_metrics(
+    forecast,
+    actual,
+):
+    """
+    Calculate basic forecast metrics.
+    """
+
+    forecast = safe_array(
+        forecast
+    )
+
+    actual = safe_array(
+        actual
+    )
+
+    n = min(
+        len(forecast),
+        len(actual),
+    )
+
+    if n == 0:
+
+        return {
+            "MAPE": np.nan,
+            "MAE": np.nan,
+            "RMSE": np.nan,
+            "Peak Error": np.nan,
+            "Energy Error": np.nan,
+        }
+
+    forecast = forecast[:n]
+    actual = actual[:n]
+
+    valid = (
+        np.isfinite(forecast)
+        & np.isfinite(actual)
+    )
+
+    forecast = forecast[valid]
+    actual = actual[valid]
+
+    if len(actual) == 0:
+
+        return {
+            "MAPE": np.nan,
+            "MAE": np.nan,
+            "RMSE": np.nan,
+            "Peak Error": np.nan,
+            "Energy Error": np.nan,
+        }
+
+    error = (
+        forecast
+        - actual
+    )
+
+    mae = np.mean(
+        np.abs(error)
+    )
+
+    rmse = np.sqrt(
+        np.mean(
+            error ** 2
+        )
+    )
+
+    nonzero = (
+        np.abs(actual) > 1e-9
+    )
+
+    if np.any(nonzero):
+
+        mape = (
+            np.mean(
+                np.abs(
+                    error[nonzero]
+                    / actual[nonzero]
+                )
+            )
+            * 100
+        )
+
+    else:
+
+        mape = np.nan
+
+    actual_peak = np.max(
+        np.abs(actual)
+    )
+
+    if actual_peak > 0:
+
+        peak_error = (
+            abs(
+                np.max(forecast)
+                - np.max(actual)
+            )
+            / actual_peak
+            * 100
+        )
+
+        energy_error = (
+            abs(
+                np.sum(forecast)
+                - np.sum(actual)
+            )
+            / np.sum(
+                np.abs(actual)
+            )
+            * 100
+        )
+
+    else:
+
+        peak_error = np.nan
+        energy_error = np.nan
+
+    return {
+        "MAPE": float(mape),
+        "MAE": float(mae),
+        "RMSE": float(rmse),
+        "Peak Error": float(peak_error),
+        "Energy Error": float(energy_error),
+    }
+
+
+def show_metrics(
+    forecast,
+    actual,
+):
+    """
+    Display model metrics.
+    """
+
+    metrics = calculate_metrics(
+        forecast,
+        actual,
+    )
+
+    c1, c2, c3, c4, c5 = st.columns(5)
+
+    values = [
+        (
+            c1,
+            "MAPE",
+            metrics["MAPE"],
+            "%",
+        ),
+        (
+            c2,
+            "MAE",
+            metrics["MAE"],
+            " MW",
+        ),
+        (
+            c3,
+            "RMSE",
+            metrics["RMSE"],
+            " MW",
+        ),
+        (
+            c4,
+            "Peak Error",
+            metrics["Peak Error"],
+            "%",
+        ),
+        (
+            c5,
+            "Energy Error",
+            metrics["Energy Error"],
+            "%",
+        ),
+    ]
+
+    for column, label, value, suffix in values:
+
+        if np.isfinite(value):
+
+            column.metric(
+                label,
+                f"{value:.2f}{suffix}",
+            )
+
+        else:
+
+            column.metric(
+                label,
+                "N/A",
+            )
 
 
 # ============================================================
@@ -1302,15 +1966,16 @@ def show_forecast_chart(
     actual,
     title,
 ):
+    """
+    Forecast vs Actual chart.
+    """
 
-    forecast = np.asarray(
-        forecast,
-        dtype=float,
+    forecast = safe_array(
+        forecast
     )
 
-    actual = np.asarray(
-        actual,
-        dtype=float,
+    actual = safe_array(
+        actual
     )
 
     n = min(
@@ -1319,10 +1984,15 @@ def show_forecast_chart(
     )
 
     if n == 0:
+
         st.warning(
             "No forecast data available."
         )
+
         return
+
+    forecast = forecast[:n]
+    actual = actual[:n]
 
     x = np.arange(
         1,
@@ -1334,7 +2004,7 @@ def show_forecast_chart(
     fig.add_trace(
         go.Scatter(
             x=x,
-            y=forecast[:n],
+            y=forecast,
             mode="lines",
             name="Forecast",
             line=dict(
@@ -1347,7 +2017,7 @@ def show_forecast_chart(
     fig.add_trace(
         go.Scatter(
             x=x,
-            y=actual[:n],
+            y=actual,
             mode="lines",
             name="Actual",
             line=dict(
@@ -1397,6 +2067,9 @@ def read_backend_blocks_cached(
     file_bytes,
     cluster,
 ):
+    """
+    Read tracking backend block numbers.
+    """
 
     sheet = (
         "Backend Cal CL1"
@@ -1421,9 +2094,13 @@ def read_backend_blocks_cached(
         sheet,
     )
 
-    return numeric(
+    blocks = numeric(
         backend["Block No."]
-    ).to_numpy()
+    ).to_numpy(
+        dtype=float
+    )
+
+    return blocks
 
 
 # ============================================================
@@ -1438,6 +2115,9 @@ def run_fixed(
     cluster,
     weights=None,
 ):
+    """
+    Run Fixed plant forecast.
+    """
 
     solar = prepare_solar_angles(
         input_df,
@@ -1446,23 +2126,15 @@ def run_fixed(
         tracking=False,
     )
 
+    actual = safe_array(
+        input_df["Actual"]
+    )
+
     if cluster:
 
-        ghi_cols = [
-            "CL1-GHI",
-            "CL2-GHI",
-            "CL3-GHI",
-            "CL4-GHI",
-            "CL5-GHI",
-        ]
-
-        weight_cols = [
-            "CL-1",
-            "CL-2",
-            "CL-3",
-            "CL-4",
-            "CL-5",
-        ]
+        # ----------------------------------------------------
+        # AUTO LOSS
+        # ----------------------------------------------------
 
         poa_for_loss = (
             solar["CL1-GHI"]
@@ -1470,19 +2142,33 @@ def run_fixed(
             / solar["Sin(a)"]
         )
 
-        auto_loss = calculate_efficiency_loss(
-            df,
-            poa_for_loss,
-            input_df["Actual"],
+        auto_loss = (
+            calculate_efficiency_loss(
+                df,
+                poa_for_loss,
+                actual,
+            )
         )
 
-        loss_key = "cluster_fixed_loss"
-
-        df = efficiency_control(
-            df,
-            auto_loss,
-            loss_key,
+        existing_loss = (
+            st.session_state
+            .cluster_fixed_loss
         )
+
+        if existing_loss is None:
+            existing_loss = auto_loss
+
+        df, loss = efficiency_control(
+            df,
+            existing_loss,
+            "cluster_fixed_loss_input",
+        )
+
+        st.session_state.cluster_fixed_loss = loss
+
+        # ----------------------------------------------------
+        # FORECAST
+        # ----------------------------------------------------
 
         forecast = np.zeros(
             len(input_df),
@@ -1490,15 +2176,22 @@ def run_fixed(
         )
 
         for ghi_col, weight_col in zip(
-            ghi_cols,
-            weight_cols,
+            CLUSTER_GHI_COLUMNS,
+            CLUSTER_WEIGHT_COLUMNS,
         ):
+
+            cluster_weight = safe_float(
+                weights.get(
+                    weight_col,
+                    0.0,
+                )
+            )
 
             eff_area = (
                 df["Total area(m2)"]
                 * df["Net Efficiency (%)"]
                 / 100
-                * weights[weight_col]
+                * cluster_weight
             ).sum()
 
             poa = (
@@ -1508,12 +2201,22 @@ def run_fixed(
             )
 
             forecast += (
-                poa.to_numpy()
-                * eff_area
+                poa.to_numpy(
+                    dtype=float
+                )
+                * float(eff_area)
                 / 1_000_000
             )
 
+        title = (
+            "🏗️ Fixed Cluster Forecast vs Actual"
+        )
+
     else:
+
+        # ----------------------------------------------------
+        # POA
+        # ----------------------------------------------------
 
         poa = (
             solar["GHI_Forecast"]
@@ -1521,35 +2224,83 @@ def run_fixed(
             / solar["Sin(a)"]
         )
 
-        auto_loss = calculate_efficiency_loss(
-            df,
-            poa,
-            input_df["Actual"],
+        # ----------------------------------------------------
+        # AUTO LOSS
+        # ----------------------------------------------------
+
+        auto_loss = (
+            calculate_efficiency_loss(
+                df,
+                poa,
+                actual,
+            )
         )
 
-        df = efficiency_control(
+        existing_loss = (
+            st.session_state.fixed_loss
+        )
+
+        if existing_loss is None:
+            existing_loss = auto_loss
+
+        df, loss = efficiency_control(
             df,
-            auto_loss,
-            "fixed_loss",
+            existing_loss,
+            "fixed_loss_input",
+        )
+
+        st.session_state.fixed_loss = loss
+
+        # ----------------------------------------------------
+        # FORECAST
+        # ----------------------------------------------------
+
+        eff_area_total = (
+            df["Eff Area"]
+            .sum()
         )
 
         forecast = (
-            poa.to_numpy()
-            * df["Eff Area"].sum()
+            poa.to_numpy(
+                dtype=float
+            )
+            * float(eff_area_total)
             / 1_000_000
         )
 
-    show_efficiency_table(df)
+        title = (
+            "🏗️ Fixed Forecast vs Actual"
+        )
+
+    # --------------------------------------------------------
+    # OUTPUT
+    # --------------------------------------------------------
+
+    show_efficiency_table(
+        df
+    )
+
+    st.markdown(
+        '<div class="section">📈 Forecast Performance</div>',
+        unsafe_allow_html=True,
+    )
+
+    show_metrics(
+        forecast,
+        actual,
+    )
 
     show_forecast_chart(
         forecast,
-        input_df["Actual"].to_numpy(float),
-        (
-            "🏗️ Fixed Cluster Forecast vs Actual"
-            if cluster
-            else "🏗️ Fixed Forecast vs Actual"
-        ),
+        actual,
+        title,
     )
+
+    return {
+        "forecast": forecast,
+        "actual": actual,
+        "efficiency": df,
+    }
 
 
 # ============================================================
@@ -1564,6 +2315,9 @@ def run_tracking(
     file_bytes,
     cluster,
 ):
+    """
+    Run Tracking plant forecast.
+    """
 
     solar = prepare_solar_angles(
         input_df,
@@ -1572,27 +2326,21 @@ def run_tracking(
         tracking=True,
     )
 
+    actual = safe_array(
+        input_df["Actual"]
+    )
+
+    # --------------------------------------------------------
+    # CLUSTER / FIXED GHI PREPARATION
+    # --------------------------------------------------------
+
     if cluster:
 
-        weights = read_cluster_weights_cached(
-            file_bytes
+        weights = (
+            read_cluster_weights_cached(
+                file_bytes
+            )
         )
-
-        ghi_cols = [
-            "CL1-GHI",
-            "CL2-GHI",
-            "CL3-GHI",
-            "CL4-GHI",
-            "CL5-GHI",
-        ]
-
-        weight_cols = [
-            "CL-1",
-            "CL-2",
-            "CL-3",
-            "CL-4",
-            "CL-5",
-        ]
 
         poa_for_loss = (
             solar["CL1-GHI"]
@@ -1600,17 +2348,29 @@ def run_tracking(
             / solar["Sin(a)"]
         )
 
-        auto_loss = calculate_efficiency_loss(
-            df,
-            poa_for_loss,
-            input_df["Actual"],
+        auto_loss = (
+            calculate_efficiency_loss(
+                df,
+                poa_for_loss,
+                actual,
+            )
         )
 
-        df = efficiency_control(
-            df,
-            auto_loss,
-            "cluster_tracking_loss",
+        existing_loss = (
+            st.session_state
+            .cluster_tracking_loss
         )
+
+        if existing_loss is None:
+            existing_loss = auto_loss
+
+        df, loss = efficiency_control(
+            df,
+            existing_loss,
+            "cluster_tracking_loss_input",
+        )
+
+        st.session_state.cluster_tracking_loss = loss
 
         weighted_ghi = np.zeros(
             len(input_df),
@@ -1618,24 +2378,39 @@ def run_tracking(
         )
 
         for ghi_col, weight_col in zip(
-            ghi_cols,
-            weight_cols,
+            CLUSTER_GHI_COLUMNS,
+            CLUSTER_WEIGHT_COLUMNS,
         ):
+
+            cluster_weight = safe_float(
+                weights.get(
+                    weight_col,
+                    0.0,
+                )
+            )
 
             eff_area = (
                 df["Total area(m2)"]
                 * df["Net Efficiency (%)"]
                 / 100
-                * weights[weight_col]
+                * cluster_weight
             ).sum()
 
             weighted_ghi += (
                 input_df[ghi_col]
-                .to_numpy(float)
-                * eff_area
+                .to_numpy(
+                    dtype=float
+                )
+                * float(eff_area)
             )
 
-        prefix = "cluster_tracking"
+        prefix = (
+            "cluster_tracking"
+        )
+
+        title = (
+            "🔄 Tracking Cluster Forecast vs Actual"
+        )
 
     else:
 
@@ -1645,54 +2420,101 @@ def run_tracking(
             / solar["Sin(a)"]
         )
 
-        auto_loss = calculate_efficiency_loss(
-            df,
-            poa_for_loss,
-            input_df["Actual"],
+        auto_loss = (
+            calculate_efficiency_loss(
+                df,
+                poa_for_loss,
+                actual,
+            )
         )
 
-        df = efficiency_control(
-            df,
-            auto_loss,
-            "tracking_loss",
+        existing_loss = (
+            st.session_state.tracking_loss
         )
+
+        if existing_loss is None:
+            existing_loss = auto_loss
+
+        df, loss = efficiency_control(
+            df,
+            existing_loss,
+            "tracking_loss_input",
+        )
+
+        st.session_state.tracking_loss = loss
 
         weighted_ghi = (
             input_df["GHI_Forecast"]
-            .to_numpy(float)
+            .to_numpy(
+                dtype=float
+            )
             * df["Eff Area"].sum()
         )
 
         prefix = "tracking"
 
-    blocks = read_backend_blocks_cached(
-        file_bytes,
-        cluster,
+        title = (
+            "🔄 Tracking Forecast vs Actual"
+        )
+
+    # --------------------------------------------------------
+    # BACKEND BLOCKS
+    # --------------------------------------------------------
+
+    blocks = (
+        read_backend_blocks_cached(
+            file_bytes,
+            cluster,
+        )
     )
 
-    actual = input_df[
-        "Actual"
-    ].to_numpy(float)
+    n = min(
+        len(blocks),
+        len(weighted_ghi),
+        len(actual),
+    )
+
+    if n == 0:
+        raise ValueError(
+            "No matching tracking data found."
+        )
+
+    blocks = blocks[:n]
+    weighted_ghi = (
+        weighted_ghi[:n]
+    )
+    actual = actual[:n]
 
     # --------------------------------------------------------
     # AUTOMATIC OPTIMIZATION
     # --------------------------------------------------------
 
     if (
-        st.session_state.tracking_params is None
+        st.session_state.tracking_params
+        is None
     ):
 
         with st.spinner(
             "🔄 Optimizing tracking parameters..."
         ):
 
-            params = optimize_tracking_cached(
-                tuple(blocks),
-                tuple(weighted_ghi),
-                tuple(actual),
+            params = (
+                optimize_tracking_cached(
+                    tuple(
+                        blocks.tolist()
+                    ),
+                    tuple(
+                        weighted_ghi.tolist()
+                    ),
+                    tuple(
+                        actual.tolist()
+                    ),
+                )
             )
 
-        st.session_state.tracking_params = params
+        st.session_state.tracking_params = (
+            params
+        )
 
     else:
 
@@ -1709,37 +2531,70 @@ def run_tracking(
         prefix,
     )
 
-    st.session_state.tracking_params = params
+    st.session_state.tracking_params = (
+        params
+    )
 
     # --------------------------------------------------------
     # FORECAST
     # --------------------------------------------------------
 
-    try:
+    forecast = tracking_forecast(
+        blocks,
+        weighted_ghi,
+        params,
+    )
 
-        forecast = tracking_forecast(
-            blocks,
-            weighted_ghi,
-            params,
-        )
+    # --------------------------------------------------------
+    # OUTPUT
+    # --------------------------------------------------------
 
-        show_efficiency_table(df)
+    show_efficiency_table(
+        df
+    )
 
-        show_forecast_chart(
-            forecast,
-            actual,
-            (
-                "🔄 Tracking Cluster Forecast vs Actual"
-                if cluster
-                else "🔄 Tracking Forecast vs Actual"
-            ),
-        )
+    st.markdown(
+        '<div class="section">📈 Forecast Performance</div>',
+        unsafe_allow_html=True,
+    )
 
-    except Exception as exc:
+    show_metrics(
+        forecast,
+        actual,
+    )
 
-        st.error(
-            f"Unable to calculate tracking forecast: {exc}"
-        )
+    show_forecast_chart(
+        forecast,
+        actual,
+        title,
+    )
+
+    return {
+        "forecast": forecast,
+        "actual": actual,
+        "efficiency": df,
+        "tracking_params": params,
+    }
+
+
+# ============================================================
+# RESET MODEL STATE
+# ============================================================
+
+def reset_model_state():
+    """
+    Reset calculations after workbook/input changes.
+    """
+
+    st.session_state.model_result = None
+
+    st.session_state.tracking_params = None
+
+    st.session_state.fixed_loss = None
+    st.session_state.tracking_loss = None
+
+    st.session_state.cluster_fixed_loss = None
+    st.session_state.cluster_tracking_loss = None
 
 
 # ============================================================
@@ -1748,9 +2603,9 @@ def run_tracking(
 
 def main():
 
-    # --------------------------------------------------------
+    # ========================================================
     # HEADER
-    # --------------------------------------------------------
+    # ========================================================
 
     st.markdown(
         '<div class="title">☀️ Loss Correction Model</div>',
@@ -1759,15 +2614,15 @@ def main():
 
     st.markdown(
         '<div class="subtitle">'
-        "Upload your workbook, edit the input data if required, "
-        "select the plant type and run the correction."
+        "Upload your workbook, edit GHI/Actual data if required, "
+        "select Fixed or Tracking, and run the correction."
         "</div>",
         unsafe_allow_html=True,
     )
 
-    # --------------------------------------------------------
+    # ========================================================
     # FILE
-    # --------------------------------------------------------
+    # ========================================================
 
     st.markdown(
         '<div class="section">📁 Input Excel</div>',
@@ -1776,7 +2631,10 @@ def main():
 
     uploaded_file = st.file_uploader(
         "Upload Excel Workbook",
-        type=["xlsx", "xls"],
+        type=[
+            "xlsx",
+            "xls",
+        ],
         label_visibility="collapsed",
     )
 
@@ -1788,110 +2646,169 @@ def main():
 
         return
 
-    file_bytes = uploaded_file.getvalue()
+    file_bytes = (
+        uploaded_file.getvalue()
+    )
 
     if not file_bytes:
-        st.error("The uploaded file is empty.")
-        return
-
-    # --------------------------------------------------------
-    # WORKBOOK
-    # --------------------------------------------------------
-
-    try:
-
-        sheets = workbook_sheets(
-            file_bytes
-        )
-
-        cluster = "Fixed" not in sheets
-
-    except Exception as exc:
 
         st.error(
-            f"Unable to read workbook: {exc}"
+            "The uploaded workbook is empty."
         )
 
         return
 
-    workbook_sig = (
-        len(file_bytes),
-        hash(file_bytes),
+    # ========================================================
+    # WORKBOOK SIGNATURE
+    # ========================================================
+
+    current_signature = (
+        workbook_signature(
+            file_bytes
+        )
     )
 
     if (
-        st.session_state.workbook_signature
-        != workbook_sig
+        st.session_state
+        .uploaded_signature
+        != current_signature
     ):
 
-        st.session_state.workbook_signature = workbook_sig
+        st.session_state.uploaded_signature = (
+            current_signature
+        )
 
         st.session_state.input_df = None
-        st.session_state.input_signature = None
-        st.session_state.model_result = None
-        st.session_state.tracking_params = None
-        st.session_state.auto_loss = None
-        st.session_state.run_id = 0
 
-    # --------------------------------------------------------
-    # PARAMETERS
-    # --------------------------------------------------------
+        reset_model_state()
+
+    # ========================================================
+    # WORKBOOK
+    # ========================================================
 
     try:
 
-        base_df = read_area_efficiency_cached(
-            file_bytes,
-            cluster,
-        )
-
-        lat = read_latitude_cached(
-            file_bytes
-        )
-
-        tilt_lookup = read_tilt_lookup_cached(
-            file_bytes
-        )
-
-        if cluster:
-            weights = read_cluster_weights_cached(
+        sheets = (
+            workbook_sheets(
                 file_bytes
             )
-        else:
-            weights = None
-
-        original_input = load_input_data_cached(
-            file_bytes,
-            cluster,
         )
 
     except Exception as exc:
 
         st.error(
-            f"Unable to load workbook parameters: {exc}"
+            "Unable to read the uploaded workbook."
         )
+
+        st.exception(exc)
 
         return
 
-    # --------------------------------------------------------
+    # ========================================================
+    # WORKBOOK TYPE
+    # ========================================================
+
+    cluster = (
+        "Fixed" not in sheets
+    )
+
+    # ========================================================
+    # LOAD PARAMETERS
+    # ========================================================
+
+    try:
+
+        base_df = (
+            read_area_efficiency_cached(
+                file_bytes,
+                cluster,
+            )
+        )
+
+        lat = (
+            read_latitude_cached(
+                file_bytes
+            )
+        )
+
+        tilt_lookup = (
+            read_tilt_lookup_cached(
+                file_bytes
+            )
+        )
+
+        weights = (
+            read_cluster_weights_cached(
+                file_bytes
+            )
+            if cluster
+            else None
+        )
+
+        original_input = (
+            load_input_data_cached(
+                file_bytes,
+                cluster,
+            )
+        )
+
+    except Exception as exc:
+
+        st.error(
+            "Unable to load workbook parameters."
+        )
+
+        st.exception(exc)
+
+        return
+
+    # ========================================================
     # INPUT DATA
-    # --------------------------------------------------------
+    # ========================================================
 
     input_df = input_data_editor(
         original_input,
         cluster,
     )
 
-    st.session_state.input_df = input_df
+    st.session_state.input_df = (
+        input_df
+    )
 
-    # --------------------------------------------------------
+    # ========================================================
     # PLANT TYPE
-    # --------------------------------------------------------
+    # ========================================================
 
     plant_type = plant_selector()
 
-    # --------------------------------------------------------
-    # RUN
-    # --------------------------------------------------------
+    # ========================================================
+    # PLANT TYPE CHANGE
+    # ========================================================
+
+    previous_plant = (
+        st.session_state.get(
+            "last_plant_type"
+        )
+    )
+
+    if (
+        previous_plant is not None
+        and previous_plant != plant_type
+    ):
+
+        # Keep input data, but invalidate
+        # previous model output.
+        st.session_state.model_result = None
+
+        st.session_state.tracking_params = None
+
+    st.session_state.last_plant_type = (
+        plant_type
+    )
+
+    # ========================================================
+    # RUN BUTTON
+    # ========================================================
 
     st.markdown("")
 
@@ -1904,21 +2821,20 @@ def main():
 
     if run_clicked:
 
-        # New explicit run.
-        # Tracking optimizer will execute again.
-        st.session_state.tracking_params = None
-        st.session_state.auto_loss = None
-        st.session_state.model_result = None
+        reset_model_state()
 
-        st.session_state.run_id += 1
+        st.session_state.run_requested = (
+            True
+        )
 
-    # --------------------------------------------------------
+    # ========================================================
     # NOTHING TO RUN
-    # --------------------------------------------------------
+    # ========================================================
 
     if (
-        st.session_state.run_id == 0
-        and st.session_state.model_result is None
+        not st.session_state.run_requested
+        and st.session_state.model_result
+        is None
     ):
 
         st.info(
@@ -1928,15 +2844,15 @@ def main():
 
         return
 
-    # --------------------------------------------------------
+    # ========================================================
     # MODEL
-    # --------------------------------------------------------
+    # ========================================================
 
     try:
 
-        if plant_type == "🏗️ Fixed":
+        if plant_type == FIXED_PLANT:
 
-            run_fixed(
+            result = run_fixed(
                 base_df,
                 input_df,
                 lat,
@@ -1947,7 +2863,7 @@ def main():
 
         else:
 
-            run_tracking(
+            result = run_tracking(
                 base_df,
                 input_df,
                 lat,
@@ -1956,9 +2872,17 @@ def main():
                 cluster,
             )
 
-        st.session_state.model_result = True
+        st.session_state.model_result = (
+            result
+        )
+
+        st.session_state.run_requested = (
+            False
+        )
 
     except Exception as exc:
+
+        st.session_state.model_result = None
 
         st.error(
             "❌ Loss correction failed."
@@ -1973,4 +2897,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-```
