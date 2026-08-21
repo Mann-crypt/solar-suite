@@ -114,7 +114,7 @@ with col1:
 
     if st.button(
         "Open Loss Correction →",
-        key="home_loss_correction",
+        key="home_loss_correction_VCast",
         use_container_width=True,
     ):
         st.switch_page("pages/1_Loss_Correction.py")
