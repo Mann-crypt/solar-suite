@@ -1,10 +1,9 @@
 # ============================================================
 # SOLAR MODULE -> INVERTER CLUSTER DISTRIBUTION
-# Stable Streamlit Version
+# STREAMLIT APP
 # ============================================================
 
 import io
-
 import numpy as np
 import pandas as pd
 import streamlit as st
@@ -17,7 +16,7 @@ import streamlit as st
 st.set_page_config(
     page_title="Solar Cluster Distribution",
     page_icon="☀️",
-    layout="wide",
+    layout="wide"
 )
 
 
@@ -25,81 +24,76 @@ st.set_page_config(
 # TITLE
 # ============================================================
 
-st.title("☀️ Solar Module Cluster Distribution")
+st.title("☀️ Solar Module → Cluster Distribution")
 
-st.caption(
-    "Distribute complete module types to inverter clusters "
-    "according to inverter proportion."
+st.write(
+    "Distribute complete module types across inverter clusters "
+    "according to the inverter distribution."
 )
 
 
 # ============================================================
-# STEP 1: CLUSTERS
+# 1. CLUSTER COUNT
 # ============================================================
 
-st.header("1. Cluster Information")
+st.header("Cluster Configuration")
 
 cluster_count = st.number_input(
-    "Enter number of clusters",
+    "Number of Clusters",
     min_value=1,
     max_value=100,
     step=1,
     value=None,
-    placeholder="Enter cluster count",
+    placeholder="Enter number of clusters"
 )
 
-
 if cluster_count is None:
-    st.info("Enter the number of clusters to continue.")
+    st.info("Enter the number of clusters.")
     st.stop()
-
 
 cluster_count = int(cluster_count)
 
 
 # ============================================================
-# STEP 2: INVERTERS
+# 2. INVERTER DISTRIBUTION
 # ============================================================
 
-st.header("2. Inverter Distribution")
+st.subheader("Inverter Distribution")
 
 st.write(
-    "Enter the number of inverters assigned to each cluster."
+    "Enter the number of inverters for each cluster."
 )
+
+inverter_cols = st.columns(cluster_count)
 
 inverter_distribution = []
 
-inverter_input_complete = True
-
+all_inverters_entered = True
 
 for i in range(cluster_count):
 
-    inverter_value = st.number_input(
-        f"Cluster {i + 1} - Number of Inverters",
-        min_value=1,
-        max_value=1000000,
-        step=1,
-        value=None,
-        placeholder="Enter inverter count",
-        key=f"cluster_inverter_{i}",
-    )
+    with inverter_cols[i]:
 
-    if inverter_value is None:
-
-        inverter_input_complete = False
-        inverter_distribution.append(0)
-
-    else:
-
-        inverter_distribution.append(
-            int(inverter_value)
+        value = st.number_input(
+            f"Cluster {i + 1}",
+            min_value=1,
+            step=1,
+            value=None,
+            placeholder="Inverters",
+            key=f"inverters_{i}"
         )
 
+        if value is None:
+            all_inverters_entered = False
+            inverter_distribution.append(0)
+        else:
+            inverter_distribution.append(int(value))
 
-if not inverter_input_complete:
+
+if not all_inverters_entered:
 
     st.info(
-        "Enter the inverter count for every cluster."
+        "Enter inverter count for every cluster."
     )
 
     st.stop()
@@ -108,7 +102,6 @@ if not inverter_input_complete:
 total_inverters = sum(
     inverter_distribution
 )
-
 
 if total_inverters <= 0:
 
@@ -120,43 +113,23 @@ if total_inverters <= 0:
 
 
 # ============================================================
-# CLUSTER PROPORTIONS
+# 3. TOTAL AC
 # ============================================================
 
-cluster_names = [
-    f"Cluster {i + 1}"
-    for i in range(cluster_count)
-]
-
-
-cluster_proportions = (
-    np.asarray(
-        inverter_distribution,
-        dtype=float,
-    )
-    / float(total_inverters)
-)
-
-
-# ============================================================
-# STEP 3: AC
-# ============================================================
-
-st.header("3. AC Input")
+st.subheader("AC Input")
 
 total_ac = st.number_input(
-    "Enter total plant AC",
+    "Total Plant AC",
     min_value=0.0,
     step=0.01,
     value=None,
-    placeholder="Enter total AC",
+    placeholder="Enter total AC"
 )
-
 
 if total_ac is None:
 
     st.info(
-        "Enter total plant AC to continue."
+        "Enter total plant AC."
     )
 
     st.stop()
@@ -166,12 +139,26 @@ total_ac = float(total_ac)
 
 
 # ============================================================
-# AC DISTRIBUTION
+# PROPORTIONS
 # ============================================================
+
+cluster_names = [
+    f"Cluster {i + 1}"
+    for i in range(cluster_count)
+]
+
+inverter_proportion = (
+    np.array(
+        inverter_distribution,
+        dtype=float
+    )
+    / total_inverters
+)
+
 
 cluster_ac = (
     total_ac
-    * cluster_proportions
+    * inverter_proportion
 )
 
 
@@ -179,77 +166,207 @@ cluster_ac = (
 # AC SUMMARY
 # ============================================================
 
-ac_summary = pd.DataFrame(
-    {
-        "Cluster": cluster_names,
-        "Inverters": inverter_distribution,
-        "Inverter Share (%)": (
-            cluster_proportions * 100
-        ),
-        "AC": cluster_ac,
-    }
-)
+ac_summary = pd.DataFrame({
+    "Cluster": cluster_names,
+    "Inverters": inverter_distribution,
+    "Inverter Share (%)":
+        inverter_proportion * 100,
+    "AC": cluster_ac
+})
 
 
 st.subheader("AC Distribution")
 
 st.dataframe(
-    ac_summary.style.format(
-        {
-            "Inverter Share (%)": "{:.2f}%",
-            "AC": "{:,.2f}",
-        }
-    ),
+    ac_summary.style.format({
+        "Inverter Share (%)": "{:.2f}%",
+        "AC": "{:,.2f}"
+    }),
     use_container_width=True,
-    hide_index=True,
+    hide_index=True
 )
 
 
 # ============================================================
-# STEP 4: MODULE DATA
+# 4. MODULE DATA INPUT
 # ============================================================
 
-st.header("4. Module Data")
+st.header("Module Data")
 
 input_method = st.radio(
-    "Select module data input method",
+    "Select how you want to provide the module DataFrame",
     [
-        "Upload File",
         "Manual Entry",
+        "Upload File"
     ],
-    index=None,
+    index=None
 )
 
 
 if input_method is None:
 
     st.info(
-        "Select Upload File or Manual Entry."
+        "Select Manual Entry or Upload File."
     )
 
     st.stop()
 
 
 # ============================================================
-# UPLOAD FILE
+# REQUIRED COLUMNS
 # ============================================================
 
-if input_method == "Upload File":
+required_columns = [
+    "Module Type",
+    "(Wp)",
+    "Std PV Eff(%)",
+    "No of Modules",
+    "Area of 1 module",
+    "Total area(m2)"
+]
+
+
+# ============================================================
+# MANUAL ENTRY
+# ============================================================
+
+if input_method == "Manual Entry":
+
+    st.subheader("Enter Module Data")
+
+    st.write(
+        "Enter or paste your module data directly into the table."
+    )
+
+    st.caption(
+        "Each Module Type should appear only once."
+    )
+
+
+    # --------------------------------------------------------
+    # Number of rows
+    # --------------------------------------------------------
+
+    row_count = st.number_input(
+        "Number of Module Type Rows",
+        min_value=1,
+        max_value=10000,
+        step=1,
+        value=None,
+        placeholder="Enter number of rows"
+    )
+
+
+    if row_count is None:
+
+        st.info(
+            "Enter the number of module type rows."
+        )
+
+        st.stop()
+
+
+    row_count = int(row_count)
+
+
+    # --------------------------------------------------------
+    # Empty DF
+    # --------------------------------------------------------
+
+    manual_template = pd.DataFrame({
+
+        "Module Type":
+            [""] * row_count,
+
+        "(Wp)":
+            [None] * row_count,
+
+        "Std PV Eff(%)":
+            [None] * row_count,
+
+        "No of Modules":
+            [None] * row_count,
+
+        "Area of 1 module":
+            [None] * row_count,
+
+        "Total area(m2)":
+            [None] * row_count
+    })
+
+
+    # --------------------------------------------------------
+    # Editable DF
+    # --------------------------------------------------------
+
+    df = st.data_editor(
+        manual_template,
+        use_container_width=True,
+        hide_index=True,
+        num_rows="fixed",
+        column_config={
+
+            "Module Type":
+                st.column_config.TextColumn(
+                    "Module Type"
+                ),
+
+            "(Wp)":
+                st.column_config.NumberColumn(
+                    "Wp",
+                    min_value=0
+                ),
+
+            "Std PV Eff(%)":
+                st.column_config.NumberColumn(
+                    "Std PV Eff (%)",
+                    min_value=0,
+                    max_value=100
+                ),
+
+            "No of Modules":
+                st.column_config.NumberColumn(
+                    "No of Modules",
+                    min_value=0,
+                    step=1
+                ),
+
+            "Area of 1 module":
+                st.column_config.NumberColumn(
+                    "Area of 1 module",
+                    min_value=0
+                ),
+
+            "Total area(m2)":
+                st.column_config.NumberColumn(
+                    "Total area (m²)",
+                    disabled=True
+                )
+        },
+        key="manual_module_dataframe"
+    )
+
+
+# ============================================================
+# UPLOAD
+# ============================================================
+
+else:
 
     uploaded_file = st.file_uploader(
-        "Upload module data",
+        "Upload Module DataFrame",
         type=[
             "xlsx",
             "xls",
-            "csv",
-        ],
+            "csv"
+        ]
     )
 
 
     if uploaded_file is None:
 
         st.info(
-            "Upload an Excel or CSV file to continue."
+            "Upload an Excel or CSV file."
         )
 
         st.stop()
@@ -265,202 +382,31 @@ if input_method == "Upload File":
                 uploaded_file
             )
 
-        elif (
-            filename.endswith(".xlsx")
-            or filename.endswith(".xls")
-        ):
+        else:
 
             df = pd.read_excel(
                 uploaded_file
             )
 
-        else:
-
-            st.error(
-                "Unsupported file format."
-            )
-
-            st.stop()
-
-
     except Exception as error:
 
         st.error(
-            f"Unable to read the uploaded file: {error}"
+            f"Could not read file: {error}"
         )
 
         st.stop()
 
 
 # ============================================================
-# MANUAL ENTRY
+# 5. VALIDATE DATAFRAME
 # ============================================================
 
-else:
-
-    st.write(
-        "Enter one row for every module type."
-    )
-
-    st.caption(
-        "Each module type must appear only once."
-    )
-
-
-    module_type_count = st.number_input(
-        "Enter number of module types",
-        min_value=1,
-        max_value=10000,
-        step=1,
-        value=None,
-        placeholder="Enter number of module types",
-    )
-
-
-    if module_type_count is None:
-
-        st.info(
-            "Enter the number of module types."
-        )
-
-        st.stop()
-
-
-    module_type_count = int(
-        module_type_count
-    )
-
-
-    manual_rows = []
-
-    manual_input_complete = True
-
-
-    for i in range(module_type_count):
-
-        st.markdown(
-            f"**Module Type {i + 1}**"
-        )
-
-
-        col1, col2, col3 = st.columns(3)
-
-
-        with col1:
-
-            module_type = st.text_input(
-                "Module Type",
-                placeholder="Enter module type",
-                key=f"module_type_{i}",
-            )
-
-
-        with col2:
-
-            wp = st.number_input(
-                "Wp",
-                min_value=0.0,
-                step=0.01,
-                value=None,
-                placeholder="Enter Wp",
-                key=f"module_wp_{i}",
-            )
-
-
-        with col3:
-
-            efficiency = st.number_input(
-                "Std PV Eff (%)",
-                min_value=0.0,
-                max_value=100.0,
-                step=0.01,
-                value=None,
-                placeholder="Enter efficiency",
-                key=f"module_efficiency_{i}",
-            )
-
-
-        col4, col5 = st.columns(2)
-
-
-        with col4:
-
-            module_count = st.number_input(
-                "No of Modules",
-                min_value=1,
-                step=1,
-                value=None,
-                placeholder="Enter module count",
-                key=f"module_count_{i}",
-            )
-
-
-        with col5:
-
-            area = st.number_input(
-                "Area of 1 module",
-                min_value=0.0,
-                step=0.0001,
-                value=None,
-                placeholder="Enter module area",
-                key=f"module_area_{i}",
-            )
-
-
-        if (
-            not module_type
-            or wp is None
-            or efficiency is None
-            or module_count is None
-            or area is None
-        ):
-
-            manual_input_complete = False
-
-
-        manual_rows.append(
-            {
-                "Module Type": module_type,
-                "(Wp)": wp,
-                "Std PV Eff(%)": efficiency,
-                "No of Modules": module_count,
-                "Area of 1 module": area,
-            }
-        )
-
-
-    if not manual_input_complete:
-
-        st.info(
-            "Complete all module type fields to continue."
-        )
-
-        st.stop()
-
-
-    df = pd.DataFrame(
-        manual_rows
-    )
-
-
-# ============================================================
-# STEP 5: DATA VALIDATION
-# ============================================================
-
-st.header("5. Module Data Validation")
+st.header("Module Data Validation")
 
 
 # ------------------------------------------------------------
-# Required columns
+# Check columns
 # ------------------------------------------------------------
-
-required_columns = [
-    "Module Type",
-    "(Wp)",
-    "No of Modules",
-    "Area of 1 module",
-]
-
 
 missing_columns = [
     column
@@ -469,31 +415,32 @@ missing_columns = [
 ]
 
 
+# Total area is calculated automatically, so don't require it
+missing_columns = [
+    column
+    for column in required_columns[:-1]
+    if column not in df.columns
+]
+
+
 if missing_columns:
 
     st.error(
-        "Missing required columns: "
-        + ", ".join(missing_columns)
+        "Missing required columns:"
     )
 
-    st.info(
-        "Required columns: "
-        + ", ".join(required_columns)
+    st.write(
+        missing_columns
     )
 
     st.stop()
 
 
 # ============================================================
-# COPY DATA
+# CLEAN DF
 # ============================================================
 
 df = df.copy()
-
-
-# ============================================================
-# REMOVE COMPLETELY EMPTY ROWS
-# ============================================================
 
 df = (
     df
@@ -506,17 +453,8 @@ df = (
 )
 
 
-if df.empty:
-
-    st.error(
-        "The module data contains no usable rows."
-    )
-
-    st.stop()
-
-
 # ============================================================
-# CLEAN MODULE TYPE
+# REMOVE EMPTY MODULE TYPES
 # ============================================================
 
 df["Module Type"] = (
@@ -530,8 +468,7 @@ df = df[
     df["Module Type"].notna()
     &
     (
-        df["Module Type"]
-        != ""
+        df["Module Type"] != ""
     )
 ].copy()
 
@@ -539,49 +476,39 @@ df = df[
 if df.empty:
 
     st.error(
-        "No valid Module Type values were found."
+        "No module data found."
     )
 
     st.stop()
 
 
 # ============================================================
-# CONVERT NUMERIC COLUMNS
+# NUMERIC CONVERSION
 # ============================================================
 
 numeric_columns = [
     "(Wp)",
+    "Std PV Eff(%)",
     "No of Modules",
-    "Area of 1 module",
+    "Area of 1 module"
 ]
-
-
-if "Std PV Eff(%)" in df.columns:
-
-    numeric_columns.append(
-        "Std PV Eff(%)"
-    )
 
 
 for column in numeric_columns:
 
     df[column] = pd.to_numeric(
         df[column],
-        errors="coerce",
+        errors="coerce"
     )
 
 
 # ============================================================
-# INVALID NUMERIC VALUES
+# CHECK MISSING NUMERIC DATA
 # ============================================================
 
-invalid_numeric = (
+invalid_rows = (
     df[
-        [
-            "(Wp)",
-            "No of Modules",
-            "Area of 1 module",
-        ]
+        numeric_columns
     ]
     .isna()
     .any(
@@ -590,22 +517,22 @@ invalid_numeric = (
 )
 
 
-if invalid_numeric.any():
+if invalid_rows.any():
 
     bad_rows = (
         df.index[
-            invalid_numeric
+            invalid_rows
         ]
         .tolist()
     )
 
     st.error(
-        "Invalid or missing numeric data found."
+        "Missing or invalid numeric values found."
     )
 
     st.write(
-        "Affected row numbers:",
-        bad_rows,
+        "Affected rows:",
+        [x + 1 for x in bad_rows]
     )
 
     st.stop()
@@ -649,10 +576,10 @@ if (
 
 
 # ============================================================
-# MODULE COUNT MUST BE WHOLE NUMBER
+# MODULE COUNT INTEGER CHECK
 # ============================================================
 
-module_count_values = (
+module_counts = (
     df["No of Modules"]
     .to_numpy()
 )
@@ -660,10 +587,8 @@ module_count_values = (
 
 if not np.all(
     np.isclose(
-        module_count_values,
-        np.round(
-            module_count_values
-        ),
+        module_counts,
+        np.round(module_counts)
     )
 ):
 
@@ -678,7 +603,7 @@ df["No of Modules"] = (
     np.round(
         df["No of Modules"]
     )
-    .astype("int64")
+    .astype(int)
 )
 
 
@@ -699,7 +624,7 @@ if duplicate_mask.any():
     duplicate_types = (
         df.loc[
             duplicate_mask,
-            "Module Type",
+            "Module Type"
         ]
         .drop_duplicates()
         .tolist()
@@ -712,26 +637,19 @@ if duplicate_mask.any():
 
 
     st.write(
-        "Duplicate module types:"
-    )
-
-
-    st.write(
         duplicate_types
     )
 
 
     st.warning(
-        "Each Module Type must appear only once. "
-        "Please correct the source data."
+        "A Module Type cannot appear more than once."
     )
-
 
     st.stop()
 
 
 # ============================================================
-# CALCULATE AREA
+# CALCULATE TOTAL AREA
 # ============================================================
 
 df["Total area(m2)"] = (
@@ -753,21 +671,6 @@ df["Calculated DC (MW)"] = (
 
 
 # ============================================================
-# CHECK DC
-# ============================================================
-
-if (
-    df["Calculated DC (MW)"] <= 0
-).any():
-
-    st.error(
-        "Calculated DC contains zero or negative values."
-    )
-
-    st.stop()
-
-
-# ============================================================
 # TOTAL DC
 # ============================================================
 
@@ -777,118 +680,84 @@ total_dc = float(
 
 
 # ============================================================
-# PLANT SUMMARY
+# DATA PREVIEW
 # ============================================================
 
-st.subheader("Plant Summary")
+st.subheader("Input Module Data")
 
-
-summary_col1, summary_col2, summary_col3 = (
-    st.columns(3)
+st.dataframe(
+    df,
+    use_container_width=True,
+    hide_index=True
 )
 
 
-with summary_col1:
-
-    st.metric(
-        "Total AC",
-        f"{total_ac:,.2f}",
-    )
-
-
-with summary_col2:
-
-    st.metric(
-        "Calculated DC",
-        f"{total_dc:,.4f} MW",
-    )
-
-
-with summary_col3:
-
-    st.metric(
-        "Module Types",
-        f"{len(df):,}",
-    )
-
-
 # ============================================================
-# MODULE DATA PREVIEW
+# 6. TARGET DC
 # ============================================================
 
-with st.expander(
-    "View module data and calculated DC"
-):
-
-    st.dataframe(
-        df,
-        use_container_width=True,
-        hide_index=True,
-    )
-
-
-# ============================================================
-# STEP 6: DC TARGET
-# ============================================================
-
-st.header("6. Cluster DC Targets")
-
+st.header("Cluster DC Targets")
 
 target_dc = (
     total_dc
     *
-    cluster_proportions
+    inverter_proportion
 )
 
 
-target_table = pd.DataFrame(
-    {
-        "Cluster": cluster_names,
-        "Inverters": inverter_distribution,
-        "Inverter Share (%)": (
-            cluster_proportions * 100
-        ),
-        "AC": cluster_ac,
-        "Target DC (MW)": target_dc,
-    }
-)
+target_summary = pd.DataFrame({
+
+    "Cluster":
+        cluster_names,
+
+    "Inverters":
+        inverter_distribution,
+
+    "Inverter Share (%)":
+        inverter_proportion * 100,
+
+    "AC":
+        cluster_ac,
+
+    "Target DC (MW)":
+        target_dc
+})
 
 
 st.dataframe(
-    target_table.style.format(
-        {
-            "Inverter Share (%)": "{:.2f}%",
-            "AC": "{:,.2f}",
-            "Target DC (MW)": "{:,.4f}",
-        }
-    ),
+    target_summary.style.format({
+
+        "Inverter Share (%)":
+            "{:.2f}%",
+
+        "AC":
+            "{:,.2f}",
+
+        "Target DC (MW)":
+            "{:,.4f}"
+
+    }),
     use_container_width=True,
-    hide_index=True,
+    hide_index=True
 )
 
 
 # ============================================================
-# STEP 7: MODULE TYPE ALLOCATION
+# 7. DISTRIBUTE MODULE TYPES
 # ============================================================
 
-st.header("7. Module Type Distribution")
-
-
-st.info(
-    "Each complete Module Type is assigned to exactly one "
-    "cluster. No module type is split between clusters."
-)
+st.header("Module Type Distribution")
 
 
 # ============================================================
-# SORT LARGEST DC FIRST
+# SORT LARGEST MODULE TYPES FIRST
 # ============================================================
 
-module_df = (
+working_df = (
     df
     .sort_values(
         "Calculated DC (MW)",
-        ascending=False,
+        ascending=False
     )
     .reset_index(
         drop=True
@@ -897,63 +766,66 @@ module_df = (
 
 
 # ============================================================
-# CURRENT CLUSTER DC
+# CURRENT DC PER CLUSTER
 # ============================================================
 
-current_cluster_dc = np.zeros(
+current_dc = np.zeros(
     cluster_count,
-    dtype=float,
+    dtype=float
 )
 
 
-assigned_clusters = []
+assigned_cluster = []
 
 
 # ============================================================
-# ASSIGN EACH MODULE TYPE
+# DISTRIBUTION
 # ============================================================
 
-for _, row in module_df.iterrows():
+for _, row in working_df.iterrows():
 
     module_dc = float(
         row["Calculated DC (MW)"]
     )
 
 
-    remaining_target = (
+    # --------------------------------------------------------
+    # Difference between target and current
+    # --------------------------------------------------------
+
+    difference = (
         target_dc
         -
-        current_cluster_dc
+        current_dc
     )
 
 
     # --------------------------------------------------------
-    # Find clusters that are still below target
+    # Prefer cluster that is furthest below target
     # --------------------------------------------------------
 
-    available = np.where(
-        remaining_target > 0
+    below_target = np.where(
+        difference > 0
     )[0]
 
 
-    if len(available) > 0:
+    if len(below_target) > 0:
 
-        selected_cluster = int(
-            available[
+        selected = int(
+            below_target[
                 np.argmax(
-                    remaining_target[
-                        available
+                    difference[
+                        below_target
                     ]
                 )
             ]
         )
 
-
     else:
 
-        selected_cluster = int(
+        selected = int(
             np.argmin(
-                current_cluster_dc
+                current_dc
             )
         )
 
@@ -962,57 +834,58 @@ for _, row in module_df.iterrows():
     # Assign COMPLETE module type
     # --------------------------------------------------------
 
-    assigned_clusters.append(
+    assigned_cluster.append(
         cluster_names[
-            selected_cluster
+            selected
         ]
     )
 
 
-    current_cluster_dc[
-        selected_cluster
-    ] += module_dc
+    current_dc[selected] += (
+        module_dc
+    )
 
 
 # ============================================================
 # ADD CLUSTER
 # ============================================================
 
-module_df["Cluster"] = (
-    assigned_clusters
+working_df["Cluster"] = (
+    assigned_cluster
 )
 
 
 # ============================================================
-# SORT OUTPUT
+# SORT CLUSTERS
 # ============================================================
 
 cluster_order = {
-    cluster_names[i]: i
-    for i in range(cluster_count)
+    name: index
+    for index, name
+    in enumerate(cluster_names)
 }
 
 
-module_df["_cluster_order"] = (
-    module_df["Cluster"]
+working_df["_order"] = (
+    working_df["Cluster"]
     .map(cluster_order)
 )
 
 
-distributed_df = (
-    module_df
+result_df = (
+    working_df
     .sort_values(
         [
-            "_cluster_order",
-            "Calculated DC (MW)",
+            "_order",
+            "Calculated DC (MW)"
         ],
         ascending=[
             True,
-            False,
-        ],
+            False
+        ]
     )
     .drop(
-        columns="_cluster_order"
+        columns="_order"
     )
     .reset_index(
         drop=True
@@ -1021,10 +894,10 @@ distributed_df = (
 
 
 # ============================================================
-# OUTPUT COLUMNS
+# RESULT COLUMN ORDER
 # ============================================================
 
-output_columns = [
+result_columns = [
     "Cluster",
     "Module Type",
     "(Wp)",
@@ -1032,19 +905,19 @@ output_columns = [
     "No of Modules",
     "Area of 1 module",
     "Total area(m2)",
-    "Calculated DC (MW)",
+    "Calculated DC (MW)"
 ]
 
 
-output_columns = [
+result_columns = [
     column
-    for column in output_columns
-    if column in distributed_df.columns
+    for column in result_columns
+    if column in result_df.columns
 ]
 
 
-distributed_df = distributed_df[
-    output_columns
+result_df = result_df[
+    result_columns
 ]
 
 
@@ -1053,135 +926,163 @@ distributed_df = distributed_df[
 # ============================================================
 
 st.subheader(
-    "Module Type → Cluster"
+    "Final Module Distribution"
 )
-
-
-st.caption(
-    "Each module type appears once only."
-)
-
 
 st.dataframe(
-    distributed_df.style.format(
-        {
-            "(Wp)": "{:,.2f}",
-            "Std PV Eff(%)": "{:,.2f}",
-            "No of Modules": "{:,.0f}",
-            "Area of 1 module": "{:,.4f}",
-            "Total area(m2)": "{:,.2f}",
-            "Calculated DC (MW)": "{:,.6f}",
-        }
-    ),
+    result_df.style.format({
+
+        "(Wp)": "{:,.2f}",
+
+        "Std PV Eff(%)": "{:,.2f}",
+
+        "No of Modules": "{:,.0f}",
+
+        "Area of 1 module":
+            "{:,.4f}",
+
+        "Total area(m2)":
+            "{:,.2f}",
+
+        "Calculated DC (MW)":
+            "{:,.6f}"
+
+    }),
     use_container_width=True,
-    hide_index=True,
+    hide_index=True
 )
 
 
 # ============================================================
-# STEP 8: FINAL CLUSTER SUMMARY
+# 8. FINAL SUMMARY
 # ============================================================
 
-st.header("8. Final Cluster Summary")
+st.header("Final Cluster Summary")
 
 
 actual_dc = (
-    distributed_df
+    result_df
     .groupby(
         "Cluster"
     )["Calculated DC (MW)"]
     .sum()
     .reindex(
         cluster_names,
-        fill_value=0,
+        fill_value=0
     )
     .to_numpy()
 )
 
 
-module_counts = (
-    distributed_df
-    .groupby(
-        "Cluster"
-    )["No of Modules"]
-    .sum()
-    .reindex(
-        cluster_names,
-        fill_value=0,
-    )
-    .to_numpy()
-)
-
-
-module_type_counts = (
-    distributed_df
+module_type_count = (
+    result_df
     .groupby(
         "Cluster"
     )["Module Type"]
     .count()
     .reindex(
         cluster_names,
-        fill_value=0,
+        fill_value=0
     )
     .to_numpy()
 )
 
 
-area_counts = (
-    distributed_df
+module_count = (
+    result_df
     .groupby(
         "Cluster"
-    )["Total area(m2)"]
+    )["No of Modules"]
     .sum()
     .reindex(
         cluster_names,
-        fill_value=0,
+        fill_value=0
     )
     .to_numpy()
 )
 
 
-final_summary = pd.DataFrame(
-    {
-        "Cluster": cluster_names,
-        "Inverters": inverter_distribution,
-        "Inverter Share (%)": (
-            cluster_proportions * 100
-        ),
-        "AC": cluster_ac,
-        "Module Types": module_type_counts,
-        "No of Modules": module_counts,
-        "Total Area (m2)": area_counts,
-        "Target DC (MW)": target_dc,
-        "Actual DC (MW)": actual_dc,
-        "DC Difference (MW)": (
-            actual_dc - target_dc
-        ),
-    }
+area = (
+    result_df
+    .groupby(
+        "Cluster"
+    )["Total area(m2)"
+    ]
+    .sum()
+    .reindex(
+        cluster_names,
+        fill_value=0
+    )
+    .to_numpy()
 )
+
+
+final_summary = pd.DataFrame({
+
+    "Cluster":
+        cluster_names,
+
+    "Inverters":
+        inverter_distribution,
+
+    "Inverter Share (%)":
+        inverter_proportion * 100,
+
+    "AC":
+        cluster_ac,
+
+    "Module Types":
+        module_type_count,
+
+    "No of Modules":
+        module_count,
+
+    "Total Area (m2)":
+        area,
+
+    "Target DC (MW)":
+        target_dc,
+
+    "Actual DC (MW)":
+        actual_dc,
+
+    "DC Difference (MW)":
+        actual_dc - target_dc
+})
 
 
 st.dataframe(
-    final_summary.style.format(
-        {
-            "Inverter Share (%)": "{:.2f}%",
-            "AC": "{:,.2f}",
-            "Total Area (m2)": "{:,.2f}",
-            "Target DC (MW)": "{:,.4f}",
-            "Actual DC (MW)": "{:,.4f}",
-            "DC Difference (MW)": "{:+,.4f}",
-        }
-    ),
+    final_summary.style.format({
+
+        "Inverter Share (%)":
+            "{:.2f}%",
+
+        "AC":
+            "{:,.2f}",
+
+        "Total Area (m2)":
+            "{:,.2f}",
+
+        "Target DC (MW)":
+            "{:,.4f}",
+
+        "Actual DC (MW)":
+            "{:,.4f}",
+
+        "DC Difference (MW)":
+            "{:+,.4f}"
+
+    }),
     use_container_width=True,
-    hide_index=True,
+    hide_index=True
 )
 
 
 # ============================================================
-# STEP 9: VALIDATION
+# 9. VALIDATION
 # ============================================================
 
-st.header("9. Validation")
+st.header("Validation")
 
 
 original_dc = float(
@@ -1189,8 +1090,8 @@ original_dc = float(
 )
 
 
-result_dc = float(
-    distributed_df["Calculated DC (MW)"].sum()
+distributed_dc = float(
+    result_df["Calculated DC (MW)"].sum()
 )
 
 
@@ -1199,108 +1100,108 @@ original_modules = int(
 )
 
 
-result_modules = int(
-    distributed_df["No of Modules"].sum()
+distributed_modules = int(
+    result_df["No of Modules"].sum()
 )
 
 
-original_module_types = int(
+original_types = int(
     df["Module Type"].nunique()
 )
 
 
-result_module_types = int(
-    distributed_df["Module Type"].nunique()
+distributed_types = int(
+    result_df["Module Type"].nunique()
 )
 
 
-duplicate_result = (
-    distributed_df["Module Type"]
+has_duplicates = (
+    result_df["Module Type"]
     .duplicated()
     .any()
 )
 
 
-validation_cols = st.columns(4)
+validation = st.columns(4)
 
 
-with validation_cols[0]:
+with validation[0]:
 
     if np.isclose(
         original_dc,
-        result_dc,
-        atol=1e-9,
+        distributed_dc,
+        atol=1e-9
     ):
 
         st.success(
-            "✓ Total DC preserved"
+            "✓ DC Preserved"
         )
 
     else:
 
         st.error(
-            "✗ DC mismatch"
+            "✗ DC Mismatch"
         )
 
 
-with validation_cols[1]:
+with validation[1]:
 
     if (
         original_modules
         ==
-        result_modules
+        distributed_modules
     ):
 
         st.success(
-            "✓ Modules preserved"
+            "✓ Modules Preserved"
         )
 
     else:
 
         st.error(
-            "✗ Module count mismatch"
+            "✗ Module Mismatch"
         )
 
 
-with validation_cols[2]:
+with validation[2]:
 
     if (
-        original_module_types
+        original_types
         ==
-        result_module_types
+        distributed_types
     ):
 
         st.success(
-            "✓ Module types preserved"
+            "✓ Module Types Preserved"
         )
 
     else:
 
         st.error(
-            "✗ Module type mismatch"
+            "✗ Module Type Mismatch"
         )
 
 
-with validation_cols[3]:
+with validation[3]:
 
-    if not duplicate_result:
+    if not has_duplicates:
 
         st.success(
-            "✓ No duplicate module types"
+            "✓ No Duplicates"
         )
 
     else:
 
         st.error(
-            "✗ Duplicate module types"
+            "✗ Duplicate Module Type"
         )
 
 
 # ============================================================
-# STEP 10: DOWNLOAD
+# 10. DOWNLOAD
 # ============================================================
 
-st.header("10. Download Results")
+st.header("Download")
 
 
 excel_buffer = io.BytesIO()
@@ -1308,53 +1209,53 @@ excel_buffer = io.BytesIO()
 
 with pd.ExcelWriter(
     excel_buffer,
-    engine="openpyxl",
+    engine="openpyxl"
 ) as writer:
 
-    distributed_df.to_excel(
+    result_df.to_excel(
         writer,
         sheet_name="Module Distribution",
-        index=False,
+        index=False
     )
 
     final_summary.to_excel(
         writer,
         sheet_name="Cluster Summary",
-        index=False,
+        index=False
     )
 
     df.to_excel(
         writer,
-        sheet_name="Original Data",
-        index=False,
+        sheet_name="Input Data",
+        index=False
     )
 
 
 st.download_button(
-    label="⬇️ Download Excel",
+    "⬇️ Download Excel",
     data=excel_buffer.getvalue(),
     file_name="Solar_Cluster_Distribution.xlsx",
     mime=(
         "application/vnd.openxmlformats-officedocument."
         "spreadsheetml.sheet"
     ),
-    use_container_width=True,
+    use_container_width=True
 )
 
 
 # ============================================================
-# CSV DOWNLOAD
+# CSV
 # ============================================================
 
-csv_data = distributed_df.to_csv(
+csv_data = result_df.to_csv(
     index=False
 )
 
 
 st.download_button(
-    label="⬇️ Download Module Distribution CSV",
+    "⬇️ Download CSV",
     data=csv_data,
-    file_name="Solar_Module_Cluster_Distribution.csv",
+    file_name="Solar_Module_Distribution.csv",
     mime="text/csv",
-    use_container_width=True,
+    use_container_width=True
 )
