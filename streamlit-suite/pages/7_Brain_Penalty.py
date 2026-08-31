@@ -1,3 +1,35 @@
+# ============================================================
+# BRAIN PENALTY / SOLAR DATE COLORING
+# ============================================================
+#
+# Features
+# ------------------------------------------------------------
+# • 10 independent sheets
+# • No sidebar
+# • Dates, not PSS
+# • Header shows Month + Year
+# • User writes the left header manually
+# • User can enter MAL and Total Capacity
+# • Click a date directly on the brain
+# • Choose Red / Green / Yellow / Blue
+# • Selected color is saved immediately
+# • Automatically moves to next uncolored date
+# • SQLite database
+# • "Save Details to Database" button
+# • Database is reloaded when app starts
+# • Refined brain-like visual
+# • Colored cells touch each other
+# • Printable sheet
+# • 10-sheet collage
+# • CSV backup
+#
+# IMPORTANT
+# ------------------------------------------------------------
+# Replace the WHOLE existing page with this file.
+# Do not paste this below the previous code.
+# ============================================================
+
+
 import io
 import sqlite3
 import calendar
@@ -24,13 +56,11 @@ st.set_page_config(
 
 
 # ============================================================
-# CONFIG
+# CONSTANTS
 # ============================================================
 
 N_SHEETS = 10
 N_DAYS = 31
-
-DB_PATH = Path("solar_date_coloring.db")
 
 COLORS = {
     "Red": "#F26B4F",
@@ -39,41 +69,34 @@ COLORS = {
     "Blue": "#2F80ED",
 }
 
-DEFAULT_FILL = "#F26B4F"
+DEFAULT_COLOR = "#F26B4F"
 
-BORDER = "#111111"
-PAGE_BG = "#FFFFFF"
-BRAIN_BG = "#FFFDF7"
-
-
-# ============================================================
-# SESSION STATE
-# ============================================================
-
-if "active_sheet" not in st.session_state:
-    st.session_state.active_sheet = 0
-
-if "selected_day" not in st.session_state:
-    st.session_state.selected_day = min(
-        date.today().day,
-        31,
-    )
-
-if "map_version" not in st.session_state:
-    st.session_state.map_version = 0
-
-if "last_click_signature" not in st.session_state:
-    st.session_state.last_click_signature = None
-
-if "show_collage" not in st.session_state:
-    st.session_state.show_collage = False
-
-if "sheets_loaded" not in st.session_state:
-    st.session_state.sheets_loaded = False
+BLACK = "#111111"
+GREY = "#777777"
+LIGHT_GREY = "#E8E8E8"
+BRAIN_BACKGROUND = "#FFFDF7"
 
 
 # ============================================================
-# CSS
+# DATABASE PATH
+# ============================================================
+#
+# SQLite is used so the page does not depend on Streamlit
+# session_state for persistence.
+#
+# If your deployment filesystem is persistent, this survives
+# reloads/restarts.
+#
+# For Streamlit Cloud, local SQLite can be lost when the app
+# container is recreated. For true permanent cloud persistence,
+# use an external database such as Supabase/PostgreSQL.
+# ============================================================
+
+DB_PATH = Path("solar_date_coloring.db")
+
+
+# ============================================================
+# HIDE SIDEBAR
 # ============================================================
 
 st.markdown(
@@ -81,17 +104,17 @@ st.markdown(
     <style>
 
     [data-testid="stSidebar"] {
-        display: none;
+        display: none !important;
     }
 
     [data-testid="stSidebarCollapsedControl"] {
-        display: none;
+        display: none !important;
     }
 
     .block-container {
         max-width: 1500px;
         padding-top: 1rem;
-        padding-bottom: 2rem;
+        padding-bottom: 3rem;
     }
 
     div.stButton > button {
@@ -122,10 +145,10 @@ def get_database():
         """
         CREATE TABLE IF NOT EXISTS sheets (
             sheet_no INTEGER PRIMARY KEY,
-            name TEXT DEFAULT '',
-            header_date TEXT DEFAULT '',
-            mal TEXT DEFAULT '',
-            total TEXT DEFAULT ''
+            name TEXT NOT NULL DEFAULT '',
+            header_date TEXT NOT NULL DEFAULT '',
+            mal TEXT NOT NULL DEFAULT '',
+            total TEXT NOT NULL DEFAULT ''
         )
         """
     )
@@ -141,18 +164,25 @@ def get_database():
         """
     )
 
-    for sheet_no in range(
-        1,
-        N_SHEETS + 1,
-    ):
+    for sheet_no in range(1, N_SHEETS + 1):
+
         conn.execute(
             """
             INSERT OR IGNORE INTO sheets (
-                sheet_no
+                sheet_no,
+                name,
+                header_date,
+                mal,
+                total
             )
-            VALUES (?)
+            VALUES (?, '', ?, '', '')
             """,
-            (sheet_no,),
+            (
+                sheet_no,
+                date.today()
+                .replace(day=1)
+                .isoformat(),
+            ),
         )
 
     conn.commit()
@@ -164,10 +194,10 @@ DB = get_database()
 
 
 # ============================================================
-# DATABASE LOAD
+# DATABASE FUNCTIONS
 # ============================================================
 
-def load_sheet_from_database(sheet_no):
+def database_load_sheet(sheet_no):
 
     cursor = DB.cursor()
 
@@ -188,13 +218,11 @@ def load_sheet_from_database(sheet_no):
 
     if row is None:
 
-        header_date = date.today().replace(
-            day=1
-        )
-
-        sheet = {
+        result = {
             "name": "",
-            "header_date": header_date,
+            "header_date": date.today().replace(
+                day=1
+            ),
             "mal": "",
             "total": "",
             "days": {},
@@ -202,21 +230,24 @@ def load_sheet_from_database(sheet_no):
 
     else:
 
-        name = row[0] or ""
-        raw_date = row[1] or ""
-        mal = row[2] or ""
-        total = row[3] or ""
+        name = str(row[0] or "")
+        raw_header = str(row[1] or "")
+        mal = str(row[2] or "")
+        total = str(row[3] or "")
 
         try:
+
             header_date = date.fromisoformat(
-                raw_date
+                raw_header
             ).replace(day=1)
+
         except Exception:
+
             header_date = date.today().replace(
                 day=1
             )
 
-        sheet = {
+        result = {
             "name": name,
             "header_date": header_date,
             "mal": mal,
@@ -238,45 +269,25 @@ def load_sheet_from_database(sheet_no):
 
     for day, color in cursor.fetchall():
 
-        if color in COLORS:
+        try:
+            day = int(day)
+        except Exception:
+            continue
 
-            sheet["days"][int(day)] = {
+        if (
+            1 <= day <= N_DAYS
+            and color in COLORS
+        ):
+
+            result["days"][day] = {
                 "color_name": color,
                 "color_hex": COLORS[color],
             }
 
-    return sheet
+    return result
 
 
-# ============================================================
-# INITIAL LOAD
-# ============================================================
-
-if not st.session_state.sheets_loaded:
-
-    st.session_state.sheets = [
-        load_sheet_from_database(i)
-        for i in range(
-            1,
-            N_SHEETS + 1,
-        )
-    ]
-
-    st.session_state.sheets_loaded = True
-
-
-def current_sheet():
-
-    return st.session_state.sheets[
-        st.session_state.active_sheet
-    ]
-
-
-# ============================================================
-# DATABASE SAVE
-# ============================================================
-
-def save_sheet_details(
+def database_save_details(
     sheet_no,
     sheet,
 ):
@@ -292,10 +303,10 @@ def save_sheet_details(
         WHERE sheet_no = ?
         """,
         (
-            sheet["name"],
+            str(sheet.get("name", "")),
             sheet["header_date"].isoformat(),
-            sheet["mal"],
-            sheet["total"],
+            str(sheet.get("mal", "")),
+            str(sheet.get("total", "")),
             sheet_no,
         ),
     )
@@ -303,11 +314,17 @@ def save_sheet_details(
     DB.commit()
 
 
-def save_date_color(
+def database_save_color(
     sheet_no,
     day,
     color_name,
 ):
+
+    if color_name not in COLORS:
+        return
+
+    if not 1 <= int(day) <= N_DAYS:
+        return
 
     DB.execute(
         """
@@ -319,8 +336,8 @@ def save_date_color(
         VALUES (?, ?, ?)
         """,
         (
-            sheet_no,
-            day,
+            int(sheet_no),
+            int(day),
             color_name,
         ),
     )
@@ -328,7 +345,7 @@ def save_date_color(
     DB.commit()
 
 
-def delete_date_color(
+def database_delete_color(
     sheet_no,
     day,
 ):
@@ -341,15 +358,15 @@ def delete_date_color(
             AND day = ?
         """,
         (
-            sheet_no,
-            day,
+            int(sheet_no),
+            int(day),
         ),
     )
 
     DB.commit()
 
 
-def clear_sheet_database(
+def database_clear_sheet(
     sheet_no,
 ):
 
@@ -358,27 +375,177 @@ def clear_sheet_database(
         DELETE FROM date_colors
         WHERE sheet_no = ?
         """,
-        (sheet_no,),
+        (int(sheet_no),),
     )
 
     DB.commit()
 
 
 # ============================================================
-# DATE HELPERS
+# SESSION STATE
 # ============================================================
 
-def days_in_month(
-    month_date,
-):
+if "active_sheet" not in st.session_state:
+    st.session_state.active_sheet = 0
+
+if "selected_day" not in st.session_state:
+    st.session_state.selected_day = min(
+        date.today().day,
+        31,
+    )
+
+if "map_version" not in st.session_state:
+    st.session_state.map_version = 0
+
+if "last_click_signature" not in st.session_state:
+    st.session_state.last_click_signature = None
+
+if "show_collage" not in st.session_state:
+    st.session_state.show_collage = False
+
+if "database_loaded" not in st.session_state:
+    st.session_state.database_loaded = False
+
+
+# ============================================================
+# LOAD ALL SHEETS ONCE
+# ============================================================
+
+if not st.session_state.database_loaded:
+
+    st.session_state.sheets = [
+        database_load_sheet(i)
+        for i in range(
+            1,
+            N_SHEETS + 1,
+        )
+    ]
+
+    st.session_state.database_loaded = True
+
+
+# ============================================================
+# SAFE SHEET NORMALIZATION
+# ============================================================
+
+def normalize_sheet(sheet):
+
+    if not isinstance(sheet, dict):
+
+        sheet = {}
+
+    name = str(
+        sheet.get("name", "") or ""
+    )
+
+    mal = str(
+        sheet.get("mal", "") or ""
+    )
+
+    total = str(
+        sheet.get("total", "") or ""
+    )
+
+    raw_date = sheet.get(
+        "header_date",
+        date.today().replace(day=1),
+    )
+
+    if isinstance(raw_date, date):
+
+        header_date = raw_date.replace(
+            day=1
+        )
+
+    else:
+
+        try:
+
+            header_date = date.fromisoformat(
+                str(raw_date)
+            ).replace(day=1)
+
+        except Exception:
+
+            header_date = date.today().replace(
+                day=1
+            )
+
+    clean_days = {}
+
+    raw_days = sheet.get(
+        "days",
+        {},
+    )
+
+    if isinstance(raw_days, dict):
+
+        for raw_day, raw_value in raw_days.items():
+
+            try:
+                day = int(raw_day)
+            except Exception:
+                continue
+
+            if not 1 <= day <= N_DAYS:
+                continue
+
+            if not isinstance(
+                raw_value,
+                dict,
+            ):
+                continue
+
+            color_name = str(
+                raw_value.get(
+                    "color_name",
+                    "",
+                )
+                or ""
+            )
+
+            if color_name in COLORS:
+
+                clean_days[day] = {
+                    "color_name": color_name,
+                    "color_hex": COLORS[color_name],
+                }
+
+    return {
+        "name": name,
+        "header_date": header_date,
+        "mal": mal,
+        "total": total,
+        "days": clean_days,
+    }
+
+
+st.session_state.sheets = [
+    normalize_sheet(sheet)
+    for sheet in st.session_state.sheets
+]
+
+
+# ============================================================
+# BASIC HELPERS
+# ============================================================
+
+def current_sheet():
+
+    return st.session_state.sheets[
+        st.session_state.active_sheet
+    ]
+
+
+def days_in_current_month(sheet):
 
     return calendar.monthrange(
-        month_date.year,
-        month_date.month,
+        sheet["header_date"].year,
+        sheet["header_date"].month,
     )[1]
 
 
-def actual_date(
+def get_actual_date(
     sheet,
     day,
 ):
@@ -388,537 +555,462 @@ def actual_date(
         return date(
             sheet["header_date"].year,
             sheet["header_date"].month,
-            day,
+            int(day),
         )
 
-    except ValueError:
+    except Exception:
 
         return None
 
 
-# ============================================================
-# REFERENCE-LIKE BRAIN GEOMETRY
-# ============================================================
-#
-# The important difference from the previous version:
-#
-# 1. Date cells are generated as adjoining regions.
-# 2. There are no intentional gaps between cells.
-# 3. Internal borders are drawn once.
-# 4. The outer brain boundary is drawn separately.
-#
-# This makes the colors appear continuous like the reference.
-# ============================================================
+def polygon_center(points):
+
+    """
+    Calculate the center of a polygon.
+
+    This function is intentionally defined before
+    make_map() and render_sheet() so there is no
+    NameError.
+    """
+
+    if not points:
+
+        return (
+            0,
+            0,
+        )
+
+    x_values = [
+        p[0]
+        for p in points
+    ]
+
+    y_values = [
+        p[1]
+        for p in points
+    ]
+
+    return (
+        sum(x_values) / len(x_values),
+        sum(y_values) / len(y_values),
+    )
 
 
-# ------------------------------------------------------------
-# Brain outline
-# ------------------------------------------------------------
+# Keep compatibility with any internal reference to center().
+center = polygon_center
 
-def brain_outline():
+
+# ============================================================
+# BRAIN OUTLINE
+# ============================================================
+
+def get_brain_outline():
 
     return [
-        (110, 180),
-        (145, 135),
-        (205, 105),
-        (275, 90),
-        (345, 88),
-        (410, 100),
-        (455, 125),
-        (500, 145),
 
-        (545, 125),
-        (590, 100),
-        (655, 88),
-        (725, 90),
-        (795, 105),
-        (855, 135),
-        (890, 180),
+        # Left upper
+        (110, 190),
+        (125, 155),
+        (165, 125),
+        (220, 103),
+        (285, 92),
+        (350, 91),
+        (410, 102),
+        (460, 126),
+        (500, 148),
 
-        (910, 245),
-        (915, 315),
-        (905, 390),
-        (920, 465),
-        (915, 545),
-        (925, 620),
-        (915, 700),
-        (920, 775),
-        (900, 850),
-        (875, 925),
-        (830, 990),
-        (770, 1040),
-        (700, 1075),
-        (625, 1095),
-        (555, 1100),
+        # Right upper
+        (540, 126),
+        (590, 102),
+        (650, 91),
+        (715, 92),
+        (780, 103),
+        (835, 125),
+        (875, 155),
+        (890, 190),
 
-        (500, 1070),
+        # Right side
+        (908, 245),
+        (912, 315),
+        (902, 380),
+        (914, 450),
+        (908, 525),
+        (918, 600),
+        (910, 680),
+        (916, 755),
+        (900, 830),
+        (878, 900),
+        (845, 960),
+        (795, 1015),
+        (730, 1055),
+        (665, 1080),
+        (590, 1093),
+        (550, 1085),
 
-        (445, 1100),
-        (375, 1095),
-        (300, 1075),
-        (230, 1040),
-        (170, 990),
-        (125, 925),
-        (100, 850),
-        (80, 775),
-        (85, 700),
-        (75, 620),
-        (85, 545),
-        (80, 465),
-        (95, 390),
-        (85, 315),
-        (90, 245),
+        # Bottom center
+        (500, 1065),
+
+        # Left bottom
+        (450, 1085),
+        (410, 1093),
+        (335, 1080),
+        (270, 1055),
+        (205, 1015),
+        (155, 960),
+        (122, 900),
+        (100, 830),
+        (84, 755),
+        (90, 680),
+        (82, 600),
+        (92, 525),
+        (86, 450),
+        (98, 380),
+        (88, 315),
+        (92, 245),
     ]
+
+
+BRAIN_OUTLINE = get_brain_outline()
 
 
 # ============================================================
 # DATE CELL GEOMETRY
 # ============================================================
 #
-# Instead of independent floating polygons, the cells form
-# continuous horizontal bands.
+# The date blocks are intentionally adjoining.
+# There are no gaps between colored regions.
 # ============================================================
 
-
-def make_date_cells():
+def build_date_cells():
 
     cells = {}
 
     # --------------------------------------------------------
-    # Top two blocks
+    # TOP LEFT / RIGHT
     # --------------------------------------------------------
 
     cells[1] = [
-        (300, 145),
-        (455, 145),
-        (465, 230),
-        (295, 230),
+        (295, 150),
+        (500, 150),
+        (500, 240),
+        (280, 240),
     ]
 
     cells[2] = [
-        (545, 145),
-        (700, 145),
-        (705, 230),
-        (535, 230),
+        (500, 150),
+        (705, 150),
+        (720, 240),
+        (500, 240),
     ]
 
     # --------------------------------------------------------
-    # Second row
+    # SECOND BAND
     # --------------------------------------------------------
 
-    cells[3] = [
-        (270, 230),
-        (385, 230),
-        (385, 315),
-        (260, 315),
+    second_row = [
+        3,
+        4,
+        5,
+        6,
     ]
 
-    cells[4] = [
-        (385, 230),
-        (500, 230),
-        (500, 315),
-        (385, 315),
-    ]
+    left = 250
+    right = 750
+    width = (
+        right - left
+    ) / 4
 
-    cells[5] = [
-        (500, 230),
-        (615, 230),
-        (615, 315),
-        (500, 315),
-    ]
-
-    cells[6] = [
-        (615, 230),
-        (740, 230),
-        (740, 315),
-        (615, 315),
-    ]
-
-    # --------------------------------------------------------
-    # Main body
-    # --------------------------------------------------------
-
-    row_days = [
-        [7, 8, 9, 10],
-        [11, 12, 13, 14],
-        [15, 16, 17, 18],
-        [19, 20, 21, 22],
-        [23, 24, 25, 26],
-        [27, 28, 29, 30],
-        [31],
-    ]
-
-    row_tops = [
-        315,
-        410,
-        505,
-        600,
-        695,
-        790,
-        885,
-    ]
-
-    row_bottoms = [
-        410,
-        505,
-        600,
-        695,
-        790,
-        885,
-        980,
-    ]
-
-    for row_index, days in enumerate(
-        row_days
+    for index, day in enumerate(
+        second_row
     ):
 
-        top = row_tops[
-            row_index
+        x1 = left + (
+            index * width
+        )
+
+        x2 = left + (
+            (index + 1) * width
+        )
+
+        cells[day] = [
+            (
+                x1,
+                240,
+            ),
+            (
+                x2,
+                240,
+            ),
+            (
+                x2,
+                335,
+            ),
+            (
+                x1,
+                335,
+            ),
         ]
 
-        bottom = row_bottoms[
-            row_index
-        ]
+    # --------------------------------------------------------
+    # MAIN BODY
+    # --------------------------------------------------------
 
-        count = len(days)
+    main_rows = [
+        (
+            [7, 8, 9, 10],
+            335,
+            430,
+        ),
+        (
+            [11, 12, 13, 14],
+            430,
+            525,
+        ),
+        (
+            [15, 16, 17, 18],
+            525,
+            620,
+        ),
+        (
+            [19, 20, 21, 22],
+            620,
+            715,
+        ),
+        (
+            [23, 24, 25, 26],
+            715,
+            810,
+        ),
+        (
+            [27, 28, 29, 30],
+            810,
+            905,
+        ),
+    ]
 
-        if count == 1:
+    left = 145
+    right = 855
 
-            x_ranges = [
-                (
-                    365,
-                    635,
-                )
-            ]
+    for days, top, bottom in main_rows:
 
-        else:
+        width = (
+            right - left
+        ) / len(days)
 
-            left = 155
-            right = 845
+        for index, day in enumerate(days):
 
-            width = (
-                right - left
-            ) / count
+            x1 = (
+                left
+                + index * width
+            )
 
-            x_ranges = []
-
-            for i in range(count):
-
-                x1 = (
-                    left
-                    + i * width
-                )
-
-                x2 = (
-                    left
-                    + (i + 1) * width
-                )
-
-                x_ranges.append(
-                    (
-                        x1,
-                        x2,
-                    )
-                )
-
-        for day, (
-            x1,
-            x2,
-        ) in zip(
-            days,
-            x_ranges,
-        ):
-
-            # Slight organic curvature on outer cells
-            if x1 < 200:
-                top_x1 = x1 + 18
-                bottom_x1 = x1
-            else:
-                top_x1 = x1
-                bottom_x1 = x1
-
-            if x2 > 800:
-                top_x2 = x2 - 18
-                bottom_x2 = x2
-            else:
-                top_x2 = x2
-                bottom_x2 = x2
+            x2 = (
+                left
+                + (index + 1) * width
+            )
 
             cells[day] = [
                 (
-                    top_x1,
+                    x1,
                     top,
                 ),
                 (
-                    top_x2,
+                    x2,
                     top,
                 ),
                 (
-                    bottom_x2,
+                    x2,
                     bottom,
                 ),
                 (
-                    bottom_x1,
+                    x1,
                     bottom,
                 ),
             ]
+
+    # --------------------------------------------------------
+    # BOTTOM DATE
+    # --------------------------------------------------------
+
+    cells[31] = [
+        (340, 905),
+        (660, 905),
+        (650, 1000),
+        (350, 1000),
+    ]
 
     return cells
 
 
-DATE_CELLS = make_date_cells()
+DATE_CELLS = build_date_cells()
 
 
 # ============================================================
-# SHARED BOUNDARY LINES
+# INTERNAL BRAIN FOLDS
 # ============================================================
 
-def shared_boundaries():
-
-    boundaries = []
-
-    # --------------------------------------------------------
-    # Horizontal boundaries
-    # --------------------------------------------------------
-
-    horizontal = [
-        (
-            230,
-            270,
-            740,
-        ),
-        (
-            315,
-            155,
-            845,
-        ),
-        (
-            410,
-            155,
-            845,
-        ),
-        (
-            505,
-            155,
-            845,
-        ),
-        (
-            600,
-            155,
-            845,
-        ),
-        (
-            695,
-            155,
-            845,
-        ),
-        (
-            790,
-            155,
-            845,
-        ),
-        (
-            885,
-            155,
-            845,
-        ),
-    ]
-
-    for y, x1, x2 in horizontal:
-
-        boundaries.append(
-            [
-                (
-                    x1,
-                    y,
-                ),
-                (
-                    x2,
-                    y,
-                ),
-            ]
-        )
-
-    # --------------------------------------------------------
-    # Vertical center
-    # --------------------------------------------------------
-
-    boundaries.append(
-        [
-            (
-                500,
-                145,
-            ),
-            (
-                500,
-                1070,
-            ),
-        ]
-    )
-
-    return boundaries
-
-
-SHARED_BOUNDARIES = (
-    shared_boundaries()
-)
-
-
-# ============================================================
-# ORGANIC BRAIN FOLDS
-# ============================================================
-
-def brain_folds():
+def get_brain_folds():
 
     return [
 
-        # Left upper
+        # LEFT
         [
-            (115, 245),
-            (170, 205),
-            (235, 220),
-            (285, 180),
+            (100, 240),
+            (155, 205),
+            (220, 225),
+            (280, 180),
         ],
 
         [
-            (100, 325),
-            (155, 285),
-            (220, 300),
-            (265, 265),
+            (92, 330),
+            (150, 290),
+            (215, 315),
+            (270, 265),
         ],
 
         [
-            (95, 415),
-            (155, 375),
-            (215, 395),
-            (260, 350),
+            (88, 420),
+            (150, 380),
+            (215, 405),
+            (270, 355),
         ],
 
         [
-            (90, 515),
-            (150, 470),
-            (215, 495),
-            (255, 450),
+            (85, 515),
+            (150, 475),
+            (220, 500),
+            (270, 450),
         ],
 
         [
-            (90, 620),
-            (150, 570),
-            (215, 605),
-            (265, 550),
+            (82, 620),
+            (150, 575),
+            (220, 610),
+            (275, 555),
         ],
 
         [
-            (95, 725),
-            (155, 680),
+            (85, 720),
+            (150, 680),
             (220, 710),
-            (270, 665),
+            (275, 665),
         ],
 
         [
-            (115, 835),
-            (175, 785),
-            (235, 820),
-            (285, 770),
+            (100, 820),
+            (160, 780),
+            (220, 815),
+            (285, 765),
         ],
 
         [
-            (150, 930),
-            (205, 885),
-            (260, 920),
-            (320, 870),
+            (130, 910),
+            (185, 875),
+            (245, 905),
+            (310, 860),
         ],
 
-        # Right upper
+        # RIGHT
         [
-            (885, 245),
-            (830, 205),
-            (765, 220),
-            (715, 180),
-        ],
-
-        [
-            (900, 325),
-            (845, 285),
-            (780, 300),
-            (735, 265),
+            (900, 240),
+            (845, 205),
+            (780, 225),
+            (720, 180),
         ],
 
         [
-            (905, 415),
-            (845, 375),
-            (785, 395),
-            (740, 350),
+            (908, 330),
+            (850, 290),
+            (785, 315),
+            (730, 265),
         ],
 
         [
-            (910, 515),
-            (850, 470),
-            (785, 495),
-            (745, 450),
+            (912, 420),
+            (850, 380),
+            (785, 405),
+            (730, 355),
         ],
 
         [
-            (910, 620),
-            (850, 570),
-            (785, 605),
-            (735, 550),
+            (915, 515),
+            (850, 475),
+            (780, 500),
+            (730, 450),
         ],
 
         [
-            (905, 725),
-            (845, 680),
+            (918, 620),
+            (850, 575),
+            (780, 610),
+            (725, 555),
+        ],
+
+        [
+            (915, 720),
+            (850, 680),
             (780, 710),
-            (730, 665),
+            (725, 665),
         ],
 
         [
-            (885, 835),
-            (825, 785),
-            (765, 820),
-            (715, 770),
+            (900, 820),
+            (840, 780),
+            (780, 815),
+            (715, 765),
         ],
 
         [
-            (850, 930),
-            (795, 885),
-            (740, 920),
-            (680, 870),
+            (870, 910),
+            (815, 875),
+            (755, 905),
+            (690, 860),
         ],
     ]
 
 
+BRAIN_FOLDS = get_brain_folds()
+
+
 # ============================================================
-# PLOTLY PREVIEW
+# MAP / PLOTLY PREVIEW
 # ============================================================
 
 def make_map(sheet):
 
     fig = go.Figure()
 
-    outline = brain_outline()
+    valid_days = days_in_current_month(
+        sheet
+    )
 
     # --------------------------------------------------------
-    # Brain base
+    # Brain background
     # --------------------------------------------------------
+
+    outline_x = [
+        point[0]
+        for point in BRAIN_OUTLINE
+    ]
+
+    outline_y = [
+        point[1]
+        for point in BRAIN_OUTLINE
+    ]
 
     fig.add_trace(
         go.Scatter(
-            x=[
-                p[0]
-                for p in outline
-            ]
-            + [outline[0][0]],
-            y=[
-                p[1]
-                for p in outline
-            ]
-            + [outline[0][1]],
+            x=outline_x + [
+                outline_x[0]
+            ],
+            y=outline_y + [
+                outline_y[0]
+            ],
             mode="lines",
             fill="toself",
-            fillcolor=BRAIN_BG,
+            fillcolor=BRAIN_BACKGROUND,
             line=dict(
-                color=BORDER,
+                color=BLACK,
                 width=5,
             ),
             hoverinfo="skip",
@@ -926,12 +1018,8 @@ def make_map(sheet):
         )
     )
 
-    valid_days = days_in_month(
-        sheet["header_date"]
-    )
-
     # --------------------------------------------------------
-    # Date cells
+    # Date blocks
     # --------------------------------------------------------
 
     for day in range(
@@ -942,9 +1030,9 @@ def make_map(sheet):
         if day not in DATE_CELLS:
             continue
 
-        pts = DATE_CELLS[day]
+        points = DATE_CELLS[day]
 
-        valid = (
+        is_valid = (
             day <= valid_days
         )
 
@@ -958,36 +1046,46 @@ def make_map(sheet):
                 "color_hex"
             ]
 
-        elif valid:
+        elif is_valid:
 
-            fill = DEFAULT_FILL
+            fill = DEFAULT_COLOR
 
         else:
 
-            fill = "#E6E6E6"
+            fill = "#E2E2E2"
 
         xs = [
-            p[0]
-            for p in pts
-        ] + [pts[0][0]]
+            point[0]
+            for point in points
+        ]
 
         ys = [
-            p[1]
-            for p in pts
-        ] + [pts[0][1]]
+            point[1]
+            for point in points
+        ]
 
-        actual = actual_date(
+        xs.append(
+            xs[0]
+        )
+
+        ys.append(
+            ys[0]
+        )
+
+        actual = get_actual_date(
             sheet,
             day,
         )
 
-        actual_text = (
-            actual.strftime(
+        if actual:
+
+            date_label = actual.strftime(
                 "%d-%b-%Y"
             )
-            if actual
-            else "Invalid date"
-        )
+
+        else:
+
+            date_label = "Invalid date"
 
         fig.add_trace(
             go.Scatter(
@@ -1006,26 +1104,26 @@ def make_map(sheet):
                 * len(xs),
                 hovertemplate=(
                     f"<b>Date {day}</b>"
-                    f"<br>{actual_text}"
+                    f"<br>{date_label}"
                     "<br><br>"
                     "Click to select"
                     "<extra></extra>"
                 ),
                 showlegend=False,
                 opacity=(
-                    1.0
-                    if valid
-                    else 0.35
+                    1
+                    if is_valid
+                    else 0.30
                 ),
             )
         )
 
-        # --------------------------------------------
-        # Number
-        # --------------------------------------------
+        # ----------------------------------------------------
+        # Date number
+        # ----------------------------------------------------
 
-        cx, cy = center(
-            pts
+        cx, cy = polygon_center(
+            points
         )
 
         fig.add_trace(
@@ -1038,16 +1136,18 @@ def make_map(sheet):
                 ],
                 textposition="middle center",
                 marker=dict(
-                    size=38,
-                    color="rgba(255,255,255,0.01)",
+                    size=40,
+                    color=(
+                        "rgba(255,255,255,0.01)"
+                    ),
                     line=dict(
                         width=0
                     ),
                 ),
                 textfont=dict(
-                    size=17,
-                    color="#111111",
                     family="Arial",
+                    size=17,
+                    color=BLACK,
                 ),
                 customdata=[
                     day
@@ -1061,24 +1161,67 @@ def make_map(sheet):
         )
 
     # --------------------------------------------------------
-    # Internal shared borders
+    # Horizontal shared boundaries
     # --------------------------------------------------------
 
-    for boundary in SHARED_BOUNDARIES:
+    boundaries = [
+        (
+            240,
+            280,
+            720,
+        ),
+        (
+            335,
+            145,
+            855,
+        ),
+        (
+            430,
+            145,
+            855,
+        ),
+        (
+            525,
+            145,
+            855,
+        ),
+        (
+            620,
+            145,
+            855,
+        ),
+        (
+            715,
+            145,
+            855,
+        ),
+        (
+            810,
+            145,
+            855,
+        ),
+        (
+            905,
+            145,
+            855,
+        ),
+    ]
+
+    for y, x1, x2 in boundaries:
 
         fig.add_trace(
             go.Scatter(
                 x=[
-                    p[0]
-                    for p in boundary
+                    x1,
+                    x2,
                 ],
                 y=[
-                    p[1]
-                    for p in boundary
+                    y,
+                    y,
                 ],
                 mode="lines",
                 line=dict(
-                    color=BORDER,
+                    color=BLACK,
                     width=2,
                 ),
                 hoverinfo="skip",
@@ -1087,10 +1230,34 @@ def make_map(sheet):
         )
 
     # --------------------------------------------------------
+    # Vertical center
+    # --------------------------------------------------------
+
+    fig.add_trace(
+        go.Scatter(
+            x=[
+                500,
+                500,
+            ],
+            y=[
+                150,
+                1065,
+            ],
+            mode="lines",
+            line=dict(
+                color=BLACK,
+                width=4,
+            ),
+            hoverinfo="skip",
+            showlegend=False,
+        )
+    )
+
+    # --------------------------------------------------------
     # Brain folds
     # --------------------------------------------------------
 
-    for fold in brain_folds():
+    for fold in BRAIN_FOLDS:
 
         fig.add_trace(
             go.Scatter(
@@ -1104,7 +1271,7 @@ def make_map(sheet):
                 ],
                 mode="lines",
                 line=dict(
-                    color="#777777",
+                    color=GREY,
                     width=2,
                     shape="spline",
                 ),
@@ -1114,48 +1281,20 @@ def make_map(sheet):
         )
 
     # --------------------------------------------------------
-    # Center division
-    # --------------------------------------------------------
-
-    fig.add_trace(
-        go.Scatter(
-            x=[
-                500,
-                500,
-            ],
-            y=[
-                115,
-                1085,
-            ],
-            mode="lines",
-            line=dict(
-                color=BORDER,
-                width=5,
-            ),
-            hoverinfo="skip",
-            showlegend=False,
-        )
-    )
-
-    # --------------------------------------------------------
     # Outer border
     # --------------------------------------------------------
 
     fig.add_trace(
         go.Scatter(
-            x=[
-                p[0]
-                for p in outline
-            ]
-            + [outline[0][0]],
-            y=[
-                p[1]
-                for p in outline
-            ]
-            + [outline[0][1]],
+            x=outline_x + [
+                outline_x[0]
+            ],
+            y=outline_y + [
+                outline_y[0]
+            ],
             mode="lines",
             line=dict(
-                color=BORDER,
+                color=BLACK,
                 width=6,
             ),
             hoverinfo="skip",
@@ -1163,22 +1302,26 @@ def make_map(sheet):
         )
     )
 
+    # --------------------------------------------------------
+    # Layout
+    # --------------------------------------------------------
+
     fig.update_xaxes(
         visible=False,
+        fixedrange=True,
         range=[
             45,
             955,
         ],
-        fixedrange=True,
     )
 
     fig.update_yaxes(
         visible=False,
+        fixedrange=True,
         range=[
             1140,
-            55,
+            60,
         ],
-        fixedrange=True,
         scaleanchor="x",
         scaleratio=1,
     )
@@ -1186,16 +1329,16 @@ def make_map(sheet):
     fig.update_layout(
         height=780,
         margin=dict(
-            l=10,
-            r=10,
-            t=10,
-            b=10,
+            l=0,
+            r=0,
+            t=0,
+            b=0,
         ),
         paper_bgcolor="white",
         plot_bgcolor="white",
+        hovermode="closest",
         clickmode="event+select",
         dragmode=False,
-        hovermode="closest",
         showlegend=False,
     )
 
@@ -1206,27 +1349,26 @@ def make_map(sheet):
 # FONT
 # ============================================================
 
-def load_font(
+def get_font(
     size,
     bold=False,
 ):
 
-    candidates = [
-        (
-            "/usr/share/fonts/truetype/dejavu/"
-            "DejaVuSans-Bold.ttf"
-            if bold
-            else
-            "/usr/share/fonts/truetype/dejavu/"
-            "DejaVuSans.ttf"
-        ),
-        (
-            "C:/Windows/Fonts/arialbd.ttf"
-            if bold
-            else
-            "C:/Windows/Fonts/arial.ttf"
-        ),
-    ]
+    if bold:
+
+        candidates = [
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+            "/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf",
+            "C:/Windows/Fonts/arialbd.ttf",
+        ]
+
+    else:
+
+        candidates = [
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+            "/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf",
+            "C:/Windows/Fonts/arial.ttf",
+        ]
 
     for path in candidates:
 
@@ -1237,71 +1379,72 @@ def load_font(
                 size,
             )
 
-        except OSError:
+        except Exception:
             pass
 
     return ImageFont.load_default()
 
 
 # ============================================================
-# PRINTABLE SHEET
+# PRINTABLE BRAIN SHEET
 # ============================================================
 
 def render_sheet(sheet):
 
-    W = 1000
-    H = 1300
+    width = 1000
+    height = 1300
 
-    img = Image.new(
+    image = Image.new(
         "RGB",
         (
-            W,
-            H,
+            width,
+            height,
         ),
         "white",
     )
 
-    d = ImageDraw.Draw(
-        img
+    draw = ImageDraw.Draw(
+        image
     )
 
-    title_font = load_font(
+    title_font = get_font(
         34,
         True,
     )
 
-    month_font = load_font(
-        31,
+    month_font = get_font(
+        30,
         True,
     )
 
-    small_font = load_font(
-        20,
-    )
-
-    day_font = load_font(
+    day_font = get_font(
         21,
         True,
     )
 
+    footer_font = get_font(
+        19,
+        False,
+    )
+
     # --------------------------------------------------------
-    # PAGE BORDER
+    # Page border
     # --------------------------------------------------------
 
-    d.rounded_rectangle(
+    draw.rounded_rectangle(
         (
-            18,
-            18,
-            W - 18,
-            H - 18,
+            15,
+            15,
+            width - 15,
+            height - 15,
         ),
         radius=8,
-        outline=BORDER,
+        outline=BLACK,
         width=3,
     )
 
     # --------------------------------------------------------
-    # HEADER
+    # Header
     # --------------------------------------------------------
 
     title = (
@@ -1315,28 +1458,28 @@ def render_sheet(sheet):
         "%B %Y"
     )
 
-    d.text(
+    draw.text(
         (
             60,
             48,
         ),
         title,
-        fill=BORDER,
+        fill=BLACK,
         font=title_font,
     )
 
-    d.line(
+    draw.line(
         (
             55,
-            94,
-            340,
-            94,
+            96,
+            350,
+            96,
         ),
-        fill=BORDER,
+        fill=BLACK,
         width=2,
     )
 
-    box = d.textbbox(
+    month_box = draw.textbbox(
         (
             0,
             0,
@@ -1346,46 +1489,40 @@ def render_sheet(sheet):
     )
 
     month_width = (
-        box[2]
-        - box[0]
+        month_box[2]
+        - month_box[0]
     )
 
-    d.text(
+    draw.text(
         (
-            W
+            width
             - 60
             - month_width,
             50,
         ),
         month,
-        fill=BORDER,
+        fill=BLACK,
         font=month_font,
     )
 
     # --------------------------------------------------------
-    # BRAIN BASE
+    # Brain base
     # --------------------------------------------------------
 
-    outline = brain_outline()
-
-    d.polygon(
-        outline,
-        fill=BRAIN_BG,
+    draw.polygon(
+        BRAIN_OUTLINE,
+        fill=BRAIN_BACKGROUND,
     )
 
-    valid_days = days_in_month(
-        sheet["header_date"]
+    valid_days = days_in_current_month(
+        sheet
     )
 
     # --------------------------------------------------------
-    # DATE CELLS
+    # Date fills
     # --------------------------------------------------------
 
-    for day, pts in DATE_CELLS.items():
-
-        valid = (
-            day <= valid_days
-        )
+    for day, points in DATE_CELLS.items():
 
         assignment = sheet[
             "days"
@@ -1397,57 +1534,120 @@ def render_sheet(sheet):
                 "color_hex"
             ]
 
-        elif valid:
+        elif day <= valid_days:
 
-            fill = DEFAULT_FILL
+            fill = DEFAULT_COLOR
 
         else:
 
-            fill = "#E5E5E5"
+            fill = "#E2E2E2"
 
-        d.polygon(
-            pts,
+        draw.polygon(
+            points,
             fill=fill,
         )
 
     # --------------------------------------------------------
-    # INTERNAL SHARED BORDERS
+    # Shared borders
     # --------------------------------------------------------
 
-    for boundary in SHARED_BOUNDARIES:
+    boundaries = [
+        (
+            240,
+            280,
+            720,
+        ),
+        (
+            335,
+            145,
+            855,
+        ),
+        (
+            430,
+            145,
+            855,
+        ),
+        (
+            525,
+            145,
+            855,
+        ),
+        (
+            620,
+            145,
+            855,
+        ),
+        (
+            715,
+            145,
+            855,
+        ),
+        (
+            810,
+            145,
+            855,
+        ),
+        (
+            905,
+            145,
+            855,
+        ),
+    ]
 
-        d.line(
-            boundary,
-            fill=BORDER,
+    for y, x1, x2 in boundaries:
+
+        draw.line(
+            (
+                x1,
+                y,
+                x2,
+                y,
+            ),
+            fill=BLACK,
             width=2,
         )
 
     # --------------------------------------------------------
-    # BRAIN FOLDS
+    # Brain folds
     # --------------------------------------------------------
 
-    for fold in brain_folds():
+    for fold in BRAIN_FOLDS:
 
-        d.line(
+        draw.line(
             fold,
-            fill="#777777",
+            fill=GREY,
             width=2,
             joint="curve",
         )
 
     # --------------------------------------------------------
-    # DATE NUMBERS
+    # Center line
     # --------------------------------------------------------
 
-    for day, pts in DATE_CELLS.items():
+    draw.line(
+        (
+            500,
+            150,
+            500,
+            1065,
+        ),
+        fill=BLACK,
+        width=4,
+    )
 
-        cx, cy = center(
-            pts
+    # --------------------------------------------------------
+    # Date numbers
+    # --------------------------------------------------------
+
+    for day, points in DATE_CELLS.items():
+
+        cx, cy = polygon_center(
+            points
         )
 
         text = str(day)
 
-        box = d.textbbox(
+        bbox = draw.textbbox(
             (
                 0,
                 0,
@@ -1456,54 +1656,44 @@ def render_sheet(sheet):
             font=day_font,
         )
 
-        tw = (
-            box[2]
-            - box[0]
+        text_width = (
+            bbox[2]
+            - bbox[0]
         )
 
-        th = (
-            box[3]
-            - box[1]
+        text_height = (
+            bbox[3]
+            - bbox[1]
         )
 
-        d.text(
+        draw.text(
             (
-                cx - tw / 2,
-                cy - th / 2,
+                cx
+                - text_width / 2,
+                cy
+                - text_height / 2,
             ),
             text,
-            fill=BORDER,
+            fill=BLACK,
             font=day_font,
         )
 
     # --------------------------------------------------------
-    # CENTER LINE
+    # Outer brain border
     # --------------------------------------------------------
 
-    d.line(
-        (
-            500,
-            115,
-            500,
-            1085,
-        ),
-        fill=BORDER,
-        width=5,
-    )
-
-    # --------------------------------------------------------
-    # OUTER BRAIN BORDER
-    # --------------------------------------------------------
-
-    d.line(
-        outline + [outline[0]],
-        fill=BORDER,
+    draw.line(
+        BRAIN_OUTLINE
+        + [
+            BRAIN_OUTLINE[0]
+        ],
+        fill=BLACK,
         width=6,
         joint="curve",
     )
 
     # --------------------------------------------------------
-    # FOOTER
+    # Footer
     # --------------------------------------------------------
 
     footer_y = 1160
@@ -1518,52 +1708,52 @@ def render_sheet(sheet):
         or "________"
     )
 
-    d.text(
+    draw.text(
         (
             60,
             footer_y,
         ),
         f"MAL Capacity (MW): {mal}",
-        fill=BORDER,
-        font=small_font,
+        fill=BLACK,
+        font=footer_font,
     )
 
-    d.text(
+    draw.text(
         (
             600,
             footer_y,
         ),
         "No. of PSS: ________",
-        fill=BORDER,
-        font=small_font,
+        fill=BLACK,
+        font=footer_font,
     )
 
-    d.text(
+    draw.text(
         (
             60,
             footer_y + 45,
         ),
         f"Total Capacity (MW): {total}",
-        fill=BORDER,
-        font=small_font,
+        fill=BLACK,
+        font=footer_font,
     )
 
-    return img
+    return image
 
 
 # ============================================================
 # COLLAGE
 # ============================================================
 
-def make_collage(
+def create_collage(
     images,
     columns=4,
 ):
 
     gap = 20
 
-    thumb_w = 520
-    thumb_h = 676
+    thumb_width = 520
+    thumb_height = 676
 
     rows = int(
         np.ceil(
@@ -1572,23 +1762,34 @@ def make_collage(
         )
     )
 
-    canvas = Image.new(
-        "RGB",
-        (
-            columns
-            * thumb_w
-            + (columns + 1)
-            * gap,
-
-            rows
-            * thumb_h
-            + (rows + 1)
-            * gap,
-        ),
-        "#E8E8E8",
+    collage_width = (
+        columns
+        * thumb_width
+        + (
+            columns + 1
+        )
+        * gap
     )
 
-    for i, image in enumerate(
+    collage_height = (
+        rows
+        * thumb_height
+        + (
+            rows + 1
+        )
+        * gap
+    )
+
+    collage_image = Image.new(
+        "RGB",
+        (
+            collage_width,
+            collage_height,
+        ),
+        "#E7E7E7",
+    )
+
+    for index, image in enumerate(
         images
     ):
 
@@ -1596,8 +1797,8 @@ def make_collage(
 
         copy.thumbnail(
             (
-                thumb_w,
-                thumb_h,
+                thumb_width,
+                thumb_height,
             ),
             Image.Resampling.LANCZOS,
         )
@@ -1605,14 +1806,15 @@ def make_collage(
         x = (
             gap
             + (
-                i % columns
+                index
+                % columns
             )
             * (
-                thumb_w
+                thumb_width
                 + gap
             )
             + (
-                thumb_w
+                thumb_width
                 - copy.width
             )
             // 2
@@ -1621,20 +1823,21 @@ def make_collage(
         y = (
             gap
             + (
-                i // columns
+                index
+                // columns
             )
             * (
-                thumb_h
+                thumb_height
                 + gap
             )
             + (
-                thumb_h
+                thumb_height
                 - copy.height
             )
             // 2
         )
 
-        canvas.paste(
+        collage_image.paste(
             copy,
             (
                 x,
@@ -1642,14 +1845,14 @@ def make_collage(
             ),
         )
 
-    return canvas
+    return collage_image
 
 
 # ============================================================
-# IMAGE BYTES
+# PNG BYTES
 # ============================================================
 
-def image_bytes(
+def to_png_bytes(
     image,
 ):
 
@@ -1665,7 +1868,7 @@ def image_bytes(
 
 
 # ============================================================
-# PAGE HEADER
+# MAIN TITLE
 # ============================================================
 
 st.title(
@@ -1673,7 +1876,7 @@ st.title(
 )
 
 st.caption(
-    "Click a date on the brain, choose Red, Green, Yellow or Blue, and continue to the next date."
+    "Click a date on the brain, choose a color, and continue to the next date."
 )
 
 
@@ -1685,36 +1888,40 @@ st.subheader(
     "Sheets"
 )
 
-sheet_buttons = st.columns(
+navigation_columns = st.columns(
     N_SHEETS
 )
 
-for i, col in enumerate(
-    sheet_buttons
+for index, column in enumerate(
+    navigation_columns
 ):
 
-    with col:
+    with column:
 
         if (
-            i
+            index
             == st.session_state.active_sheet
         ):
 
-            label = f"🟦 {i + 1}"
+            button_text = (
+                f"● Sheet {index + 1}"
+            )
 
         else:
 
-            label = str(
-                i + 1
+            button_text = (
+                f"Sheet {index + 1}"
             )
 
         if st.button(
-            label,
-            key=f"sheet_nav_{i}",
+            button_text,
+            key=f"sheet_button_{index}",
             use_container_width=True,
         ):
 
-            st.session_state.active_sheet = i
+            st.session_state.active_sheet = (
+                index
+            )
 
             st.session_state.selected_day = min(
                 date.today().day,
@@ -1740,12 +1947,12 @@ sheet = current_sheet()
 
 
 # ============================================================
-# MAIN AREA
+# MAIN CONTENT
 # ============================================================
 
 st.divider()
 
-controls, preview = st.columns(
+left_panel, right_panel = st.columns(
     [
         0.75,
         1.65,
@@ -1755,130 +1962,141 @@ controls, preview = st.columns(
 
 
 # ============================================================
-# LEFT CONTROL PANEL
+# LEFT PANEL
 # ============================================================
 
-with controls:
+with left_panel:
 
     st.subheader(
         f"Sheet {sheet_index + 1}"
     )
 
     # --------------------------------------------------------
-    # HEADER DETAILS
+    # Header input
     # --------------------------------------------------------
 
-    sheet["name"] = st.text_input(
+    new_name = st.text_input(
         "Write on left header",
         value=sheet["name"],
-        key=f"name_input_{sheet_index}",
         placeholder="Solar - G1",
+        key=f"name_{sheet_index}",
     )
 
-    sheet["header_date"] = st.date_input(
+    sheet["name"] = new_name
+
+    # --------------------------------------------------------
+    # Month
+    # --------------------------------------------------------
+
+    new_month = st.date_input(
         "Header month",
         value=sheet["header_date"],
-        key=f"date_input_{sheet_index}",
-    ).replace(
+        key=f"month_{sheet_index}",
+    )
+
+    sheet["header_date"] = new_month.replace(
         day=1
     )
+
+    # --------------------------------------------------------
+    # Capacity
+    # --------------------------------------------------------
 
     sheet["mal"] = st.text_input(
         "MAL Capacity (MW)",
         value=sheet["mal"],
-        key=f"mal_input_{sheet_index}",
+        key=f"mal_{sheet_index}",
     )
 
     sheet["total"] = st.text_input(
         "Total Capacity (MW)",
         value=sheet["total"],
-        key=f"total_input_{sheet_index}",
+        key=f"total_{sheet_index}",
     )
 
     # --------------------------------------------------------
-    # DATABASE
+    # Database button
     # --------------------------------------------------------
 
     st.markdown(
         "### Database"
     )
 
-    st.caption(
-        "Save sheet details permanently."
-    )
-
     if st.button(
         "💾 Save Details to Database",
         type="primary",
         use_container_width=True,
-        key=f"save_details_{sheet_index}",
+        key=f"save_{sheet_index}",
     ):
 
-        save_sheet_details(
+        database_save_details(
             sheet_index + 1,
             sheet,
         )
 
+        # Reload from database
         st.session_state.sheets[
             sheet_index
-        ] = load_sheet_from_database(
+        ] = database_load_sheet(
             sheet_index + 1
         )
 
         st.success(
-            "Details saved successfully."
+            "Sheet details saved."
         )
 
         st.rerun()
 
     # --------------------------------------------------------
-    # COLOR DATES
+    # Date coloring
     # --------------------------------------------------------
 
     st.markdown(
         "### Color Dates"
     )
 
-    st.info(
-        "Click a date in the preview, then select its color."
+    st.caption(
+        "1. Click a date in the brain"
+        "\n\n"
+        "2. Choose Red, Green, Yellow or Blue"
     )
 
     selected_day = (
         st.session_state.selected_day
     )
 
-    selected_actual_date = actual_date(
+    selected_date = get_actual_date(
         sheet,
         selected_day,
     )
 
-    if selected_actual_date:
+    if selected_date:
 
         st.write(
-            f"**Selected:** "
-            f"{selected_actual_date.strftime('%d-%b-%Y')}"
+            f"**Selected Date:** "
+            f"{selected_date.strftime('%d-%b-%Y')}"
         )
 
     else:
 
-        st.write(
-            f"**Selected day:** {selected_day}"
+        st.warning(
+            f"Day {selected_day} does not exist in this month."
         )
 
     # --------------------------------------------------------
-    # COLORS
+    # Color buttons
     # --------------------------------------------------------
 
-    color_cols = st.columns(
+    color_columns = st.columns(
         4
     )
 
-    for color_name, col in zip(
-        COLORS,
-        color_cols,
+    for color_name, color_column in zip(
+        COLORS.keys(),
+        color_columns,
     ):
 
-        with col:
+        with color_column:
 
             if st.button(
                 color_name,
@@ -1890,18 +2108,26 @@ with controls:
                 use_container_width=True,
             ):
 
-                if selected_actual_date:
+                selected_date = get_actual_date(
+                    sheet,
+                    selected_day,
+                )
 
+                if selected_date is not None:
+
+                    # ----------------------------------------
                     # Save immediately
-                    save_date_color(
+                    # ----------------------------------------
+
+                    database_save_color(
                         sheet_index + 1,
                         selected_day,
                         color_name,
                     )
 
-                    sheet["days"][
-                        selected_day
-                    ] = {
+                    sheet[
+                        "days"
+                    ][selected_day] = {
                         "color_name": color_name,
                         "color_hex": COLORS[
                             color_name
@@ -1909,15 +2135,16 @@ with controls:
                     }
 
                     # ----------------------------------------
-                    # Move to next uncolored valid date
+                    # Automatically find next date
                     # ----------------------------------------
 
-                    valid_days = days_in_month(
-                        sheet["header_date"]
+                    valid_days = days_in_current_month(
+                        sheet
                     )
 
                     next_day = None
 
+                    # Forward search
                     for candidate in range(
                         selected_day + 1,
                         valid_days + 1,
@@ -1931,6 +2158,7 @@ with controls:
                             next_day = candidate
                             break
 
+                    # Start from beginning
                     if next_day is None:
 
                         for candidate in range(
@@ -1946,7 +2174,7 @@ with controls:
                                 next_day = candidate
                                 break
 
-                    if next_day:
+                    if next_day is not None:
 
                         st.session_state.selected_day = (
                             next_day
@@ -1959,30 +2187,30 @@ with controls:
                     st.rerun()
 
     # --------------------------------------------------------
-    # SELECTED DATE STATUS
+    # Current date status
     # --------------------------------------------------------
 
-    existing = sheet[
+    current_assignment = sheet[
         "days"
     ].get(
         selected_day
     )
 
-    if existing:
+    if current_assignment:
 
         st.success(
-            f"Date {selected_day}: "
-            f"{existing['color_name']}"
+            f"Date {selected_day} is "
+            f"{current_assignment['color_name']}"
         )
 
     else:
 
-        st.caption(
+        st.info(
             f"Date {selected_day} is not colored."
         )
 
     # --------------------------------------------------------
-    # CLEAR SELECTED
+    # Clear selected
     # --------------------------------------------------------
 
     if st.button(
@@ -1991,7 +2219,7 @@ with controls:
         key=f"clear_date_{sheet_index}",
     ):
 
-        delete_date_color(
+        database_delete_color(
             sheet_index + 1,
             selected_day,
         )
@@ -2008,16 +2236,16 @@ with controls:
         st.rerun()
 
     # --------------------------------------------------------
-    # CLEAR SHEET
+    # Clear complete sheet
     # --------------------------------------------------------
 
     if st.button(
-        "🗑 Clear All Dates on This Sheet",
+        "🗑 Clear All Dates",
         use_container_width=True,
-        key=f"clear_sheet_{sheet_index}",
+        key=f"clear_all_{sheet_index}",
     ):
 
-        clear_sheet_database(
+        database_clear_sheet(
             sheet_index + 1
         )
 
@@ -2033,51 +2261,51 @@ with controls:
 
 
 # ============================================================
-# RIGHT PREVIEW
+# RIGHT PANEL
 # ============================================================
 
-with preview:
+with right_panel:
 
     st.subheader(
-        "Sheet Preview"
+        "Brain Preview"
     )
 
     # --------------------------------------------------------
-    # HEADER
+    # Preview header
     # --------------------------------------------------------
 
-    head_left, head_right = st.columns(
+    header_left, header_right = st.columns(
         [
             3,
             1,
         ]
     )
 
-    with head_left:
+    with header_left:
 
         st.markdown(
             f"### {sheet['name'] or 'Solar - ____'}"
         )
 
-    with head_right:
+    with header_right:
 
         st.markdown(
             f"### {sheet['header_date'].strftime('%B %Y')}"
         )
 
     # --------------------------------------------------------
-    # BRAIN
+    # Brain map
     # --------------------------------------------------------
 
-    fig = make_map(
+    figure = make_map(
         sheet
     )
 
     event = st.plotly_chart(
-        fig,
+        figure,
         use_container_width=True,
         key=(
-            f"brain_map_"
+            f"brain_"
             f"{sheet_index}_"
             f"{st.session_state.map_version}"
         ),
@@ -2088,20 +2316,20 @@ with preview:
     )
 
     # --------------------------------------------------------
-    # CLICK HANDLING
+    # Detect clicked date
     # --------------------------------------------------------
 
     if event is not None:
 
-        points = getattr(
-            getattr(
-                event,
-                "selection",
-                None,
-            ),
-            "points",
-            [],
-        )
+        try:
+
+            points = (
+                event.selection.points
+            )
+
+        except Exception:
+
+            points = []
 
         if points:
 
@@ -2144,10 +2372,7 @@ with preview:
 
                     break
 
-                except (
-                    TypeError,
-                    ValueError,
-                ):
+                except Exception:
 
                     continue
 
@@ -2156,18 +2381,18 @@ with preview:
                 and 1 <= clicked_day <= N_DAYS
             ):
 
-                if actual_date(
+                if get_actual_date(
                     sheet,
                     clicked_day,
-                ):
+                ) is not None:
 
-                    signature = (
+                    click_signature = (
                         sheet_index,
                         clicked_day,
                     )
 
                     if (
-                        signature
+                        click_signature
                         != st.session_state.last_click_signature
                     ):
 
@@ -2176,7 +2401,7 @@ with preview:
                         )
 
                         st.session_state.last_click_signature = (
-                            signature
+                            click_signature
                         )
 
                         st.session_state.map_version += 1
@@ -2184,45 +2409,45 @@ with preview:
                         st.rerun()
 
     # --------------------------------------------------------
-    # SELECTED DATE
+    # Selected date indicator
     # --------------------------------------------------------
 
     selected_day = (
         st.session_state.selected_day
     )
 
-    selected_date = actual_date(
+    selected_date = get_actual_date(
         sheet,
         selected_day,
     )
 
     if selected_date:
 
-        existing = sheet[
+        assignment = sheet[
             "days"
         ].get(
             selected_day
         )
 
-        if existing:
+        if assignment:
 
             st.success(
-                f"Selected Date: "
+                f"Selected: "
                 f"{selected_date.strftime('%d-%b-%Y')}  •  "
-                f"{existing['color_name']}"
+                f"{assignment['color_name']}"
             )
 
         else:
 
             st.info(
-                f"Selected Date: "
+                f"Selected: "
                 f"{selected_date.strftime('%d-%b-%Y')}  •  "
                 f"Not colored"
             )
 
 
 # ============================================================
-# LEGEND
+# COLOR LEGEND
 # ============================================================
 
 st.divider()
@@ -2231,30 +2456,30 @@ st.subheader(
     "Color Legend"
 )
 
-legend_cols = st.columns(
+legend_columns = st.columns(
     4
 )
 
-for col, (
+for column, (
     color_name,
     color_hex,
 ) in zip(
-    legend_cols,
+    legend_columns,
     COLORS.items(),
 ):
 
-    with col:
+    with column:
 
         st.markdown(
             f"""
             <div style="
-                border: 1px solid #D0D0D0;
-                border-radius: 8px;
-                padding: 10px;
-                text-align: center;
-                background: {color_hex};
-                color: #111111;
-                font-weight: 600;
+                background:{color_hex};
+                border:2px solid #111;
+                border-radius:8px;
+                padding:10px;
+                text-align:center;
+                font-weight:600;
+                color:#111;
             ">
                 {color_name}
             </div>
@@ -2276,36 +2501,39 @@ st.subheader(
 saved_rows = []
 
 for day in sorted(
-    sheet["days"]
+    sheet["days"].keys()
 ):
 
-    actual = actual_date(
+    actual = get_actual_date(
         sheet,
         day,
     )
 
-    if actual:
+    if actual is None:
+        continue
 
-        saved_rows.append(
-            {
-                "Date": actual.strftime(
-                    "%d-%b-%Y"
-                ),
-                "Day": day,
-                "Color": sheet[
-                    "days"
-                ][day][
-                    "color_name"
-                ],
-            }
-        )
+    saved_rows.append(
+        {
+            "Date": actual.strftime(
+                "%d-%b-%Y"
+            ),
+            "Day": day,
+            "Color": sheet[
+                "days"
+            ][day][
+                "color_name"
+            ],
+        }
+    )
 
 if saved_rows:
 
+    saved_df = pd.DataFrame(
+        saved_rows
+    )
+
     st.dataframe(
-        pd.DataFrame(
-            saved_rows
-        ),
+        saved_df,
         hide_index=True,
         use_container_width=True,
     )
@@ -2318,7 +2546,7 @@ else:
 
 
 # ============================================================
-# FINAL COLLAGE
+# 10 SHEET COLLAGE
 # ============================================================
 
 st.divider()
@@ -2328,7 +2556,7 @@ st.subheader(
 )
 
 st.caption(
-    "All 10 sheets are combined into one 4 + 4 + 2 collage."
+    "The final output contains all 10 sheets in a 4 + 4 + 2 layout."
 )
 
 if st.button(
@@ -2342,25 +2570,27 @@ if st.button(
 
 if st.session_state.show_collage:
 
-    latest_sheets = [
-        load_sheet_from_database(
-            i
-        )
+    # Always reload from database.
+    # This prevents the collage from depending
+    # only on session state.
+
+    database_sheets = [
+        database_load_sheet(i)
         for i in range(
             1,
             N_SHEETS + 1,
         )
     ]
 
-    images = [
+    rendered_sheets = [
         render_sheet(
-            s
+            sheet_data
         )
-        for s in latest_sheets
+        for sheet_data in database_sheets
     ]
 
-    final_collage = make_collage(
-        images,
+    final_collage = create_collage(
+        rendered_sheets,
         columns=4,
     )
 
@@ -2371,7 +2601,7 @@ if st.session_state.show_collage:
 
     st.download_button(
         "📥 Download 10-Sheet Collage",
-        data=image_bytes(
+        data=to_png_bytes(
             final_collage
         ),
         file_name=(
@@ -2383,7 +2613,7 @@ if st.session_state.show_collage:
 
 
 # ============================================================
-# DATABASE BACKUP CSV
+# DATABASE BACKUP
 # ============================================================
 
 st.divider()
@@ -2392,14 +2622,14 @@ st.subheader(
     "Database Backup"
 )
 
-all_rows = []
+backup_rows = []
 
 for sheet_no in range(
     1,
     N_SHEETS + 1,
 ):
 
-    db_sheet = load_sheet_from_database(
+    db_sheet = database_load_sheet(
         sheet_no
     )
 
@@ -2408,7 +2638,7 @@ for sheet_no in range(
         N_DAYS + 1,
     ):
 
-        actual = actual_date(
+        actual = get_actual_date(
             db_sheet,
             day,
         )
@@ -2419,7 +2649,7 @@ for sheet_no in range(
             day
         )
 
-        all_rows.append(
+        backup_rows.append(
             {
                 "Sheet": sheet_no,
                 "Header": db_sheet[
@@ -2454,7 +2684,7 @@ for sheet_no in range(
 
 
 backup_df = pd.DataFrame(
-    all_rows
+    backup_rows
 )
 
 st.download_button(
@@ -2463,7 +2693,7 @@ st.download_button(
         index=False
     ),
     file_name=(
-        "solar_date_coloring_database_backup.csv"
+        "solar_date_coloring_backup.csv"
     ),
     mime="text/csv",
     use_container_width=True,
