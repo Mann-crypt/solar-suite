@@ -28,9 +28,10 @@ PALETTE = {
 # PSS rows follow the photographed sheet: 1-2, 3-4, then 4 columns,
 # ending with 29-31. Coordinates are deliberately fixed so every sheet
 # has exactly the same geometry.
-ROWS = [, [3, 4], [5, 6, 7, 8], [9, 10, 11, 12],
-, [17, 18, 19, 20], [21, 22, 23, 24],
-, [29, 30, 31],
+ROWS = [
+    [1, 2], [3, 4], [5, 6, 7, 8], [9, 10, 11, 12],
+    [13, 14, 15, 16], [17, 18, 19, 20], [21, 22, 23, 24],
+    [25, 26, 27, 28], [29, 30, 31],
 ]
 Y = [145, 235, 325, 415, 505, 595, 685, 775, 865, 955]
 FOUR_X = [(145, 300), (300, 455), (545, 700), (700, 855)]
@@ -109,6 +110,7 @@ def make_map(sheet, selected_date):
         ys = [p[1] for p in pts] + [pts[0][1]]
         assignment = sheet["assignments"].get(pss)
         fill = assignment["color"] if assignment else PALETTE["Red"]
+        # Only show assigned colors. Unassigned defaults to the photographed orange/red.
         opacity = 0.97 if assignment else 0.88
         fig.add_trace(go.Scatter(
             x=xs, y=ys, mode="lines", fill="toself",
@@ -174,6 +176,7 @@ def render_sheet(sheet, width=900):
     ]
     d.polygon(outer, fill="white", outline="black")
 
+    # Draw all PSS cells. Unassigned cells retain the red/orange paper-map look.
     for pss, pts in POLYS.items():
         v = sheet["assignments"].get(pss)
         fill = v["color"] if v else PALETTE["Red"]
@@ -224,50 +227,147 @@ def png_bytes(img):
 st.title("☀️ Solar PSS Sheet Painter")
 st.caption("Select a date and color, then click PSS blocks on the map. Create 10 sheets and export a 4-4-2 collage.")
 
-# Sheet Navigation Header Tabs
+# Sheet tabs
 sheet_cols = st.columns(N_SHEETS)
 for i, col in enumerate(sheet_cols):
     with col:
-        sheet_item = st.session_state.sheets[i]
-        # Resolve the KeyError securely here:
-        sheet_name = sheet_item.get("name")
-        label = f"📄 {sheet_name}" if sheet_name else f"Sheet {i + 1}"
-        
-        # Highlight active sheet button style
-        if st.session_state.active_sheet == i:
-            st.markdown(f"**🎯 {label}**")
-        else:
-            if st.button(label, key=f"tab_btn_{i}"):
-                st.session_state.active_sheet = i
-                st.rerun()
+        label = st.session_state.sheets[i]["name"] or f"Sheet {i + 1}"
+        if st.button(label, key=f"sheet_{i}", width="stretch"):
+            st.session_state.active_sheet = i
+            st.session_state.selected_pss = assignments_for_date(st.session_state.sheets[i], st.session_state.paint_date)
+            st.session_state.last_synced_paint_date = st.session_state.paint_date.isoformat()
+            st.session_state.processed_event = None
+            st.rerun()
 
 st.divider()
-
-# Split work arena: Left sidebar parameters / Right map visualizer
+idx = st.session_state.active_sheet
 sheet = current_sheet()
-col1, col2 = st.columns([1, 2])
 
-with col1:
-    st.subheader("📋 Sheet Details")
-    sheet["name"] = st.text_input("Sheet Name / Project Title", value=sheet["name"], key=f"s_name_{st.session_state.active_sheet}")
-    sheet["header_date"] = st.date_input("Target Month/Date", value=sheet["header_date"], key=f"s_date_{st.session_state.active_sheet}")
-    sheet["mal"] = st.text_input("MAL Capacity (MW)", value=sheet["mal"], key=f"s_mal_{st.session_state.active_sheet}")
-    sheet["total"] = st.text_input("Total Capacity (MW)", value=sheet["total"], key=f"s_tot_{st.session_state.active_sheet}")
-    
-    st.divider()
-    st.subheader("🎨 Paint Settings")
-    p_date = st.date_input("Assignment Paint Date", value=st.session_state.paint_date)
-    st.session_state.paint_date = p_date
-    
-    color_choice = st.selectbox("Paint Brush Color", list(PALETTE.keys()), index=list(PALETTE.keys()).index(st.session_state.paint_color_name))
-    st.session_state.paint_color_name = color_choice
-    chosen_hex = PALETTE[color_choice]
+controls, preview = st.columns([0.9, 1.7], gap="large")
+with controls:
+    st.subheader(f"Sheet {idx + 1}")
+    sheet["name"] = st.text_input("Write on left header", value=sheet["name"], key=f"name_{idx}", placeholder="Solar - G1")
+    sheet["header_date"] = st.date_input("Header month/date", value=sheet["header_date"], key=f"header_date_{idx}")
+    sheet["mal"] = st.text_input("MAL Capacity (MW)", value=sheet["mal"], key=f"mal_{idx}")
+    sheet["total"] = st.text_input("Total Capacity (MW)", value=sheet["total"], key=f"total_{idx}")
 
-with col2:
-    st.subheader(f"🗺️ Map Interface: {sheet['name'] or f'Sheet {st.session_state.active_sheet + 1}'}")
+    st.markdown("### Paint by date")
+    st.session_state.paint_date = st.date_input("1. Click/select date", value=st.session_state.paint_date, key="global_paint_date")
+    if st.session_state.paint_date.isoformat() != st.session_state.last_synced_paint_date:
+        st.session_state.selected_pss = assignments_for_date(sheet, st.session_state.paint_date)
+        st.session_state.last_synced_paint_date = st.session_state.paint_date.isoformat()
+        st.session_state.processed_event = None
+    st.session_state.paint_color_name = st.selectbox("2. Select color", list(PALETTE), index=list(PALETTE).index(st.session_state.paint_color_name), key="global_color")
+    st.session_state.paint_custom = st.color_picker("Optional: custom fill color", value=PALETTE[st.session_state.paint_color_name], key="global_custom")
+
+    st.write(f"**Selected for {st.session_state.paint_date.strftime('%d-%b-%Y')}:** {', '.join(map(str, sorted(st.session_state.selected_pss))) or 'None'}")
+
+    if st.button("Apply selected PSS", type="primary", width="stretch"):
+        color = st.session_state.paint_custom
+        d_iso = st.session_state.paint_date.isoformat()
+        # Preserve other dates on every PSS. For this selected date, assign/remove exactly the selected set.
+        for pss in range(1, N_PSS + 1):
+            if pss in st.session_state.selected_pss:
+                sheet["assignments"][pss] = {"date": d_iso, "color": color}
+            elif sheet["assignments"].get(pss, {}).get("date") == d_iso:
+                del sheet["assignments"][pss]
+        st.success("Color assignment saved.")
+        st.rerun()
+
+    if st.button("Clear selected date", width="stretch"):
+        d_iso = st.session_state.paint_date.isoformat()
+        sheet["assignments"] = {p: v for p, v in sheet["assignments"].items() if v["date"] != d_iso}
+        st.rerun()
+
+    if st.button("Clear this sheet", width="stretch"):
+        sheet["assignments"] = {}
+        st.rerun()
+
+    st.markdown("### Assigned dates")
+    if sheet["assignments"]:
+        rows = []
+        for pss, v in sorted(sheet["assignments"].items()):
+            rows.append({"PSS": pss, "Date": v["date"], "Color": v["color"]})
+        st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
+    else:
+        st.caption("No PSS dates assigned yet.")
+
+with preview:
+    st.subheader("Click PSS blocks to paint")
     fig = make_map(sheet, st.session_state.paint_date)
-    
-    # Process clicks natively through Plotly Events
-    event = st.plotly_chart(fig, use_container_width=True, on_select="rerun")
-    
-    # Check selection point payload dynamically
+    event = st.plotly_chart(
+        fig,
+        width="stretch",
+        key=f"pss_map_{idx}",
+        on_select="rerun",
+        selection_mode=["points"],
+    )
+
+    # Plotly selection is used as the click-to-select mechanism. Center markers make
+    # every PSS reliably clickable while the filled polygons preserve the visual map.
+    if event is not None:
+        points = getattr(getattr(event, "selection", None), "points", [])
+        if points:
+            pss_values = []
+            for point in points:
+                cd = point.get("customdata") if isinstance(point, dict) else None
+                if cd is not None:
+                    try:
+                        pss_values.append(int(cd[0] if isinstance(cd, (list, tuple)) else cd))
+                    except (TypeError, ValueError):
+                        pass
+            if pss_values:
+                # Process only a new event so Streamlit reruns don't repeatedly toggle the same click.
+                sig = (idx, st.session_state.paint_date.isoformat(), tuple(sorted(pss_values)))
+                if sig != st.session_state.processed_event:
+                    selected = set(st.session_state.selected_pss)
+                    for pss in pss_values:
+                        if pss in selected:
+                            selected.remove(pss)
+                        else:
+                            selected.add(pss)
+                    st.session_state.selected_pss = selected
+                    st.session_state.processed_event = sig
+                    st.rerun()
+
+    st.caption("Click a PSS number. Click it again to remove it from the current date selection. Then press 'Apply selected PSS'.")
+
+# ============================================================
+# FINAL COLLAGE
+# ============================================================
+st.divider()
+st.subheader("Final 10-sheet collage")
+st.caption("The collage is arranged 4 + 4 + 2, matching the layout of your photograph.")
+
+if st.button("Generate collage", type="primary", width="stretch"):
+    st.session_state.make_collage = True
+
+if st.session_state.get("make_collage", False):
+    images = [render_sheet(s) for s in st.session_state.sheets]
+    final = collage(images, columns=4)
+    st.image(final, width="stretch")
+    st.download_button(
+        "⬇️ Download collage PNG",
+        data=png_bytes(final),
+        file_name="solar_pss_10_sheet_collage.png",
+        mime="image/png",
+        width="stretch",
+    )
+
+# Export mapping for backup / Excel workflow.
+rows = []
+for i, s in enumerate(st.session_state.sheets, start=1):
+    for pss in range(1, N_PSS + 1):
+        v = s["assignments"].get(pss)
+        rows.append({
+            "Sheet": i,
+            "Header": s["name"],
+            "Header Date": s["header_date"].isoformat(),
+            "PSS": pss,
+            "Assigned Date": v["date"] if v else "",
+            "Color": v["color"] if v else "",
+            "MAL Capacity (MW)": s["mal"],
+            "Total Capacity (MW)": s["total"],
+        })
+backup = pd.DataFrame(rows)
+st.download_button("Download PSS/date mapping CSV", backup.to_csv(index=False), "solar_pss_mapping.csv", "text/csv")
