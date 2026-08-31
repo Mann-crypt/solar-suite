@@ -1,12 +1,22 @@
 # ============================================================
 # 7_Brain_Penalty.py
-# DATE COLORING / BRAIN SHEET
+#
+# BRAIN DATE COLORING SHEET
+#
+# 10 Sheets
+# Date based
+# Red / Green / Yellow / Blue
+# Persistent SQLite storage
+# No sidebar
+# No slider
+# No HTML UI
 # ============================================================
 
 import io
 import sqlite3
 from pathlib import Path
 from datetime import datetime
+import calendar
 
 import pandas as pd
 import streamlit as st
@@ -14,13 +24,14 @@ from PIL import Image, ImageDraw, ImageFont
 
 
 # ============================================================
-# PAGE
+# PAGE CONFIG
 # ============================================================
 
 st.set_page_config(
     page_title="Brain Penalty",
     page_icon="🧠",
     layout="wide",
+    initial_sidebar_state="collapsed",
 )
 
 
@@ -30,16 +41,23 @@ st.set_page_config(
 
 TOTAL_SHEETS = 10
 
-DB_PATH = Path("brain_penalty.db")
+DB_FILE = Path("brain_penalty.db")
 
-COLORS = {
+COLOR_NAMES = [
+    "Red",
+    "Green",
+    "Yellow",
+    "Blue",
+]
+
+COLOR_VALUES = {
     "Red": "#E53935",
     "Green": "#43A047",
     "Yellow": "#FDD835",
     "Blue": "#1E88E5",
 }
 
-COLOR_EMOJI = {
+COLOR_SYMBOLS = {
     "Red": "🔴",
     "Green": "🟢",
     "Yellow": "🟡",
@@ -52,14 +70,18 @@ COLOR_EMOJI = {
 # ============================================================
 
 @st.cache_resource
-def get_database():
+def initialize_database():
 
     conn = sqlite3.connect(
-        str(DB_PATH),
+        str(DB_FILE),
         check_same_thread=False,
     )
 
     cursor = conn.cursor()
+
+    # --------------------------------------------------------
+    # SHEETS
+    # --------------------------------------------------------
 
     cursor.execute(
         """
@@ -74,22 +96,39 @@ def get_database():
         """
     )
 
+    # --------------------------------------------------------
+    # DATES
+    # --------------------------------------------------------
+
     cursor.execute(
         """
         CREATE TABLE IF NOT EXISTS date_colors (
             sheet_no INTEGER NOT NULL,
             day INTEGER NOT NULL,
             color TEXT NOT NULL,
-            PRIMARY KEY (sheet_no, day)
+
+            PRIMARY KEY (
+                sheet_no,
+                day
+            )
         )
         """
     )
 
-    for sheet_no in range(1, TOTAL_SHEETS + 1):
+    # --------------------------------------------------------
+    # CREATE 10 SHEETS
+    # --------------------------------------------------------
+
+    for sheet_no in range(
+        1,
+        TOTAL_SHEETS + 1,
+    ):
 
         cursor.execute(
             """
-            INSERT OR IGNORE INTO sheets (sheet_no)
+            INSERT OR IGNORE INTO sheets (
+                sheet_no
+            )
             VALUES (?)
             """,
             (sheet_no,),
@@ -100,14 +139,14 @@ def get_database():
     return conn
 
 
-DB = get_database()
+DB = initialize_database()
 
 
 # ============================================================
-# DATABASE FUNCTIONS
+# DATABASE HELPERS
 # ============================================================
 
-def get_sheet(sheet_no):
+def load_sheet(sheet_no):
 
     cursor = DB.cursor()
 
@@ -129,7 +168,7 @@ def get_sheet(sheet_no):
 
     if row is None:
 
-        return {
+        sheet = {
             "header_text": "",
             "month_year": "",
             "footer_left": "",
@@ -138,9 +177,13 @@ def get_sheet(sheet_no):
             "date_colors": {},
         }
 
+        return sheet
+
     cursor.execute(
         """
-        SELECT day, color
+        SELECT
+            day,
+            color
         FROM date_colors
         WHERE sheet_no = ?
         ORDER BY day
@@ -148,10 +191,13 @@ def get_sheet(sheet_no):
         (sheet_no,),
     )
 
-    colors = {
-        int(day): color
-        for day, color in cursor.fetchall()
-    }
+    color_rows = cursor.fetchall()
+
+    date_colors = {}
+
+    for day, color in color_rows:
+
+        date_colors[int(day)] = color
 
     return {
         "header_text": row[0] or "",
@@ -159,11 +205,11 @@ def get_sheet(sheet_no):
         "footer_left": row[2] or "",
         "footer_middle": row[3] or "",
         "footer_right": row[4] or "",
-        "date_colors": colors,
+        "date_colors": date_colors,
     }
 
 
-def save_sheet(
+def save_sheet_details(
     sheet_no,
     header_text,
     month_year,
@@ -196,16 +242,22 @@ def save_sheet(
     DB.commit()
 
 
-def save_color(
+def save_date_color(
     sheet_no,
     day,
     color,
 ):
 
+    if color not in COLOR_NAMES:
+        return
+
     DB.execute(
         """
-        INSERT OR REPLACE INTO date_colors
-        (sheet_no, day, color)
+        INSERT OR REPLACE INTO date_colors (
+            sheet_no,
+            day,
+            color
+        )
         VALUES (?, ?, ?)
         """,
         (
@@ -218,7 +270,7 @@ def save_color(
     DB.commit()
 
 
-def remove_color(
+def delete_date_color(
     sheet_no,
     day,
 ):
@@ -239,7 +291,7 @@ def remove_color(
     DB.commit()
 
 
-def clear_sheet(
+def clear_sheet_colors(
     sheet_no,
 ):
 
@@ -255,30 +307,37 @@ def clear_sheet(
 
 
 # ============================================================
-# MONTHS
+# MONTH / YEAR OPTIONS
 # ============================================================
 
 MONTH_OPTIONS = [""]
 
-for year in range(2024, 2036):
+for year in range(
+    2024,
+    2036,
+):
 
-    for month in range(1, 13):
+    for month in range(
+        1,
+        13,
+    ):
 
         MONTH_OPTIONS.append(
             datetime(
                 year,
                 month,
                 1,
-            ).strftime("%B %Y")
+            ).strftime(
+                "%B %Y"
+            )
         )
 
 
-def get_days(
+def get_days_in_month(
     month_year,
 ):
 
     if not month_year:
-
         return 31
 
     try:
@@ -288,25 +347,10 @@ def get_days(
             "%B %Y",
         )
 
-        if dt.month == 12:
-
-            nxt = datetime(
-                dt.year + 1,
-                1,
-                1,
-            )
-
-        else:
-
-            nxt = datetime(
-                dt.year,
-                dt.month + 1,
-                1,
-            )
-
-        return (
-            nxt - dt
-        ).days
+        return calendar.monthrange(
+            dt.year,
+            dt.month,
+        )[1]
 
     except Exception:
 
@@ -328,51 +372,100 @@ if "selected_day" not in st.session_state:
 
 
 # ============================================================
-# SIDEBAR
+# CSS
+#
+# Only used to make standard Streamlit controls look cleaner.
+# No HTML is displayed to the user.
 # ============================================================
 
-with st.sidebar:
+st.markdown(
+    """
+    <style>
 
-    st.title("🧠 Brain Sheets")
+    [data-testid="stSidebar"] {
+        display: none;
+    }
 
-    st.caption(
-        "Select one of the 10 sheets"
+    [data-testid="stSidebarCollapsedControl"] {
+        display: none;
+    }
+
+    .block-container {
+        padding-top: 1.2rem;
+        padding-bottom: 2rem;
+        max-width: 1500px;
+    }
+
+    div.stButton > button {
+        min-height: 44px;
+        border-radius: 9px;
+        font-weight: 600;
+    }
+
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+
+# ============================================================
+# TOP TITLE
+# ============================================================
+
+st.title(
+    "🧠 Brain Penalty"
+)
+
+st.caption(
+    "Daily date coloring sheet"
+)
+
+
+# ============================================================
+# SHEET NAVIGATION
+# ============================================================
+
+st.subheader(
+    "Sheets"
+)
+
+sheet_columns = st.columns(
+    TOTAL_SHEETS
+)
+
+for index in range(
+    TOTAL_SHEETS
+):
+
+    sheet_no = index + 1
+
+    sheet_data = load_sheet(
+        sheet_no
     )
 
-    # --------------------------------------------------------
-    # SHEETS
-    # --------------------------------------------------------
+    colored_count = len(
+        sheet_data[
+            "date_colors"
+        ]
+    )
 
-    for sheet_no in range(
-        1,
-        TOTAL_SHEETS + 1,
-    ):
-
-        data = get_sheet(
-            sheet_no
-        )
-
-        count = len(
-            data["date_colors"]
-        )
+    with sheet_columns[index]:
 
         if sheet_no == st.session_state.active_sheet:
 
-            label = (
-                f"🟦 Sheet {sheet_no} "
-                f"• {count} colored"
+            button_label = (
+                f"🟦 {sheet_no}"
             )
 
         else:
 
-            label = (
-                f"Sheet {sheet_no} "
-                f"• {count} colored"
+            button_label = (
+                f"{sheet_no}"
             )
 
         if st.button(
-            label,
-            key=f"sheet_{sheet_no}",
+            button_label,
+            key=f"sheet_button_{sheet_no}",
             use_container_width=True,
         ):
 
@@ -386,79 +479,134 @@ with st.sidebar:
 
             st.rerun()
 
-    # --------------------------------------------------------
-    # CURRENT SHEET
-    # --------------------------------------------------------
+        st.caption(
+            f"{colored_count} colored"
+        )
 
-    sheet_no = st.session_state.active_sheet
 
-    data = get_sheet(
-        sheet_no
-    )
+# ============================================================
+# CURRENT SHEET
+# ============================================================
 
-    st.divider()
+active_sheet = (
+    st.session_state.active_sheet
+)
 
-    st.subheader(
-        f"Sheet {sheet_no} Details"
-    )
+sheet = load_sheet(
+    active_sheet
+)
+
+
+# ============================================================
+# HEADER INPUT
+# ============================================================
+
+st.divider()
+
+header_left, header_right = st.columns(
+    [3, 1]
+)
+
+with header_left:
 
     header_text = st.text_input(
         "Left Header",
-        value=data["header_text"],
-        placeholder="Example: Solar - G1",
-        key=f"header_{sheet_no}",
+        value=sheet[
+            "header_text"
+        ],
+        placeholder="Enter text...",
+        key=f"header_input_{active_sheet}",
     )
+
+with header_right:
+
+    current_month_index = 0
+
+    if sheet[
+        "month_year"
+    ] in MONTH_OPTIONS:
+
+        current_month_index = (
+            MONTH_OPTIONS.index(
+                sheet[
+                    "month_year"
+                ]
+            )
+        )
 
     month_year = st.selectbox(
         "Month & Year",
         MONTH_OPTIONS,
-        index=(
-            MONTH_OPTIONS.index(
-                data["month_year"]
-            )
-            if data["month_year"]
-            in MONTH_OPTIONS
-            else 0
-        ),
-        key=f"month_{sheet_no}",
+        index=current_month_index,
+        key=f"month_input_{active_sheet}",
+        format_func=lambda x:
+            "Select Month & Year"
+            if not x
+            else x,
     )
 
-    st.divider()
 
-    st.subheader(
-        "Footer"
+# ============================================================
+# FOOTER INPUTS
+# ============================================================
+
+footer_left, footer_middle, footer_right = st.columns(
+    3
+)
+
+with footer_left:
+
+    footer_left_value = st.text_input(
+        "Footer Left",
+        value=sheet[
+            "footer_left"
+        ],
+        key=f"footer_left_{active_sheet}",
     )
 
-    footer_left = st.text_input(
-        "Left",
-        value=data["footer_left"],
-        key=f"footer_left_{sheet_no}",
+with footer_middle:
+
+    footer_middle_value = st.text_input(
+        "Footer Middle",
+        value=sheet[
+            "footer_middle"
+        ],
+        key=f"footer_middle_{active_sheet}",
     )
 
-    footer_middle = st.text_input(
-        "Middle",
-        value=data["footer_middle"],
-        key=f"footer_middle_{sheet_no}",
+with footer_right:
+
+    footer_right_value = st.text_input(
+        "Footer Right",
+        value=sheet[
+            "footer_right"
+        ],
+        key=f"footer_right_{active_sheet}",
     )
 
-    footer_right = st.text_input(
-        "Right",
-        value=data["footer_right"],
-        key=f"footer_right_{sheet_no}",
-    )
+
+# ============================================================
+# SAVE HEADER / FOOTER
+# ============================================================
+
+save_col, status_col = st.columns(
+    [1, 4]
+)
+
+with save_col:
 
     if st.button(
         "💾 Save Details",
         use_container_width=True,
     ):
 
-        save_sheet(
-            sheet_no,
+        save_sheet_details(
+            active_sheet,
             header_text,
             month_year,
-            footer_left,
-            footer_middle,
-            footer_right,
+            footer_left_value,
+            footer_middle_value,
+            footer_right_value,
         )
 
         st.success(
@@ -467,285 +615,109 @@ with st.sidebar:
 
         st.rerun()
 
-    # --------------------------------------------------------
-    # COLOR SELECTOR
-    # --------------------------------------------------------
-
-    st.divider()
-
-    st.subheader(
-        "Date Coloring"
-    )
-
-    selected_day = (
-        st.session_state.selected_day
-    )
-
-    if selected_day is None:
-
-        st.info(
-            "Click a date on the sheet."
-        )
-
-    else:
-
-        st.success(
-            f"Date {selected_day} selected"
-        )
-
-        for color in COLORS:
-
-            if st.button(
-                f"{COLOR_EMOJI[color]} {color}",
-                key=(
-                    f"select_color_"
-                    f"{sheet_no}_"
-                    f"{selected_day}_"
-                    f"{color}"
-                ),
-                use_container_width=True,
-            ):
-
-                save_color(
-                    sheet_no,
-                    selected_day,
-                    color,
-                )
-
-                # --------------------------------------------
-                # AUTOMATICALLY SELECT NEXT UNCOLORED DATE
-                # --------------------------------------------
-
-                updated = get_sheet(
-                    sheet_no
-                )
-
-                max_days = get_days(
-                    updated["month_year"]
-                )
-
-                next_day = None
-
-                # First search forward
-                for candidate in range(
-                    selected_day + 1,
-                    max_days + 1,
-                ):
-
-                    if candidate not in updated[
-                        "date_colors"
-                    ]:
-
-                        next_day = candidate
-                        break
-
-                # Then search from beginning
-                if next_day is None:
-
-                    for candidate in range(
-                        1,
-                        max_days + 1,
-                    ):
-
-                        if candidate not in updated[
-                            "date_colors"
-                        ]:
-
-                            next_day = candidate
-                            break
-
-                st.session_state.selected_day = (
-                    next_day
-                )
-
-                st.rerun()
-
-        if st.button(
-            "🗑 Remove Color",
-            use_container_width=True,
-        ):
-
-            remove_color(
-                sheet_no,
-                selected_day,
-            )
-
-            st.session_state.selected_day = (
-                None
-            )
-
-            st.rerun()
-
-        if st.button(
-            "Cancel",
-            use_container_width=True,
-        ):
-
-            st.session_state.selected_day = (
-                None
-            )
-
-            st.rerun()
-
-    # --------------------------------------------------------
-    # CLEAR SHEET
-    # --------------------------------------------------------
-
-    st.divider()
-
-    if st.button(
-        "🗑 Clear All Dates",
-        use_container_width=True,
-    ):
-
-        clear_sheet(
-            sheet_no
-        )
-
-        st.session_state.selected_day = (
-            None
-        )
-
-        st.rerun()
-
 
 # ============================================================
-# LOAD CURRENT DATA
+# RELOAD DATA AFTER SAVE
 # ============================================================
 
-sheet_no = st.session_state.active_sheet
-
-data = get_sheet(
-    sheet_no
+sheet = load_sheet(
+    active_sheet
 )
 
-max_days = get_days(
-    data["month_year"]
+max_days = get_days_in_month(
+    sheet[
+        "month_year"
+    ]
 )
 
-
-# ============================================================
-# MAIN HEADER
-# ============================================================
-
-header_col, month_col = st.columns(
-    [3, 1]
-)
-
-with header_col:
-
-    st.title(
-        data["header_text"]
-        or f"Solar - Sheet {sheet_no}"
-    )
-
-with month_col:
-
-    st.markdown(
-        f"### {data['month_year'] or 'Month-Year'}"
-    )
-
-
-st.divider()
-
-
-# ============================================================
-# STATUS
-# ============================================================
-
-colored = data[
+date_colors = sheet[
     "date_colors"
 ]
 
-st.write(
-    f"**Sheet {sheet_no}**  •  "
-    f"{len(colored)} / {max_days} dates colored"
+
+# ============================================================
+# VISUAL SHEET HEADER
+# ============================================================
+
+st.divider()
+
+visual_header_left, visual_header_right = st.columns(
+    [3, 1]
 )
 
+with visual_header_left:
 
-# ============================================================
-# COLOR LEGEND
-# ============================================================
+    st.markdown(
+        f"## {sheet['header_text'] or 'Solar'}"
+    )
 
-legend = st.columns(4)
+with visual_header_right:
 
-for column, color in zip(
-    legend,
-    COLORS,
-):
-
-    with column:
-
-        st.write(
-            f"{COLOR_EMOJI[color]} **{color}**"
-        )
+    st.markdown(
+        f"## {sheet['month_year'] or 'Month Year'}"
+    )
 
 
 # ============================================================
-# DATE GRID
+# BRAIN DATE LAYOUT
 # ============================================================
 
-st.subheader(
-    "Dates"
+st.markdown(
+    "### 🧠 Date Sheet"
 )
 
 st.caption(
-    "Click any date to select it, then choose its color from the sidebar."
+    "Click any date. Then choose Red, Green, Yellow or Blue."
 )
 
 
 # ============================================================
-# BRAIN-LIKE GRID
+# BRAIN LAYOUT
 #
-# IMPORTANT:
-# We use exactly 5 columns on each side.
-# No columns[6 + index] access.
-# Therefore the previous IndexError cannot occur.
+# The layout deliberately uses fixed row structures.
+# There is NO calculated columns[index] access.
 # ============================================================
 
-left_dates = [
-    [1, 2, 3, 4, 5],
-    [6, 7, 8, 9, 10],
-    [11, 12, 13, 14, 15],
-    [16, 17, 18, 19, 20],
+LEFT_ROWS = [
+    [1, 2, 3, 4],
+    [5, 6, 7, 8, 9],
+    [10, 11, 12, 13, 14],
+    [15, 16, 17, 18, 19],
+    [20, 21, 22, 23],
 ]
 
-right_dates = [
-    [21, 22, 23, 24, 25],
-    [26, 27, 28, 29, 30],
+RIGHT_ROWS = [
+    [24, 25, 26, 27],
+    [28, 29, 30],
     [31],
 ]
 
 
-def date_button(
+def draw_date_button(
     day,
 ):
 
     if day > max_days:
-
         return
 
-    color = colored.get(
+    current_color = date_colors.get(
         day
     )
 
-    if color:
+    if current_color:
 
         label = (
-            f"{COLOR_EMOJI[color]} {day}"
+            f"{COLOR_SYMBOLS[current_color]} "
+            f"{day}"
         )
 
     else:
 
-        label = f"Day {day}"
+        label = str(day)
 
     if st.button(
         label,
-        key=(
-            f"date_"
-            f"{sheet_no}_"
-            f"{day}"
-        ),
+        key=f"date_{active_sheet}_{day}",
         use_container_width=True,
     ):
 
@@ -757,14 +729,14 @@ def date_button(
 
 
 # ============================================================
-# LEFT BRAIN
+# BRAIN TOP
 # ============================================================
 
 st.markdown(
-    "### Left"
+    "#### Left Hemisphere"
 )
 
-for row in left_dates:
+for row in LEFT_ROWS:
 
     cols = st.columns(
         len(row)
@@ -777,20 +749,16 @@ for row in left_dates:
 
         with col:
 
-            date_button(
+            draw_date_button(
                 day
             )
 
 
-# ============================================================
-# RIGHT BRAIN
-# ============================================================
-
 st.markdown(
-    "### Right"
+    "#### Right Hemisphere"
 )
 
-for row in right_dates:
+for row in RIGHT_ROWS:
 
     cols = st.columns(
         len(row)
@@ -803,7 +771,7 @@ for row in right_dates:
 
         with col:
 
-            date_button(
+            draw_date_button(
                 day
             )
 
@@ -812,89 +780,193 @@ for row in right_dates:
 # SELECTED DATE
 # ============================================================
 
-if st.session_state.selected_day is not None:
+selected_day = (
+    st.session_state.selected_day
+)
+
+if selected_day is not None:
 
     st.divider()
 
-    selected = (
-        st.session_state.selected_day
+    st.subheader(
+        f"Selected Date: {selected_day}"
     )
 
-    selected_color = colored.get(
-        selected
+    selected_color = date_colors.get(
+        selected_day
     )
 
     if selected_color:
 
-        st.success(
-            f"Date {selected} is currently "
-            f"{selected_color}."
+        st.write(
+            f"Current color: "
+            f"{COLOR_SYMBOLS[selected_color]} "
+            f"{selected_color}"
         )
 
     else:
 
-        st.info(
-            f"Date {selected} has no color yet."
+        st.write(
+            "Current color: Not colored"
         )
 
-
-# ============================================================
-# FOOTER
-# ============================================================
-
-st.divider()
-
-footer = st.columns(3)
-
-with footer[0]:
-
     st.write(
-        f"**{data['footer_left']}**"
+        "Choose a color:"
     )
 
-with footer[1]:
-
-    st.write(
-        f"**{data['footer_middle']}**"
+    color_columns = st.columns(
+        4
     )
 
-with footer[2]:
+    for col, color_name in zip(
+        color_columns,
+        COLOR_NAMES,
+    ):
 
-    st.write(
-        f"**{data['footer_right']}**"
+        with col:
+
+            if st.button(
+                f"{COLOR_SYMBOLS[color_name]} {color_name}",
+                key=(
+                    f"color_"
+                    f"{active_sheet}_"
+                    f"{selected_day}_"
+                    f"{color_name}"
+                ),
+                use_container_width=True,
+            ):
+
+                save_date_color(
+                    active_sheet,
+                    selected_day,
+                    color_name,
+                )
+
+                # --------------------------------------------
+                # FIND NEXT UNCOLORED DATE
+                # --------------------------------------------
+
+                updated = load_sheet(
+                    active_sheet
+                )
+
+                updated_colors = updated[
+                    "date_colors"
+                ]
+
+                updated_max_days = (
+                    get_days_in_month(
+                        updated[
+                            "month_year"
+                        ]
+                    )
+                )
+
+                next_day = None
+
+                # Search forward
+                for candidate in range(
+                    selected_day + 1,
+                    updated_max_days + 1,
+                ):
+
+                    if candidate not in updated_colors:
+
+                        next_day = candidate
+
+                        break
+
+                # If nothing after it,
+                # search from the beginning.
+                if next_day is None:
+
+                    for candidate in range(
+                        1,
+                        updated_max_days + 1,
+                    ):
+
+                        if candidate not in updated_colors:
+
+                            next_day = candidate
+
+                            break
+
+                st.session_state.selected_day = (
+                    next_day
+                )
+
+                st.rerun()
+
+
+    delete_col, cancel_col = st.columns(
+        2
     )
+
+    with delete_col:
+
+        if st.button(
+            "🗑 Remove Color",
+            use_container_width=True,
+        ):
+
+            delete_date_color(
+                active_sheet,
+                selected_day,
+            )
+
+            st.session_state.selected_day = (
+                None
+            )
+
+            st.rerun()
+
+    with cancel_col:
+
+        if st.button(
+            "Cancel Selection",
+            use_container_width=True,
+        ):
+
+            st.session_state.selected_day = (
+                None
+            )
+
+            st.rerun()
 
 
 # ============================================================
-# CURRENT SHEET DATA
+# COLOR SUMMARY
 # ============================================================
 
 st.divider()
 
 st.subheader(
-    "Color Summary"
+    "Current Sheet Summary"
 )
 
-summary_cols = st.columns(4)
+summary_columns = st.columns(
+    4
+)
 
-for column, color in zip(
-    summary_cols,
-    COLORS,
+for col, color_name in zip(
+    summary_columns,
+    COLOR_NAMES,
 ):
 
     dates = [
         day
-        for day, c in sorted(
-            colored.items()
+        for day, color
+        in sorted(
+            date_colors.items()
         )
-        if c == color
+        if color == color_name
     ]
 
-    with column:
+    with col:
 
         st.metric(
-            label=color,
-            value=len(dates),
+            color_name,
+            len(dates),
         )
 
         if dates:
@@ -902,40 +974,75 @@ for column, color in zip(
             st.caption(
                 "Dates: "
                 + ", ".join(
-                    map(
-                        str,
-                        dates,
-                    )
+                    str(x)
+                    for x in dates
                 )
             )
 
 
 # ============================================================
-# EXPORT DATA
+# FOOTER PREVIEW
 # ============================================================
 
-rows = []
+st.divider()
 
-for s in range(
+footer_preview = st.columns(
+    3
+)
+
+with footer_preview[0]:
+
+    st.write(
+        f"**{sheet['footer_left']}**"
+    )
+
+with footer_preview[1]:
+
+    st.write(
+        f"**{sheet['footer_middle']}**"
+    )
+
+with footer_preview[2]:
+
+    st.write(
+        f"**{sheet['footer_right']}**"
+    )
+
+
+# ============================================================
+# ALL SHEETS DATA
+# ============================================================
+
+st.divider()
+
+st.subheader(
+    "Saved Data"
+)
+
+all_rows = []
+
+for sheet_no in range(
     1,
     TOTAL_SHEETS + 1,
 ):
 
-    sheet = get_sheet(
-        s
+    sheet_data = load_sheet(
+        sheet_no
     )
 
     for day, color in sorted(
-        sheet["date_colors"].items()
+        sheet_data[
+            "date_colors"
+        ].items()
     ):
 
-        rows.append(
+        all_rows.append(
             {
-                "Sheet": s,
-                "Header": sheet[
+                "Sheet": sheet_no,
+                "Header": sheet_data[
                     "header_text"
                 ],
-                "Month-Year": sheet[
+                "Month-Year": sheet_data[
                     "month_year"
                 ],
                 "Date": day,
@@ -944,21 +1051,74 @@ for s in range(
         )
 
 
-if rows:
+if all_rows:
 
-    export_df = pd.DataFrame(
-        rows
+    df = pd.DataFrame(
+        all_rows
     )
 
-    csv_data = export_df.to_csv(
+    st.dataframe(
+        df,
+        use_container_width=True,
+        hide_index=True,
+    )
+
+    csv_file = df.to_csv(
         index=False
     ).encode(
         "utf-8"
     )
 
     st.download_button(
-        "📥 Download Saved Data",
-        data=csv_data,
-        file_name="brain_penalty_data.csv",
+        "📥 Download CSV",
+        data=csv_file,
+        file_name="brain_penalty_dates.csv",
         mime="text/csv",
     )
+
+else:
+
+    st.info(
+        "No dates have been colored yet."
+    )
+
+
+# ============================================================
+# RESET ALL DATA
+# ============================================================
+
+st.divider()
+
+with st.expander(
+    "⚠️ Reset Current Sheet"
+):
+
+    st.warning(
+        f"This will remove all colors from Sheet {active_sheet}."
+    )
+
+    if st.button(
+        "Reset Current Sheet",
+        key=f"reset_{active_sheet}",
+    ):
+
+        clear_sheet_colors(
+            active_sheet
+        )
+
+        st.session_state.selected_day = (
+            None
+        )
+
+        st.rerun()
+
+
+# ============================================================
+# FOOTER
+# ============================================================
+
+st.divider()
+
+st.caption(
+    "🧠 Brain Penalty • Date colors are saved automatically."
+)
