@@ -231,7 +231,8 @@ st.caption("Select a date and color, then click PSS blocks on the map. Create 10
 sheet_cols = st.columns(N_SHEETS)
 for i, col in enumerate(sheet_cols):
     with col:
-        label = st.session_state.sheets[i]["name"] or f"Sheet {i + 1}"
+        sheet_item = st.session_state.sheets[i]
+        label = sheet_item.get("name") if isinstance(sheet_item, dict) else f"Sheet {i + 1}"
         if st.button(label, key=f"sheet_{i}", width="stretch"):
             st.session_state.active_sheet = i
             st.session_state.selected_pss = assignments_for_date(st.session_state.sheets[i], st.session_state.paint_date)
