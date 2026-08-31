@@ -74,10 +74,47 @@ def empty_sheet():
     }
 
 
-if "sheets" not in st.session_state:
-    st.session_state.sheets = [empty_sheet() for _ in range(N_SHEETS)]
+def normalize_sheet(raw):
+    """Repair old/incomplete session-state sheet objects safely."""
+    base = empty_sheet()
+    if not isinstance(raw, dict):
+        return base
+    for key in base:
+        if key in raw:
+            base[key] = raw[key]
+    if not isinstance(base["assignments"], dict):
+        base["assignments"] = {}
+    clean = {}
+    for pss, value in base["assignments"].items():
+        try:
+            pss_int = int(pss)
+        except (TypeError, ValueError):
+            continue
+        if not 1 <= pss_int <= N_PSS or not isinstance(value, dict):
+            continue
+        if "date" not in value or "color" not in value:
+            continue
+        clean[pss_int] = {"date": str(value["date"]), "color": str(value["color"])}
+    base["assignments"] = clean
+    return base
+
+
+# Streamlit can preserve session_state across code edits/redeploys.
+# Normalize every sheet so stale/incomplete dictionaries never cause KeyError.
+if "sheets" not in st.session_state or not isinstance(st.session_state.sheets, list):
+    st.session_state.sheets = []
+
+st.session_state.sheets = [
+    normalize_sheet(s) for s in st.session_state.sheets[:N_SHEETS]
+]
+while len(st.session_state.sheets) < N_SHEETS:
+    st.session_state.sheets.append(empty_sheet())
+
 if "active_sheet" not in st.session_state:
     st.session_state.active_sheet = 0
+st.session_state.active_sheet = max(
+    0, min(int(st.session_state.active_sheet), N_SHEETS - 1)
+)
 if "paint_date" not in st.session_state:
     st.session_state.paint_date = date.today()
 if "paint_color_name" not in st.session_state:
@@ -88,6 +125,8 @@ if "selected_pss" not in st.session_state:
     st.session_state.selected_pss = set()
 if "processed_event" not in st.session_state:
     st.session_state.processed_event = None
+if "map_version" not in st.session_state:
+    st.session_state.map_version = 0
 if "last_synced_paint_date" not in st.session_state:
     st.session_state.last_synced_paint_date = st.session_state.paint_date.isoformat()
 
@@ -237,6 +276,7 @@ for i, col in enumerate(sheet_cols):
             st.session_state.selected_pss = assignments_for_date(st.session_state.sheets[i], st.session_state.paint_date)
             st.session_state.last_synced_paint_date = st.session_state.paint_date.isoformat()
             st.session_state.processed_event = None
+            st.session_state.map_version += 1
             st.rerun()
 
 st.divider()
@@ -272,15 +312,23 @@ with controls:
             elif sheet["assignments"].get(pss, {}).get("date") == d_iso:
                 del sheet["assignments"][pss]
         st.success("Color assignment saved.")
+        st.session_state.processed_event = None
+        st.session_state.map_version += 1
         st.rerun()
 
     if st.button("Clear selected date", width="stretch"):
         d_iso = st.session_state.paint_date.isoformat()
         sheet["assignments"] = {p: v for p, v in sheet["assignments"].items() if v["date"] != d_iso}
+        st.session_state.selected_pss = set()
+        st.session_state.processed_event = None
+        st.session_state.map_version += 1
         st.rerun()
 
     if st.button("Clear this sheet", width="stretch"):
         sheet["assignments"] = {}
+        st.session_state.selected_pss = set()
+        st.session_state.processed_event = None
+        st.session_state.map_version += 1
         st.rerun()
 
     st.markdown("### Assigned dates")
@@ -298,7 +346,7 @@ with preview:
     event = st.plotly_chart(
         fig,
         width="stretch",
-        key=f"pss_map_{idx}",
+        key=f"pss_map_{idx}_{st.session_state.map_version}",
         on_select="rerun",
         selection_mode=["points"],
     )
@@ -328,6 +376,8 @@ with preview:
                             selected.add(pss)
                     st.session_state.selected_pss = selected
                     st.session_state.processed_event = sig
+                    # Changing the chart key clears the previous Plotly selection.
+                    st.session_state.map_version += 1
                     st.rerun()
 
     st.caption("Click a PSS number. Click it again to remove it from the current date selection. Then press 'Apply selected PSS'.")
