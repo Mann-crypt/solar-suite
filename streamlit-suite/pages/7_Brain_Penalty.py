@@ -1,484 +1,373 @@
-import streamlit as st
-import html
-import re
+import io
 from datetime import date
 
-st.set_page_config(
-    page_title="Solar PSS Coloring & 10-Sheet Collage",
-    page_icon="☀️",
-    layout="wide",
-    initial_sidebar_state="collapsed",
-)
+import numpy as np
+import pandas as pd
+from PIL import Image, ImageDraw, ImageFont
+import plotly.graph_objects as go
+import streamlit as st
 
-# -----------------------------
-# Configuration
-# -----------------------------
+st.set_page_config(page_title="Solar PSS Sheet Painter", page_icon="☀️", layout="wide")
+
+# ============================================================
+# CONFIG
+# ============================================================
 N_SHEETS = 10
 N_PSS = 31
-
 PALETTE = {
-    "Yellow": "#FFF200",
-    "Green": "#28B463",
-    "Blue": "#2E86DE",
-    "Red": "#F4511E",
-    "Orange": "#FF9800",
-    "Purple": "#9B59B6",
-    "Pink": "#EC407A",
-    "Cyan": "#19C3C8",
+    "Red": "#F26B4F",
+    "Yellow": "#FFF36A",
+    "Green": "#35C98B",
+    "Blue": "#2F80ED",
+    "Orange": "#F5A623",
+    "Purple": "#A970FF",
+    "Teal": "#28C7C7",
     "White": "#FFFFFF",
 }
 
-# Approximate geometry based on the supplied paper layout.
-# Each tuple is: pss_number, x, y, width, height.
-# The visual page is built as SVG so the final collage remains sharp.
-PSS_GEOMETRY = [
-    (1, 42, 42, 42, 34), (2, 84, 42, 42, 34),
-    (3, 38, 76, 46, 34), (4, 88, 76, 42, 34),
-    (5, 32, 110, 49, 37), (6, 81, 110, 46, 37),
-    (7, 127, 110, 43, 37), (8, 170, 110, 48, 37),
-    (9, 28, 147, 53, 40), (10, 81, 147, 48, 40),
-    (11, 129, 147, 46, 40), (12, 175, 147, 48, 40),
-    (13, 25, 187, 53, 40), (14, 78, 187, 51, 40),
-    (15, 129, 187, 48, 40), (16, 177, 187, 47, 40),
-    (17, 24, 227, 54, 40), (18, 78, 227, 51, 40),
-    (19, 129, 227, 48, 40), (20, 177, 227, 47, 40),
-    (21, 26, 267, 53, 39), (22, 79, 267, 50, 39),
-    (23, 129, 267, 48, 39), (24, 177, 267, 47, 39),
-    (25, 31, 306, 51, 40), (26, 82, 306, 47, 40),
-    (27, 129, 306, 48, 40), (28, 177, 306, 47, 40),
-    (29, 53, 346, 43, 37), (30, 96, 346, 43, 37),
-    (31, 145, 346, 50, 37),
+# PSS rows follow the photographed sheet: 1-2, 3-4, then 4 columns,
+# ending with 29-31. Coordinates are deliberately fixed so every sheet
+# has exactly the same geometry.
+ROWS = [
+    [1, 2], [3, 4], [5, 6, 7, 8], [9, 10, 11, 12],
+    [13, 14, 15, 16], [17, 18, 19, 20], [21, 22, 23, 24],
+    [25, 26, 27, 28], [29, 30, 31],
 ]
+Y = [145, 235, 325, 415, 505, 595, 685, 775, 865, 955]
+FOUR_X = [(145, 300), (300, 455), (545, 700), (700, 855)]
 
-# -----------------------------
-# Session state
-# -----------------------------
+
+def make_polygons():
+    polys = {}
+    for ri, row in enumerate(ROWS):
+        top, bottom = Y[ri], Y[ri + 1]
+        if len(row) == 2:
+            xs = [(320, 470), (530, 680)]
+        elif len(row) == 3:
+            xs = [(245, 395), (395, 545), (545, 695)]
+        else:
+            xs = FOUR_X
+        for i, pss in enumerate(row):
+            x1, x2 = xs[i]
+            slant = 8 if ri < 2 else 4
+            polys[pss] = [
+                (x1 + slant, top), (x2 - slant, top + 2),
+                (x2, bottom - 3), (x1, bottom),
+            ]
+    return polys
+
+
+POLYS = make_polygons()
+
+
+def center(points):
+    return (sum(x for x, _ in points) / len(points), sum(y for _, y in points) / len(points))
+
+
+def empty_sheet():
+    return {
+        "name": "",
+        "header_date": date.today(),
+        "mal": "",
+        "total": "",
+        "assignments": {},  # pss -> {date: ISO string, color: hex}
+    }
+
+
 if "sheets" not in st.session_state:
-    st.session_state.sheets = [
-        {
-            "title": "",
-            "month": "Aug-26",
-            "mal_capacity": "",
-            "no_pss": "",
-            "total_capacity": "",
-            "colors": {i: None for i in range(1, N_PSS + 1)},
-            "dates": {i: None for i in range(1, N_PSS + 1)},
-        }
-        for _ in range(N_SHEETS)
-    ]
-
+    st.session_state.sheets = [empty_sheet() for _ in range(N_SHEETS)]
 if "active_sheet" not in st.session_state:
     st.session_state.active_sheet = 0
-
-if "selected_date" not in st.session_state:
-    st.session_state.selected_date = date.today()
-
-if "selected_color" not in st.session_state:
-    st.session_state.selected_color = "Yellow"
-
-if "selected_sheet_for_controls" not in st.session_state:
-    st.session_state.selected_sheet_for_controls = 0
-
-
-# -----------------------------
-# Helpers
-# -----------------------------
-def clean_text(value):
-    return html.escape(str(value or ""))
+if "paint_date" not in st.session_state:
+    st.session_state.paint_date = date.today()
+if "paint_color_name" not in st.session_state:
+    st.session_state.paint_color_name = "Red"
+if "paint_custom" not in st.session_state:
+    st.session_state.paint_custom = PALETTE["Red"]
+if "selected_pss" not in st.session_state:
+    st.session_state.selected_pss = set()
+if "processed_event" not in st.session_state:
+    st.session_state.processed_event = None
+if "last_synced_paint_date" not in st.session_state:
+    st.session_state.last_synced_paint_date = st.session_state.paint_date.isoformat()
 
 
-def parse_date_from_string(value):
-    if not value:
-        return None
-    return str(value)
+def current_sheet():
+    return st.session_state.sheets[st.session_state.active_sheet]
 
 
-def make_svg(sheet_idx, editable=True):
-    sheet = st.session_state.sheets[sheet_idx]
-    title = sheet["title"] or f"Solar - Sheet {sheet_idx + 1}"
-    month = sheet["month"] or "Aug-26"
-
-    # Sheet dimensions in SVG units.
-    W, H = 245, 500
-
-    svg = [
-        f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" '
-        f'viewBox="0 0 {W} {H}" style="display:block;width:100%;height:auto;">',
-        '<rect x="2" y="2" width="241" height="496" rx="1" fill="white" stroke="#555" stroke-width="1.2"/>',
-
-        # Header
-        f'<text x="12" y="24" font-family="Arial, sans-serif" font-size="12" '
-        f'font-weight="600" fill="#111">{clean_text(title)}</text>',
-        f'<text x="197" y="24" text-anchor="end" font-family="Arial, sans-serif" '
-        f'font-size="11" fill="#111">{clean_text(month)}</text>',
-        '<line x1="10" y1="29" x2="235" y2="29" stroke="#999" stroke-width="0.7"/>',
-
-        # Main plant silhouette
-        '<path d="M30 45 Q53 31 84 34 L163 34 Q193 36 213 55 '
-        'L211 350 Q205 397 174 420 L145 438 L105 438 L72 421 '
-        'Q39 401 28 353 Z" fill="#fff" stroke="#111" stroke-width="2.2"/>',
-
-        # Central divider
-        '<path d="M121 38 Q118 100 120 160 Q121 225 122 290 Q123 355 129 430" '
-        'fill="none" stroke="#111" stroke-width="3.2"/>',
-    ]
-
-    # PSS blocks
-    for pss, x, y, w, h in PSS_GEOMETRY:
-        fill = sheet["colors"].get(pss) or "#FFFFFF"
-        date_label = sheet["dates"].get(pss)
-        cx = x + w / 2
-        cy = y + h / 2
-
-        # Slightly irregular rounded polygon to feel like the paper sketch.
-        skew = 2 if pss % 3 == 0 else -1
-        points = (
-            f"{x+skew},{y+2} {x+w-2},{y} {x+w},{y+h-3} "
-            f"{x+w-3},{y+h} {x+2},{y+h-1}"
-        )
-
-        if editable:
-            # Clickable SVG link. It sends the PSS number through query parameters.
-            href = f"?sheet={sheet_idx}&pss={pss}&_click=1"
-            svg.append(
-                f'<a href="{href}" title="PSS {pss}">'
-                f'<polygon points="{points}" fill="{fill}" stroke="#111" stroke-width="1.1"/>'
-                f'<text x="{cx}" y="{cy+4}" text-anchor="middle" '
-                f'font-family="Arial, sans-serif" font-size="11" font-weight="600" fill="#111">'
-                f'{pss}</text></a>'
-            )
-        else:
-            svg.extend([
-                f'<polygon points="{points}" fill="{fill}" stroke="#111" stroke-width="1.1"/>',
-                f'<text x="{cx}" y="{cy+4}" text-anchor="middle" '
-                f'font-family="Arial, sans-serif" font-size="11" font-weight="600" fill="#111">'
-                f'{pss}</text>',
-            ])
-
-    # Footer
-    svg.extend([
-        '<line x1="10" y1="445" x2="235" y2="445" stroke="#999" stroke-width="0.7"/>',
-        '<text x="12" y="462" font-family="Arial, sans-serif" font-size="8.5" fill="#222">'
-        'MAL Capacity (MW)</text>',
-        '<line x1="75" y1="460" x2="142" y2="460" stroke="#333" stroke-width="0.7"/>',
-        '<text x="150" y="462" font-family="Arial, sans-serif" font-size="8.5" fill="#222">'
-        'No. of PSS</text>',
-        '<line x1="195" y1="460" x2="232" y2="460" stroke="#333" stroke-width="0.7"/>',
-
-        '<text x="12" y="481" font-family="Arial, sans-serif" font-size="8.5" fill="#222">'
-        'Total Capacity (MW)</text>',
-        '<line x1="78" y1="479" x2="150" y2="479" stroke="#333" stroke-width="0.7"/>',
-    ])
-
-    # Filled footer values, if supplied.
-    if sheet["mal_capacity"]:
-        svg.append(
-            f'<text x="108" y="462" text-anchor="middle" font-family="Arial, sans-serif" '
-            f'font-size="8.5" font-weight="600">{clean_text(sheet["mal_capacity"])}</text>'
-        )
-    if sheet["no_pss"]:
-        svg.append(
-            f'<text x="214" y="462" text-anchor="middle" font-family="Arial, sans-serif" '
-            f'font-size="8.5" font-weight="600">{clean_text(sheet["no_pss"])}</text>'
-        )
-    if sheet["total_capacity"]:
-        svg.append(
-            f'<text x="114" y="481" text-anchor="middle" font-family="Arial, sans-serif" '
-            f'font-size="8.5" font-weight="600">{clean_text(sheet["total_capacity"])}</text>'
-        )
-
-    svg.append("</svg>")
-    return "".join(svg)
+def assignments_for_date(sheet, d):
+    iso = d.isoformat()
+    return {p for p, v in sheet["assignments"].items() if v["date"] == iso}
 
 
-def make_collage_svg():
-    # 5 columns x 2 rows, similar to the physical collage.
-    cols, rows = 5, 2
-    sheet_w, sheet_h = 245, 500
-    gap_x, gap_y = 16, 20
-    margin = 18
-
-    W = margin * 2 + cols * sheet_w + (cols - 1) * gap_x
-    H = margin * 2 + rows * sheet_h + (rows - 1) * gap_y
-
-    out = [
-        f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" '
-        f'viewBox="0 0 {W} {H}" style="display:block;width:100%;height:auto;background:#eee;">'
-    ]
-
-    for i in range(N_SHEETS):
-        col = i % cols
-        row = i // cols
-        x = margin + col * (sheet_w + gap_x)
-        y = margin + row * (sheet_h + gap_y)
-
-        sheet_svg = make_svg(i, editable=False)
-        # Remove outer svg wrapper so it can be nested.
-        inner = re.sub(r"^<svg[^>]*>", "", sheet_svg)
-        inner = re.sub(r"</svg>$", "", inner)
-
-        out.append(f'<g transform="translate({x},{y})">{inner}</g>')
-
-    out.append("</svg>")
-    return "".join(out)
-
-
-def svg_to_downloadable_data(svg):
-    import base64
-    return "data:image/svg+xml;base64," + base64.b64encode(svg.encode("utf-8")).decode("ascii")
-
-
-# -----------------------------
-# Apply click from SVG
-# -----------------------------
-params = st.query_params
-if "sheet" in params and "pss" in params and "_click" in params:
-    try:
-        clicked_sheet = int(params["sheet"])
-        clicked_pss = int(params["pss"])
-        if 0 <= clicked_sheet < N_SHEETS and 1 <= clicked_pss <= N_PSS:
-            target = st.session_state.sheets[clicked_sheet]
-            target["colors"][clicked_pss] = PALETTE[st.session_state.selected_color]
-            target["dates"][clicked_pss] = parse_date_from_string(
-                st.session_state.selected_date
-            )
-            st.session_state.active_sheet = clicked_sheet
-            st.session_state.selected_sheet_for_controls = clicked_sheet
-    except Exception:
-        pass
-
-    # Clear click parameters after processing so refresh doesn't re-apply.
-    try:
-        st.query_params.clear()
-    except Exception:
-        pass
-
-
-# -----------------------------
-# UI
-# -----------------------------
-st.markdown(
-    """
-    <style>
-    .block-container {
-        max-width: 1450px;
-        padding-top: 1.2rem;
-        padding-bottom: 2rem;
-    }
-    .title {
-        font-size: 28px;
-        font-weight: 750;
-        margin-bottom: 2px;
-    }
-    .subtitle {
-        color: #666;
-        margin-bottom: 18px;
-    }
-    .control-card {
-        border: 1px solid #ddd;
-        border-radius: 12px;
-        padding: 14px 16px;
-        background: #fafafa;
-    }
-    .sheet-card {
-        border: 1px solid #ddd;
-        border-radius: 10px;
-        padding: 8px;
-        background: white;
-    }
-    .small-note {
-        color: #666;
-        font-size: 13px;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
-st.markdown('<div class="title">☀️ Solar PSS Coloring & Sheet Collage</div>', unsafe_allow_html=True)
-st.markdown(
-    '<div class="subtitle">Select a date and color, then click the PSS blocks you want to fill. '
-    'Complete up to 10 sheets and generate the final collage.</div>',
-    unsafe_allow_html=True,
-)
-
-# Main controls
-c1, c2, c3, c4 = st.columns([1.25, 1.1, 1.2, 1.2])
-
-with c1:
-    st.session_state.selected_sheet_for_controls = st.selectbox(
-        "Sheet",
-        list(range(N_SHEETS)),
-        index=st.session_state.selected_sheet_for_controls,
-        format_func=lambda x: f"Sheet {x + 1}",
-    )
-    st.session_state.active_sheet = st.session_state.selected_sheet_for_controls
-
-with c2:
-    st.session_state.selected_date = st.date_input(
-        "Date",
-        value=st.session_state.selected_date,
-        format="DD-MMM-YYYY",
-    )
-
-with c3:
-    st.session_state.selected_color = st.selectbox(
-        "Color",
-        list(PALETTE.keys()),
-        index=list(PALETTE.keys()).index(st.session_state.selected_color),
-    )
-
-with c4:
-    st.markdown("**Current color**")
-    st.markdown(
-        f'<div style="height:38px;border-radius:8px;border:1px solid #999;'
-        f'background:{PALETTE[st.session_state.selected_color]};"></div>',
-        unsafe_allow_html=True,
-    )
-
-# Sheet information
-idx = st.session_state.active_sheet
-sheet = st.session_state.sheets[idx]
-
-st.markdown("### Sheet information")
-i1, i2, i3, i4, i5 = st.columns([1.6, 1.0, 1.0, 1.0, 1.0])
-
-with i1:
-    sheet["title"] = st.text_input(
-        "Left header",
-        value=sheet["title"],
-        placeholder="e.g. Solar - G1",
-        key=f"title_{idx}",
-    )
-
-with i2:
-    sheet["month"] = st.text_input(
-        "Right header",
-        value=sheet["month"],
-        placeholder="e.g. Aug-26",
-        key=f"month_{idx}",
-    )
-
-with i3:
-    sheet["mal_capacity"] = st.text_input(
-        "MAL Capacity (MW)",
-        value=sheet["mal_capacity"],
-        key=f"mal_{idx}",
-    )
-
-with i4:
-    sheet["no_pss"] = st.text_input(
-        "No. of PSS",
-        value=sheet["no_pss"],
-        key=f"npss_{idx}",
-    )
-
-with i5:
-    sheet["total_capacity"] = st.text_input(
-        "Total Capacity (MW)",
-        value=sheet["total_capacity"],
-        key=f"total_{idx}",
-    )
-
-st.markdown(
-    f'**Sheet {idx + 1}:** Select `{st.session_state.selected_date.strftime("%d-%b-%Y")}` '
-    f'and `{st.session_state.selected_color}`, then click PSS blocks below.',
-    unsafe_allow_html=True,
-)
-
-# Display editable sheet
-left, right = st.columns([1.1, 1.0])
-
-with left:
-    st.markdown("### Interactive sheet")
-    st.components.v1.html(
-        make_svg(idx, editable=True),
-        height=525,
-        scrolling=False,
-    )
-
-with right:
-    st.markdown("### Current date assignments")
-    assignments = []
+def make_map(sheet, selected_date):
+    fig = go.Figure()
+    d_iso = selected_date.isoformat()
     for pss in range(1, N_PSS + 1):
-        d = sheet["dates"].get(pss)
-        c = sheet["colors"].get(pss)
-        if d:
-            assignments.append(
-                {
-                    "PSS": pss,
-                    "Date": d,
-                    "Color": next(
-                        (name for name, hexv in PALETTE.items() if hexv == c),
-                        "Custom",
-                    ),
-                }
-            )
+        pts = POLYS[pss]
+        xs = [p[0] for p in pts] + [pts[0][0]]
+        ys = [p[1] for p in pts] + [pts[0][1]]
+        assignment = sheet["assignments"].get(pss)
+        fill = assignment["color"] if assignment else PALETTE["Red"]
+        # Only show assigned colors. Unassigned defaults to the photographed orange/red.
+        opacity = 0.97 if assignment else 0.88
+        fig.add_trace(go.Scatter(
+            x=xs, y=ys, mode="lines", fill="toself",
+            fillcolor=fill, line=dict(color="black", width=2),
+            customdata=[pss] * len(xs), hovertemplate=f"PSS {pss}<extra></extra>",
+            name=f"PSS {pss}", showlegend=False, opacity=opacity,
+        ))
+        cx, cy = center(pts)
+        fig.add_trace(go.Scatter(
+            x=[cx], y=[cy], mode="markers+text",
+            text=[str(pss)], textposition="middle center",
+            marker=dict(size=34, color="rgba(255,255,255,0.01)", line=dict(width=0)),
+            textfont=dict(size=15, color="black"),
+            customdata=[pss], hovertemplate=f"Click PSS {pss}<extra></extra>",
+            name=f"PSS {pss} click", showlegend=False,
+        ))
 
-    if assignments:
-        st.dataframe(assignments, use_container_width=True, hide_index=True)
-    else:
-        st.info("No PSS has been colored on this sheet yet.")
+    fig.update_xaxes(visible=False, range=[60, 940], fixedrange=True)
+    fig.update_yaxes(visible=False, range=[1120, 70], fixedrange=True, scaleanchor="x", scaleratio=1)
+    fig.update_layout(
+        height=760,
+        margin=dict(l=0, r=0, t=0, b=0),
+        paper_bgcolor="white", plot_bgcolor="white",
+        clickmode="event+select",
+        dragmode=False,
+    )
+    return fig
 
-    b1, b2 = st.columns(2)
-    with b1:
-        if st.button("Clear this sheet", use_container_width=True):
-            sheet["colors"] = {i: None for i in range(1, N_PSS + 1)}
-            sheet["dates"] = {i: None for i in range(1, N_PSS + 1)}
-            st.rerun()
 
-    with b2:
-        if st.button("Clear all sheets", use_container_width=True):
-            for s in st.session_state.sheets:
-                s["colors"] = {i: None for i in range(1, N_PSS + 1)}
-                s["dates"] = {i: None for i in range(1, N_PSS + 1)}
-            st.rerun()
+def load_font(size, bold=False):
+    candidates = [
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "C:/Windows/Fonts/arialbd.ttf" if bold else "C:/Windows/Fonts/arial.ttf",
+    ]
+    for path in candidates:
+        try:
+            return ImageFont.truetype(path, size)
+        except OSError:
+            continue
+    return ImageFont.load_default()
 
-# Sheet navigation
-st.markdown("### Sheets")
-sheet_cols = st.columns(10)
-for i in range(N_SHEETS):
-    with sheet_cols[i]:
-        if st.button(
-            f"{i + 1}",
-            key=f"sheet_nav_{i}",
-            type="primary" if i == st.session_state.active_sheet else "secondary",
-            use_container_width=True,
-        ):
-            st.session_state.active_sheet = i
-            st.session_state.selected_sheet_for_controls = i
-            st.rerun()
 
-# Preview all 10 sheets
-st.markdown("## Final 10-sheet collage")
-st.caption("The collage below is generated from the 10 sheets. It is arranged 5 × 2 by default.")
+def render_sheet(sheet, width=900):
+    W, H = 1000, 1300
+    img = Image.new("RGB", (W, H), "white")
+    d = ImageDraw.Draw(img)
+    title_font = load_font(35, True)
+    small = load_font(20)
+    pfont = load_font(23, True)
 
-st.components.v1.html(
-    make_collage_svg(),
-    height=1080,
-    scrolling=True,
-)
+    title = sheet["name"] or "Solar - ____"
+    month = sheet["header_date"].strftime("%b-%y")
+    d.text((60, 48), title, fill="black", font=title_font)
+    d.line((55, 95, 250, 95), fill="black", width=2)
+    bb = d.textbbox((0, 0), month, font=title_font)
+    d.text((W - 60 - (bb[2] - bb[0]), 48), month, fill="black", font=title_font)
 
-# Download SVG files
-st.markdown("### Export")
-collage_svg = make_collage_svg()
-st.download_button(
-    "⬇️ Download 10-sheet collage (SVG)",
-    data=collage_svg,
-    file_name="solar_10_sheet_collage.svg",
-    mime="image/svg+xml",
-    use_container_width=True,
-)
+    outer = [
+        (130, 150), (225, 100), (450, 92), (500, 115), (550, 92),
+        (775, 100), (870, 150), (905, 350), (920, 600), (900, 850),
+        (825, 1030), (690, 1110), (560, 1125), (500, 1090), (440, 1125),
+        (310, 1110), (175, 1030), (100, 850), (80, 600), (95, 350),
+    ]
+    d.polygon(outer, fill="white", outline="black")
 
-# Legend
-st.markdown("### Color legend")
-legend_cols = st.columns(len(PALETTE))
-for col, (name, color) in zip(legend_cols, PALETTE.items()):
+    # Draw all PSS cells. Unassigned cells retain the red/orange paper-map look.
+    for pss, pts in POLYS.items():
+        v = sheet["assignments"].get(pss)
+        fill = v["color"] if v else PALETTE["Red"]
+        d.polygon(pts, fill=fill, outline="black")
+        cx, cy = center(pts)
+        txt = str(pss)
+        bb = d.textbbox((0, 0), txt, font=pfont)
+        d.text((cx - (bb[2] - bb[0]) / 2, cy - (bb[3] - bb[1]) / 2), txt, fill="black", font=pfont)
+
+    d.line(outer + [outer[0]], fill="black", width=6, joint="curve")
+    d.line((500, 112, 500, 1095), fill="black", width=8)
+
+    fy = 1160
+    mal = sheet["mal"] or "________"
+    total = sheet["total"] or "________"
+    assigned_count = len(sheet["assignments"])
+    d.text((60, fy), f"MAL Capacity (MW): {mal}", fill="black", font=small)
+    d.text((600, fy), f"No. of PSS: {assigned_count}", fill="black", font=small)
+    d.text((60, fy + 48), f"Total Capacity (MW): {total}", fill="black", font=small)
+    return img
+
+
+def collage(images, columns=4):
+    gap = 24
+    thumb_w = 520
+    thumb_h = 676
+    rows = int(np.ceil(len(images) / columns))
+    out = Image.new("RGB", (columns * thumb_w + (columns + 1) * gap,
+                             rows * thumb_h + (rows + 1) * gap), "#E9E9E9")
+    for i, im in enumerate(images):
+        cp = im.copy()
+        cp.thumbnail((thumb_w, thumb_h), Image.Resampling.LANCZOS)
+        x = gap + (i % columns) * (thumb_w + gap) + (thumb_w - cp.width) // 2
+        y = gap + (i // columns) * (thumb_h + gap) + (thumb_h - cp.height) // 2
+        out.paste(cp, (x, y))
+    return out
+
+
+def png_bytes(img):
+    b = io.BytesIO()
+    img.save(b, format="PNG", optimize=True)
+    return b.getvalue()
+
+
+# ============================================================
+# UI
+# ============================================================
+st.title("☀️ Solar PSS Sheet Painter")
+st.caption("Select a date and color, then click PSS blocks on the map. Create 10 sheets and export a 4-4-2 collage.")
+
+# Sheet tabs
+sheet_cols = st.columns(N_SHEETS)
+for i, col in enumerate(sheet_cols):
     with col:
-        st.markdown(
-            f'<div style="display:flex;align-items:center;gap:7px;">'
-            f'<span style="width:18px;height:18px;background:{color};'
-            f'border:1px solid #777;border-radius:3px;display:inline-block;"></span>'
-            f'<span>{html.escape(name)}</span></div>',
-            unsafe_allow_html=True,
-        )
+        label = st.session_state.sheets[i]["name"] or f"Sheet {i + 1}"
+        if st.button(label, key=f"sheet_{i}", width="stretch"):
+            st.session_state.active_sheet = i
+            st.session_state.selected_pss = assignments_for_date(st.session_state.sheets[i], st.session_state.paint_date)
+            st.session_state.last_synced_paint_date = st.session_state.paint_date.isoformat()
+            st.session_state.processed_event = None
+            st.rerun()
+
+st.divider()
+idx = st.session_state.active_sheet
+sheet = current_sheet()
+
+controls, preview = st.columns([0.9, 1.7], gap="large")
+with controls:
+    st.subheader(f"Sheet {idx + 1}")
+    sheet["name"] = st.text_input("Write on left header", value=sheet["name"], key=f"name_{idx}", placeholder="Solar - G1")
+    sheet["header_date"] = st.date_input("Header month/date", value=sheet["header_date"], key=f"header_date_{idx}")
+    sheet["mal"] = st.text_input("MAL Capacity (MW)", value=sheet["mal"], key=f"mal_{idx}")
+    sheet["total"] = st.text_input("Total Capacity (MW)", value=sheet["total"], key=f"total_{idx}")
+
+    st.markdown("### Paint by date")
+    st.session_state.paint_date = st.date_input("1. Click/select date", value=st.session_state.paint_date, key="global_paint_date")
+    if st.session_state.paint_date.isoformat() != st.session_state.last_synced_paint_date:
+        st.session_state.selected_pss = assignments_for_date(sheet, st.session_state.paint_date)
+        st.session_state.last_synced_paint_date = st.session_state.paint_date.isoformat()
+        st.session_state.processed_event = None
+    st.session_state.paint_color_name = st.selectbox("2. Select color", list(PALETTE), index=list(PALETTE).index(st.session_state.paint_color_name), key="global_color")
+    st.session_state.paint_custom = st.color_picker("Optional: custom fill color", value=PALETTE[st.session_state.paint_color_name], key="global_custom")
+
+    st.write(f"**Selected for {st.session_state.paint_date.strftime('%d-%b-%Y')}:** {', '.join(map(str, sorted(st.session_state.selected_pss))) or 'None'}")
+
+    if st.button("Apply selected PSS", type="primary", width="stretch"):
+        color = st.session_state.paint_custom
+        d_iso = st.session_state.paint_date.isoformat()
+        # Preserve other dates on every PSS. For this selected date, assign/remove exactly the selected set.
+        for pss in range(1, N_PSS + 1):
+            if pss in st.session_state.selected_pss:
+                sheet["assignments"][pss] = {"date": d_iso, "color": color}
+            elif sheet["assignments"].get(pss, {}).get("date") == d_iso:
+                del sheet["assignments"][pss]
+        st.success("Color assignment saved.")
+        st.rerun()
+
+    if st.button("Clear selected date", width="stretch"):
+        d_iso = st.session_state.paint_date.isoformat()
+        sheet["assignments"] = {p: v for p, v in sheet["assignments"].items() if v["date"] != d_iso}
+        st.rerun()
+
+    if st.button("Clear this sheet", width="stretch"):
+        sheet["assignments"] = {}
+        st.rerun()
+
+    st.markdown("### Assigned dates")
+    if sheet["assignments"]:
+        rows = []
+        for pss, v in sorted(sheet["assignments"].items()):
+            rows.append({"PSS": pss, "Date": v["date"], "Color": v["color"]})
+        st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
+    else:
+        st.caption("No PSS dates assigned yet.")
+
+with preview:
+    st.subheader("Click PSS blocks to paint")
+    fig = make_map(sheet, st.session_state.paint_date)
+    event = st.plotly_chart(
+        fig,
+        width="stretch",
+        key=f"pss_map_{idx}",
+        on_select="rerun",
+        selection_mode=["points"],
+    )
+
+    # Plotly selection is used as the click-to-select mechanism. Center markers make
+    # every PSS reliably clickable while the filled polygons preserve the visual map.
+    if event is not None:
+        points = getattr(getattr(event, "selection", None), "points", [])
+        if points:
+            pss_values = []
+            for point in points:
+                cd = point.get("customdata") if isinstance(point, dict) else None
+                if cd is not None:
+                    try:
+                        pss_values.append(int(cd[0] if isinstance(cd, (list, tuple)) else cd))
+                    except (TypeError, ValueError):
+                        pass
+            if pss_values:
+                # Process only a new event so Streamlit reruns don't repeatedly toggle the same click.
+                sig = (idx, st.session_state.paint_date.isoformat(), tuple(sorted(pss_values)))
+                if sig != st.session_state.processed_event:
+                    selected = set(st.session_state.selected_pss)
+                    for pss in pss_values:
+                        if pss in selected:
+                            selected.remove(pss)
+                        else:
+                            selected.add(pss)
+                    st.session_state.selected_pss = selected
+                    st.session_state.processed_event = sig
+                    st.rerun()
+
+    st.caption("Click a PSS number. Click it again to remove it from the current date selection. Then press 'Apply selected PSS'.")
+
+# ============================================================
+# FINAL COLLAGE
+# ============================================================
+st.divider()
+st.subheader("Final 10-sheet collage")
+st.caption("The collage is arranged 4 + 4 + 2, matching the layout of your photograph.")
+
+if st.button("Generate collage", type="primary", width="stretch"):
+    st.session_state.make_collage = True
+
+if st.session_state.get("make_collage", False):
+    images = [render_sheet(s) for s in st.session_state.sheets]
+    final = collage(images, columns=4)
+    st.image(final, width="stretch")
+    st.download_button(
+        "⬇️ Download collage PNG",
+        data=png_bytes(final),
+        file_name="solar_pss_10_sheet_collage.png",
+        mime="image/png",
+        width="stretch",
+    )
+
+# Export mapping for backup / Excel workflow.
+rows = []
+for i, s in enumerate(st.session_state.sheets, start=1):
+    for pss in range(1, N_PSS + 1):
+        v = s["assignments"].get(pss)
+        rows.append({
+            "Sheet": i,
+            "Header": s["name"],
+            "Header Date": s["header_date"].isoformat(),
+            "PSS": pss,
+            "Assigned Date": v["date"] if v else "",
+            "Color": v["color"] if v else "",
+            "MAL Capacity (MW)": s["mal"],
+            "Total Capacity (MW)": s["total"],
+        })
+backup = pd.DataFrame(rows)
+st.download_button("Download PSS/date mapping CSV", backup.to_csv(index=False), "solar_pss_mapping.csv", "text/csv")
