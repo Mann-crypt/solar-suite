@@ -278,16 +278,20 @@ for column in valid_columns:
 
 results_df = pd.DataFrame(result_data)
 
-result_col1, result_col2 = st.columns(2)
+# Split table and download button into side-by-side columns to save vertical space
+result_col1, result_col2 = st.columns([2, 1])
 
 with result_col1:
     st.subheader("Data Summary")
     st.dataframe(
         results_df,
         use_container_width=True,
-        hide_index=True
+        hide_index=True,
+        height=300  # Sets a clean scrollable window height
     )
     
+with result_col2:
+    st.subheader("Export Options")
     csv_buffer = io.StringIO()
     results_df.to_csv(csv_buffer, index=False)
     csv_bytes = csv_buffer.getvalue().encode("utf-8")
@@ -300,23 +304,35 @@ with result_col1:
         use_container_width=True
     )
 
-with result_col2:
-    st.subheader("Visual Profile")
-    
-    # Generate the interactive Plotly Line chart
-    fig = px.line(
-        results_df,
-        x="Block",
-        y=valid_columns,
-        title=f"96 Block Profile - P{percentile:g}",
-        labels={"value": "Value", "variable": "Selected Columns"}
-    )
-    
-    # Clean layout stylings
-    fig.update_layout(
-        hovermode="x unified",
-        xaxis=dict(tickmode="linear", tick0=1, dtick=12),
-        margin=dict(l=20, r=20, t=40, b=20)
-    )
-    
-    st.plotly_chart(fig, use_container_width=True)
+# FULL WIDTH PLOTLY GRAPH BREAKOUT
+st.markdown("---")
+st.subheader("📊 Full Width Visual Profile")
+
+fig = px.line(
+    results_df,
+    x="Block",
+    y=valid_columns,
+    labels={"value": "Value", "variable": "Columns"}
+)
+
+# Move legends to bottom horizontally and enforce full scaling layout
+fig.update_layout(
+    hovermode="x unified",
+    xaxis=dict(
+        tickmode="linear", 
+        tick0=1, 
+        dtick=4, # Gridline ticks every hour (every 4 blocks)
+        showgrid=True
+    ),
+    legend=dict(
+        orientation="h",     # Horizontal positioning
+        yanchor="top",       # Base anchor reference
+        y=-0.2,              # Places legend underneath the chart X-axis
+        xanchor="center",    # Centers the container horizontally
+        x=0.5
+    ),
+    margin=dict(l=40, r=40, t=20, b=60),
+    height=600               # Tall canvas for high-resolution readability across ultra-wide monitors
+)
+
+st.plotly_chart(fig, use_container_width=True)
