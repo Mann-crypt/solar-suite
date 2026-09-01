@@ -1,6 +1,7 @@
 import io
 import numpy as np
 import pandas as pd
+import plotly.express as px
 import streamlit as st
 
 # ------------------------------------------------------------
@@ -222,13 +223,8 @@ for column in selected_columns:
             })
             continue
 
-        # Slice data to whole days only
         trimmed = values[:usable_values]
-
-        # Reshape to 2D array matrix [Days, 96 Blocks]
         daily_matrix = trimmed.reshape(complete_days, BLOCKS)
-
-        # Apply percentile mapping vertically across the days
         percentile_values = np.percentile(daily_matrix, percentile, axis=0)
 
         processed[column] = {
@@ -257,7 +253,6 @@ for column in selected_columns:
             "Status": f"Error: {str(e)}"
         })
 
-# Display validation logs summary
 validation_df = pd.DataFrame(validation)
 st.dataframe(
     validation_df,
@@ -276,7 +271,6 @@ if len(valid_columns) == 0:
 # ------------------------------------------------------------
 st.header(f"5. Calculated Percentile Profile (P{percentile:g})")
 
-# Generate standard 1 to 96 timeline base index
 result_data = {"Block": np.arange(1, BLOCKS + 1)}
 
 for column in valid_columns:
@@ -284,7 +278,6 @@ for column in valid_columns:
 
 results_df = pd.DataFrame(result_data)
 
-# Splitting UI workspace: Left is Data, Right is Data Visualization
 result_col1, result_col2 = st.columns(2)
 
 with result_col1:
@@ -295,7 +288,6 @@ with result_col1:
         hide_index=True
     )
     
-    # Generate CSV stream for standard download
     csv_buffer = io.StringIO()
     results_df.to_csv(csv_buffer, index=False)
     csv_bytes = csv_buffer.getvalue().encode("utf-8")
@@ -310,5 +302,21 @@ with result_col1:
 
 with result_col2:
     st.subheader("Visual Profile")
-    chart_df = results_df.set_index("Block")
-    st.line_chart(chart_df, y=valid_columns)
+    
+    # Generate the interactive Plotly Line chart
+    fig = px.line(
+        results_df,
+        x="Block",
+        y=valid_columns,
+        title=f"96 Block Profile - P{percentile:g}",
+        labels={"value": "Value", "variable": "Selected Columns"}
+    )
+    
+    # Clean layout stylings
+    fig.update_layout(
+        hovermode="x unified",
+        xaxis=dict(tickmode="linear", tick0=1, dtick=12),
+        margin=dict(l=20, r=20, t=40, b=20)
+    )
+    
+    st.plotly_chart(fig, use_container_width=True)
