@@ -288,10 +288,10 @@ with st.expander("Preview uploaded data", expanded=False):
     )
 
 # ============================================================
-# COLUMN SELECTION
+# MULTIPLE COLUMN SELECTION
 # ============================================================
 
-st.subheader("2. Select Data Column")
+st.subheader("2. Select Data Columns")
 
 numeric_columns = get_numeric_columns(df)
 
@@ -302,95 +302,31 @@ if not numeric_columns:
     )
     st.stop()
 
-selected_column = st.selectbox(
-    "Select the column for percentile calculation",
+selected_columns = st.multiselect(
+    "Select one or more columns for percentile calculation",
     options=numeric_columns,
-    index=0,
+    default=[],
+    help=(
+        "You can select multiple numeric columns. "
+        "A separate 96-block percentile profile will be "
+        "calculated for every selected column."
+    ),
 )
 
-# ============================================================
-# PREPARE DATA
-# ============================================================
-
-values = prepare_numeric_series(
-    df,
-    selected_column,
-)
-
-if values.empty:
-    st.error(
-        f"The selected column **{selected_column}** contains no valid numeric values."
-    )
-    st.stop()
-
-total_valid_values = len(values)
-
-# ============================================================
-# DATA VALIDATION
-# ============================================================
-
-st.subheader("3. Data Validation")
-
-complete_days = total_valid_values // BLOCKS_PER_DAY
-remainder = total_valid_values % BLOCKS_PER_DAY
-
-validation_col1, validation_col2, validation_col3 = st.columns(3)
-
-with validation_col1:
-    st.metric(
-        "Valid values",
-        f"{total_valid_values:,}",
-    )
-
-with validation_col2:
-    st.metric(
-        "Complete days",
-        f"{complete_days:,}",
-    )
-
-with validation_col3:
-    st.metric(
-        "Values/day",
-        f"{BLOCKS_PER_DAY}",
-    )
-
-if total_valid_values < MIN_VALUES_FOR_CALCULATION:
-    st.error(
-        f"At least {BLOCKS_PER_DAY} valid values are required "
-        "to create one complete day."
-    )
-    st.stop()
-
-if remainder != 0:
-
-    discarded = remainder
-
-    st.warning(
-        f"The selected column contains **{total_valid_values:,}** valid values. "
-        f"This represents **{complete_days} complete day(s)** plus "
-        f"**{discarded} incomplete value(s)**."
-    )
-
+if not selected_columns:
     st.info(
-        f"The last incomplete day will be excluded. "
-        f"Only the first **{complete_days * BLOCKS_PER_DAY:,}** values "
-        f"will be used for the percentile calculation."
+        "Please select at least one column to continue."
     )
+    st.stop()
 
-else:
-
-    st.success(
-        f"Validation passed. "
-        f"{complete_days:,} complete day(s) × {BLOCKS_PER_DAY} blocks/day."
-    )
 
 # ============================================================
 # PERCENTILE CONTROL
 # ============================================================
 
-st.subheader("4. Percentile Selection")
+st.subheader("3. Percentile Selection")
 
-percentile_col1, percentile_col2 = st.columns([2, 1])
+percentile_col1, percentile_col2 = st.columns([3, 1])
 
 with percentile_col1:
 
@@ -413,90 +349,278 @@ with percentile_col2:
         f"P{percentile:g}",
     )
 
+
 # ============================================================
-# CALCULATION
+# PROCESS ALL SELECTED COLUMNS
 # ============================================================
 
-reshaped_data, percentile_values, used_days = (
-    calculate_percentile_profile(
-        values,
-        percentile,
+st.subheader("4. Data Validation")
+
+processed_data = {}
+validation_rows = []
+
+for column in selected_columns:
+
+    # Convert to numeric
+    numeric_values = pd.to_numeric(
+        df[column],
+        errors="coerce",
     )
+
+    # Remove invalid values
+    valid_values = numeric_values.dropna().reset_index(drop=True)
+
+    total_values = len(valid_values)
+
+    complete_days = total_values // BLOCKS_PER_DAY
+
+    remainder = total_values % BLOCKS_PER_DAY
+
+    usable_values = complete_days * BLOCKS_PER_DAY
+
+    validation_rows.append(
+        {
+            "Column": column,
+            "Valid Values": total_values,
+            "Complete Days": complete_days,
+            "Incomplete Values": remainder,
+            "Usable Values": usable_values,
+            "Status": (
+                "Valid"
+                if complete_days >= 1
+                else "Insufficient data"
+            ),
+        }
+    )
+
+    if complete_days >= 1:
+
+        trimmed_values = valid_values.iloc[
+            :usable_values
+        ].to_numpy(dtype=float)
+
+        reshaped = trimmed_values.reshape(
+            complete_days,
+            BLOCKS_PER_DAY,
+        )
+
+        processed_data[column] = {
+            "values": valid_values,
+            "reshaped": reshaped,
+            "days": complete_days,
+            "remainder": remainder,
+        }
+
+
+# ============================================================
+# VALIDATION TABLE
+# ============================================================
+
+validation_df = pd.DataFrame(validation_rows)
+
+st.dataframe(
+    validation_df,
+    use_container_width=True,
+    hide_index=True,
 )
 
-if reshaped_data is None or percentile_values is None:
-    st.error(
-        "Unable to create complete 96-block days from the selected data."
+
+# ============================================================
+# CHECK WHETHER ANY COLUMN CAN BE PROCESSED
+# ============================================================
+
+valid_columns = [
+    column
+    for column in selected_columns
+    if column in processed_data
+]
+
+invalid_columns = [
+    column
+    for column in selected_columns
+    if column not in processed_data
+]
+
+
+if invalid_columns:
+
+    st.warning(
+        "The following columns do not contain enough valid data "
+        "for one complete 96-block day and will be excluded: "
+        + ", ".join(invalid_columns)
     )
+
+
+if not valid_columns:
+
+    st.error(
+        "None of the selected columns contains enough data "
+        "to create a complete 96-block day."
+    )
+
     st.stop()
 
+
 # ============================================================
-# RESULT
+# INCOMPLETE DAY INFORMATION
 # ============================================================
 
-result_df = create_result_dataframe(
-    percentile_values,
-    percentile,
-)
+for column in valid_columns:
+
+    info = processed_data[column]
+
+    if info["remainder"] > 0:
+
+        st.warning(
+            f"**{column}** has {info['remainder']} incomplete "
+            f"value(s) after {info['days']} complete day(s). "
+            f"The incomplete portion will be excluded."
+        )
+
+
+# ============================================================
+# CALCULATE PERCENTILE FOR EACH COLUMN
+# ============================================================
+
+result_data = {
+    "Block": np.arange(
+        1,
+        BLOCKS_PER_DAY + 1,
+    ),
+    "Time": pd.date_range(
+        start="00:00",
+        periods=BLOCKS_PER_DAY,
+        freq="15min",
+    ).strftime("%H:%M"),
+}
+
+
+for column in valid_columns:
+
+    reshaped = processed_data[column]["reshaped"]
+
+    percentile_values = np.percentile(
+        reshaped,
+        percentile,
+        axis=0,
+    )
+
+    result_data[
+        f"{column} P{percentile:g}"
+    ] = percentile_values
+
+
+result_df = pd.DataFrame(result_data)
+
+
+# ============================================================
+# RESULT SUMMARY
+# ============================================================
 
 st.subheader("5. Percentile Result")
 
-result_col1, result_col2, result_col3 = st.columns(3)
+summary_col1, summary_col2, summary_col3 = st.columns(3)
 
-with result_col1:
+with summary_col1:
     st.metric(
-        "Days used",
-        f"{used_days:,}",
+        "Columns processed",
+        len(valid_columns),
     )
 
-with result_col2:
+with summary_col2:
     st.metric(
         "Time blocks",
-        "96",
+        BLOCKS_PER_DAY,
     )
 
-with result_col3:
+with summary_col3:
     st.metric(
         "Percentile",
         f"P{percentile:g}",
     )
+
 
 # ============================================================
 # RESULT TABLE
 # ============================================================
 
 st.markdown(
-    f"### P{percentile:g} Profile"
+    f"### 96-Block P{percentile:g} Profile"
 )
 
 st.dataframe(
     result_df,
     use_container_width=True,
     hide_index=True,
-    height=500,
+    height=550,
 )
 
+
 # ============================================================
-# CHART
+# GRAPH
 # ============================================================
 
-st.subheader("6. 96-Block Percentile Profile")
+st.subheader("6. Percentile Profiles")
 
-chart_df = result_df.set_index("Time")
+chart_data = result_df.set_index("Time")
+
+profile_columns = [
+    column
+    for column in result_df.columns
+    if column not in ["Block", "Time"]
+]
 
 st.line_chart(
-    chart_df[f"P{percentile:g}"],
+    chart_data[profile_columns],
     use_container_width=True,
 )
 
+
 # ============================================================
-# OPTIONAL DAILY MATRIX
+# INDIVIDUAL COLUMN GRAPHS
 # ============================================================
 
 with st.expander(
-    "View reshaped daily data (Days × 96 blocks)",
+    "View individual percentile profiles",
     expanded=False,
 ):
+
+    for column in valid_columns:
+
+        result_column = f"{column} P{percentile:g}"
+
+        st.markdown(
+            f"**{column} - P{percentile:g}**"
+        )
+
+        individual_chart = result_df.set_index(
+            "Time"
+        )[[result_column]]
+
+        st.line_chart(
+            individual_chart,
+            use_container_width=True,
+        )
+
+
+# ============================================================
+# DAILY MATRIX
+# ============================================================
+
+with st.expander(
+    "View reshaped daily data",
+    expanded=False,
+):
+
+    matrix_column = st.selectbox(
+        "Select column to view its Days × 96 matrix",
+        options=valid_columns,
+        key="daily_matrix_column",
+    )
+
+    selected_matrix = processed_data[
+        matrix_column
+    ]["reshaped"]
 
     block_columns = [
         f"Block_{i:02d}"
@@ -504,19 +628,23 @@ with st.expander(
     ]
 
     daily_matrix = pd.DataFrame(
-        reshaped_data,
+        selected_matrix,
         columns=block_columns,
     )
 
     daily_matrix.insert(
         0,
         "Day",
-        np.arange(1, used_days + 1),
+        np.arange(
+            1,
+            len(daily_matrix) + 1,
+        ),
     )
 
     st.caption(
-        f"Shape: {daily_matrix.shape[0]} days × "
-        f"{daily_matrix.shape[1] - 1} time blocks"
+        f"{matrix_column} shape: "
+        f"{daily_matrix.shape[0]} days × "
+        f"{BLOCKS_PER_DAY} blocks"
     )
 
     st.dataframe(
@@ -526,66 +654,68 @@ with st.expander(
         height=500,
     )
 
+
 # ============================================================
-# DOWNLOAD
+# DOWNLOAD RESULT
 # ============================================================
 
 st.subheader("7. Download Result")
 
-download_df = result_df.copy()
-
-csv_data = download_df.to_csv(
+download_csv = result_df.to_csv(
     index=False
 ).encode("utf-8")
 
 st.download_button(
-    label=f"⬇️ Download P{percentile:g} Profile CSV",
-    data=csv_data,
-    file_name=f"percentile_P{percentile:g}_96_blocks.csv",
+    label=f"⬇️ Download P{percentile:g} Result CSV",
+    data=download_csv,
+    file_name=(
+        f"percentile_P{percentile:g}_96_block_profiles.csv"
+    ),
     mime="text/csv",
-    use_container_width=False,
 )
 
+
 # ============================================================
-# METHODOLOGY
+# CALCULATION DETAILS
 # ============================================================
 
-with st.expander("Calculation methodology", expanded=False):
+with st.expander(
+    "Calculation methodology",
+    expanded=False,
+):
 
     st.markdown(
-        """
-        **Calculation logic**
+        f"""
+        ### Calculation
 
-        1. The selected column is converted to numeric values.
-        2. Invalid/non-numeric values are removed.
-        3. The valid values are grouped into complete days.
-        4. Each day contains exactly **96 blocks**.
-        5. Data is reshaped as:
+        Each selected column is processed independently.
+
+        For every column:
+
+        **1.** Convert the column to numeric.
+
+        **2.** Remove invalid/non-numeric values.
+
+        **3.** Calculate the number of complete days:
+
+        `Complete Days = Valid Values // 96`
+
+        **4.** Remove any incomplete final day.
+
+        **5.** Reshape the data:
 
         `Days × 96`
 
-        6. The selected percentile is calculated independently for
-        each of the 96 columns:
+        **6.** Calculate the selected percentile across days:
 
-        `np.percentile(daily_matrix, percentile, axis=0)`
+        `np.percentile(data.reshape(-1, 96), {percentile:g}, axis=0)`
 
-        7. The final output contains exactly **96 percentile values**,
-        corresponding to:
+        **7.** Return 96 values representing:
 
-        `00:00, 00:15, 00:30, ... , 23:45`
+        `00:00 → 00:15 → 00:30 → ... → 23:45`
 
-        If the number of valid values is not divisible by 96,
-        the incomplete final day is excluded from the calculation.
+        The percentile can be changed using the slider above,
+        and the table, charts and downloaded CSV automatically
+        update to the new percentile.
         """
     )
-
-# ============================================================
-# FOOTER
-# ============================================================
-
-st.divider()
-
-st.caption(
-    "96-block percentile calculation • 15-minute resolution • "
-    "Incomplete days are automatically excluded"
-)
