@@ -30,6 +30,8 @@ VALID_COLUMNS = [
     "SEMS (SEMS)",
     "Green Gen-SCADA (OPC)",
     "Green Gen-Meter (OPC)",
+    "Green Gen-Meter (API)",
+    "Green Gen-SCADA (API)",
     "Power (MW)",
 ]
 
