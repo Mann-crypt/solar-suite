@@ -4,3 +4,7 @@ numpy
 scipy
 openpyxl
 plotly
+pydeck
+pandas
+pyproj
+geopy
