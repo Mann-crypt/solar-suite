@@ -327,13 +327,13 @@ def cached_no_curtailment(
 
     smooth = savgol_filter(
         percentile,
-        window_length=11,
+        window_length=window,
         polyorder=3,
     )
 
     symmetric = savgol_filter(
         symmetric,
-        window_length=11,
+        window_length=window,
         polyorder=3,
     )
 
@@ -403,7 +403,7 @@ def cached_sym_shift_nc(
 
     symmetric = savgol_filter(
         symmetric,
-        window_length=11,
+        window_length=window,
         polyorder=3,
     )
 
