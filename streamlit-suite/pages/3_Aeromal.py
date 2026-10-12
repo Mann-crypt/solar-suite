@@ -211,86 +211,23 @@ def cached_best_shift(
     return int(best_shift)
 
 
-# ==========================================================
-# MONOTONIC SYMMETRIC PROFILE
-# ==========================================================
+def create_symmetric_profile(sym):
+    sym = np.asarray(sym, dtype=float).copy()
+    sym = np.where(sym < 0, 0, sym)
 
-def create_symmetric_profile(
-    profile,
-    percentile,
-    match_blocks=6,
-    peak_cap=None,
-):
-    profile = np.asarray(profile, dtype=float).copy()
-    percentile = np.asarray(percentile, dtype=float).copy()
+    mid = len(sym) // 2
+    max_val = np.max(sym)
 
-    n = len(profile)
+    # First half: rise with flat peak allowed
+    for i in range(1, mid):
+        if sym[i] < sym[i - 1]:
+            sym[i] = max_val
 
-    # Prevent negative values
-    profile = np.maximum(profile, 0)
+    # Mirror the first half to create the set
+    first_half = sym[:mid].copy()
+    sym[mid:mid + len(first_half)] = first_half[::-1]
 
-    # Find generation start and end
-    active = np.where(percentile > 0.1)[0]
-
-    if len(active) == 0:
-        return np.zeros(n)
-
-    start = active[0]
-    end = active[-1]
-
-    match_blocks = max(1, int(match_blocks))
-
-    # Preserve exact percentile values at both ends
-    left_end = min(start + match_blocks, end + 1)
-    right_start = max(end - match_blocks + 1, start)
-
-    result = np.zeros(n)
-
-    result[start:left_end] = percentile[start:left_end]
-    result[right_start:end + 1] = percentile[right_start:end + 1]
-
-    # Define the inner region
-    left = left_end
-    right = right_start - 1
-
-    if right < left:
-        return result
-
-    core = profile[left:right + 1].copy()
-    length = len(core)
-
-    # Make the core symmetric before enforcing monotonicity
-    for i in range(length // 2):
-        j = length - 1 - i
-        avg = (core[i] + core[j]) / 2
-        core[i] = avg
-        core[j] = avg
-
-    # First half: ascending only
-    mid = (length + 1) // 2
-    first_half = np.maximum.accumulate(core[:mid])
-
-    # Optional peak cap
-    if peak_cap is not None:
-        first_half = np.minimum(first_half, peak_cap)
-
-    max_val = np.max(first_half) if len(first_half) else 0
-
-    # Second half: exact reverse
-    if length % 2 == 0:
-        core = np.concatenate([
-            first_half,
-            first_half[::-1],
-        ])
-    else:
-        core = np.concatenate([
-            first_half,
-            first_half[:-1][::-1],
-        ])
-
-    result[left:right + 1] = core
-
-    return np.maximum(result, 0)
+    return sym
 
 # ==========================================================
 # NO CURTAILMENT
@@ -328,16 +265,14 @@ def cached_no_curtailment(
     best_shift = cached_best_shift(
         tuple(smooth.tolist())
     )
-
+    
     shifted = np.roll(
         smooth,
         -best_shift,
     )
-
+    
     symmetric = create_symmetric_profile(
-        profile=shifted,
-        percentile=percentile,
-        match_blocks=6,
+        shifted
     )
 
     # ------------------------------------------------------
@@ -478,9 +413,8 @@ def cached_sym_shift_nc(
         -int(shift),
     )
 
-    symmetric = (
-        0.50 * smooth
-        + 0.50 * shifted[::-1]
+    symmetric = create_symmetric_profile(
+        shifted
     )
 
     symmetric = savgol_filter(
