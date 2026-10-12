@@ -229,6 +229,30 @@ def create_symmetric_profile(sym):
 
     return sym
 
+
+def shift_profile_blockwise(profile, shift):
+    profile = np.asarray(profile, dtype=float)
+    shifted = np.zeros_like(profile)
+
+    shift = int(shift)
+    n = len(profile)
+
+    if shift > 0:
+        # Move profile right
+        if shift < n:
+            shifted[shift:] = profile[:n - shift]
+
+    elif shift < 0:
+        # Move profile left
+        if abs(shift) < n:
+            shifted[:n + shift] = profile[-shift:]
+
+    else:
+        shifted = profile.copy()
+
+    return shifted
+
+
 # ==========================================================
 # NO CURTAILMENT
 # ==========================================================
@@ -337,44 +361,18 @@ def cached_no_curtailment(
 # ==========================================================
 
 @st.cache_data(show_spinner=False)
-def cached_sym_shift_nc(
-    smooth_tuple,
-    shift,
-):
+@st.cache_data(show_spinner=False)
+def cached_sym_shift_nc(smooth_tuple, shift):
+    smooth = np.asarray(smooth_tuple, dtype=float)
 
-    smooth = np.asarray(
-        smooth_tuple,
-        dtype=float,
-    )
+    shifted = shift_profile_blockwise(smooth, shift)
 
-    shifted = np.roll(
-        smooth,
-        -int(shift),
-    )
+    symmetric = create_symmetric_profile(shifted)
 
-    symmetric = create_symmetric_profile(
-        shifted
-    )
+    symmetric = np.clip(symmetric, 0, None)
+    symmetric[symmetric < 0.1] = 0
 
-    symmetric = savgol_filter(
-        symmetric,
-        window_length=window,
-        polyorder=3,
-    )
-
-    symmetric = np.clip(
-        symmetric,
-        0,
-        None,
-    )
-
-    symmetric[
-        symmetric < 0.1
-    ] = 0
-
-    return tuple(
-        symmetric.tolist()
-    )
+    return tuple(symmetric.tolist())
 
 
 # ==========================================================
