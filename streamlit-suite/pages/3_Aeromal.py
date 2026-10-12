@@ -1,3 +1,12 @@
+
+# ============================================================
+# AEROMAL SOLAR SUITE
+# Clean application structure
+# ============================================================
+
+# -------------------------
+# 1. IMPORTS & CONFIGURATION
+# -------------------------
 import io
 import numpy as np
 import pandas as pd
@@ -5,14 +14,10 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from scipy.signal import savgol_filter
-from openpyxl import load_workbook
+from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Font, PatternFill, Alignment
 from openpyxl.utils import get_column_letter
 
-
-# ==========================================================
-# PAGE CONFIG
-# ==========================================================
 
 st.set_page_config(
     page_title="Aeromal — Solar Suite",
@@ -20,9 +25,11 @@ st.set_page_config(
     layout="wide",
 )
 
+APP_TITLE = "Kaha hai Aeromal ka khauf?!!"
 AEROMAL_PASSWORD = "asdfghjkl;'"
+BLOCKS_PER_DAY = 96
 
-VALID_COLUMNS = [
+GENERATION_COLUMNS = [
     "Green Gen-Meter (Developer)",
     "Green Gen-SCADA (Developer)",
     "Green Gen-Meter (Generator)",
@@ -33,1676 +40,445 @@ VALID_COLUMNS = [
     "Green Gen-Meter (API)",
     "Green Gen-SCADA (API)",
     "Power (MW)",
-    "Green Gen-SCADA (Generator)"
+    "Green Gen-SCADA (Generator)",
 ]
 
 
-# ==========================================================
-# SIDEBAR
-# ==========================================================
+# -------------------------
+# 2. PAGE STYLING
+# -------------------------
+def add_page_styling():
+    st.markdown(
+        """
+        <style>
+        .block-container {
+            padding-top: 1.5rem;
+            padding-bottom: 2rem;
+            max-width: 1500px;
+        }
 
-st.sidebar.markdown(
-    """
-    <h1 style='text-align:center;
-    background:linear-gradient(90deg,#00c6ff,#0072ff);
-    -webkit-background-clip:text;
-    -webkit-text-fill-color:transparent;
-    font-size:40px;font-weight:800;'>
-    ⚡ Solar Suite
-    </h1>
+        h1, h2, h3 {
+            letter-spacing: -0.3px;
+        }
 
-    <p style='text-align:center;color:gray;font-size:14px;'>
-    Forecast Correction Platform
-    </p>
-    """,
-    unsafe_allow_html=True,
-)
+        div[data-testid="stMetric"] {
+            background: rgba(128, 128, 128, 0.07);
+            padding: 16px;
+            border-radius: 12px;
+            border: 1px solid rgba(128, 128, 128, 0.15);
+        }
 
-st.sidebar.divider()
+        div[data-testid="stFileUploader"] {
+            border-radius: 12px;
+        }
 
-
-# ==========================================================
-# AUTHENTICATION
-# ==========================================================
-
-if "aeromal_auth" not in st.session_state:
-    st.session_state.aeromal_auth = False
-
-
-if st.session_state.aeromal_auth:
-
-    if st.sidebar.button(
-        "🚪 Logout",
-        use_container_width=True,
-    ):
-        st.session_state.aeromal_auth = False
-        st.rerun()
-
-else:
-
-    st.title("🔒 Access bas bade logo ke paas hai")
-
-    password = st.text_input(
-        "Enter Password",
-        type="password",
-    )
-
-    if st.button(
-        "Login",
-        type="primary",
-        use_container_width=True,
-    ):
-
-        if password == AEROMAL_PASSWORD:
-
-            st.session_state.aeromal_auth = True
-            st.rerun()
-
-        else:
-            st.error("Incorrect Password")
-
-    st.stop()
-
-
-# ==========================================================
-# FILE READERS
-# ==========================================================
-
-@st.cache_data(show_spinner=False)
-def read_excel_sheets(file_bytes):
-
-    xls = pd.ExcelFile(
-        io.BytesIO(file_bytes)
-    )
-
-    return xls.sheet_names
-
-
-@st.cache_data(show_spinner=False)
-def read_excel_sheet(
-    file_bytes,
-    sheet_name,
-):
-
-    return pd.read_excel(
-        io.BytesIO(file_bytes),
-        sheet_name=sheet_name,
+        .section-divider {
+            margin-top: 1.5rem;
+            margin-bottom: 1.5rem;
+            border-top: 1px solid rgba(128, 128, 128, 0.25);
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
     )
 
 
-@st.cache_data(show_spinner=False)
-def read_csv(file_bytes):
+# -------------------------
+# 3. AUTHENTICATION
+# -------------------------
+def authenticate():
+    if st.session_state.get("authenticated", False):
+        return True
 
-    return pd.read_csv(
-        io.BytesIO(file_bytes)
-    )
+    st.title("⚡ Aeromal Solar Suite")
+    st.subheader("Login")
 
-
-# ==========================================================
-# PERCENTILE
-# ==========================================================
-
-@st.cache_data(show_spinner=False)
-def cached_percentile(
-    power_tuple,
-    days,
-):
-
-    power = np.asarray(
-        power_tuple,
-        dtype=float,
-    )
-
-    profile = power.reshape(
-        days,
-        96,
-    )
-
-    percentile = np.percentile(
-        profile,
-        95,
-        axis=0,
-    )
-
-    return tuple(
-        percentile.tolist()
-    )
-
-
-# ==========================================================
-# BEST SYMMETRY SHIFT
-# ==========================================================
-
-@st.cache_data(show_spinner=False)
-def cached_best_shift(
-    profile_tuple,
-):
-
-    profile = np.asarray(
-        profile_tuple,
-        dtype=float,
-    )
-
-    best_error = np.inf
-    best_shift = 0
-
-    for shift in range(96):
-
-        shifted = np.roll(
-            profile,
-            -shift,
+    with st.form("login_form"):
+        password = st.text_input(
+            "Enter password",
+            type="password",
+        )
+        submitted = st.form_submit_button(
+            "Login",
+            use_container_width=True,
         )
 
-        symmetric = (
-            profile + shifted[::-1]
-        ) / 2
+    if submitted:
+        if password == AEROMAL_PASSWORD:
+            st.session_state["authenticated"] = True
+            st.rerun()
+        else:
+            st.error("Incorrect password. Please try again.")
+
+    return False
+
+
+# -------------------------
+# 4. INPUT FILE READING
+# -------------------------
+def read_uploaded_file(uploaded_file):
+    """Read CSV or Excel input into a DataFrame."""
+    filename = uploaded_file.name.lower()
+
+    try:
+        if filename.endswith(".csv"):
+            uploaded_file.seek(0)
+            return pd.read_csv(uploaded_file)
+
+        if filename.endswith((".xlsx", ".xls")):
+            uploaded_file.seek(0)
+            return pd.read_excel(uploaded_file)
+
+        raise ValueError("Unsupported file format.")
+
+    except Exception as exc:
+        raise ValueError(
+            f"Unable to read {uploaded_file.name}: {exc}"
+        ) from exc
+
+
+def clean_dataframe(df):
+    """Clean column names and normalize missing/non-numeric values."""
+    df = df.copy()
+    df.columns = [str(column).strip() for column in df.columns]
+
+    return df
+
+
+def get_generation_columns(df):
+    """Return supported generation columns present in the uploaded file."""
+    return [
+        column
+        for column in GENERATION_COLUMNS
+        if column in df.columns
+    ]
+
+
+def prepare_generation_data(df, generation_column):
+    """Convert the selected generation column to a clean numeric array."""
+    if generation_column not in df.columns:
+        raise ValueError(
+            f"Column '{generation_column}' was not found."
+        )
+
+    values = pd.to_numeric(
+        df[generation_column],
+        errors="coerce",
+    )
+
+    values = (
+        values.replace([np.inf, -np.inf], np.nan)
+        .fillna(0)
+        .to_numpy(dtype=float)
+    )
+
+    if len(values) == 0:
+        raise ValueError("The selected generation column is empty.")
+
+    if len(values) % BLOCKS_PER_DAY != 0:
+        raise ValueError(
+            f"Expected the number of rows to be divisible by "
+            f"{BLOCKS_PER_DAY}. Received {len(values)} rows."
+        )
+
+    return values
+
+
+# -------------------------
+# 5. GENERAL PROFILE HELPERS
+# -------------------------
+def validate_smoothing_window(window, profile_length=BLOCKS_PER_DAY):
+    """Ensure the Savitzky–Golay window is valid."""
+    window = int(window)
+
+    if window % 2 == 0:
+        window += 1
+
+    maximum = profile_length if profile_length % 2 else profile_length - 1
+    window = min(window, maximum)
+
+    if window < 5:
+        window = 5
+
+    return window
+
+
+def smooth_profile(profile, window, polyorder=3):
+    """Smooth a profile using a valid Savitzky–Golay window."""
+    profile = np.asarray(profile, dtype=float)
+
+    if len(profile) < 5:
+        return profile.copy()
+
+    window = validate_smoothing_window(
+        window,
+        profile_length=len(profile),
+    )
+
+    polyorder = min(polyorder, window - 2)
+
+    return savgol_filter(
+        profile,
+        window_length=window,
+        polyorder=polyorder,
+    )
+
+
+@st.cache_data(show_spinner=False)
+def cached_percentile(power_tuple, days):
+    """Calculate the 95th percentile for each of the 96 daily blocks."""
+    power = np.asarray(power_tuple, dtype=float)
+    matrix = power.reshape(int(days), BLOCKS_PER_DAY)
+
+    return tuple(
+        np.percentile(matrix, 95, axis=0).tolist()
+    )
+
+
+@st.cache_data(show_spinner=False)
+def cached_best_shift(profile_tuple):
+    """Find the shift with the lowest RMSE against the reversed profile."""
+    profile = np.asarray(profile_tuple, dtype=float)
+
+    best_shift = 0
+    best_error = float("inf")
+
+    for shift in range(len(profile)):
+        shifted = np.roll(profile, -shift)
+        symmetric = (profile + shifted[::-1]) / 2.0
 
         error = np.sqrt(
-            np.mean(
-                (profile - symmetric) ** 2
-            )
+            np.mean((symmetric - profile) ** 2)
         )
 
         if error < best_error:
-
             best_error = error
             best_shift = shift
 
     return int(best_shift)
 
 
-def create_symmetric_profile(sym):
-    sym = np.asarray(sym, dtype=float).copy()
-    sym = np.where(sym < 0, 0, sym)
+def create_symmetric_profile(profile):
+    """
+    Create a profile with a single rise and a single set.
 
-    mid = len(sym) // 2
-    max_val = np.max(sym)
+    This retains the existing approach of enforcing a non-decreasing
+    first half and mirroring it into the second half.
+    """
+    profile = np.asarray(profile, dtype=float).copy()
+    profile = np.maximum(profile, 0)
 
-    # First half: rise with flat peak allowed
-    for i in range(1, mid):
-        if sym[i] < sym[i - 1]:
-            sym[i] = max_val
+    length = len(profile)
+    midpoint = length // 2
 
-    # Mirror the first half to create the set
-    first_half = sym[:mid].copy()
-    sym[mid:mid + len(first_half)] = first_half[::-1]
+    if length == 0:
+        return profile
 
-    return sym
+    max_value = float(np.max(profile))
+
+    for index in range(1, midpoint):
+        if profile[index] < profile[index - 1]:
+            profile[index] = max_value
+
+    profile[midpoint:] = profile[: length - midpoint][::-1]
+
+    return profile
 
 
 def shift_profile_blockwise(profile, shift):
-    profile = np.asarray(profile, dtype=float)
-    shifted = np.zeros_like(profile)
+    """
+    Shift profile blocks without circular wrapping.
 
+    Positive shift: move right and fill the beginning with zeros.
+    Negative shift: move left and fill the end with zeros.
+    """
+    profile = np.asarray(profile, dtype=float)
     shift = int(shift)
-    n = len(profile)
+    result = np.zeros_like(profile)
+
+    if len(profile) == 0:
+        return result
+
+    if shift == 0:
+        return profile.copy()
+
+    if shift >= len(profile) or shift <= -len(profile):
+        return result
 
     if shift > 0:
-        # Move profile right
-        if shift < n:
-            shifted[shift:] = profile[:n - shift]
-
-    elif shift < 0:
-        # Move profile left
-        if abs(shift) < n:
-            shifted[:n + shift] = profile[-shift:]
-
+        result[shift:] = profile[:-shift]
     else:
-        shifted = profile.copy()
-
-    return shifted
-
-
-# ==========================================================
-# NO CURTAILMENT
-# ==========================================================
-
-@st.cache_data(show_spinner=False)
-def cached_no_curtailment(
-    power_tuple,
-    days,
-    window,
-    power_availability,
-):
-
-    percentile = np.asarray(
-        cached_percentile(
-            power_tuple,
-            days,
-        )
-    )
-
-    # ------------------------------------------------------
-    # Initial smoothing
-    # ------------------------------------------------------
-
-    smooth = savgol_filter(
-        percentile,
-        window_length=window,
-        polyorder=3,
-    )
-
-    # ------------------------------------------------------
-    # Best symmetry shift
-    # ------------------------------------------------------
-
-    best_shift = cached_best_shift(
-        tuple(smooth.tolist())
-    )
-    
-    symmetric = create_symmetric_profile(
-        shifted
-    )
-
-    
-
-    # ------------------------------------------------------
-    # Final smoothing
-    # ------------------------------------------------------
-
-    smooth = savgol_filter(
-        percentile,
-        window_length=window,
-        polyorder=3,
-    )
-
-    smooth = np.clip(
-        smooth,
-        0,
-        None,
-    )
-
-    symmetric = np.clip(
-        symmetric,
-        0,
-        None,
-    )
-
-    smooth[
-        smooth < 0.1
-    ] = 0
-
-    symmetric[
-        symmetric < 0.1
-    ] = 0
-
-    # ------------------------------------------------------
-    # Power availability
-    # ------------------------------------------------------
-
-    factor = (
-        power_availability / 100
-    )
-
-    smooth *= factor
-    symmetric *= factor
-
-    return (
-        tuple(percentile.tolist()),
-        tuple(smooth.tolist()),
-        tuple(symmetric.tolist()),
-        best_shift,
-    )
-
-
-
-# ==========================================================
-# MANUAL BLOCKWISE SHIFT: NO CURTAILMENT
-# ==========================================================
-
-@st.cache_data(show_spinner=False)
-def cached_sym_shift_nc(symmetric_tuple, shift):
-    symmetric = np.asarray(
-        symmetric_tuple,
-        dtype=float,
-    )
-
-    shifted = shift_profile_blockwise(
-        symmetric,
-        shift,
-    )
-
-    return tuple(shifted.tolist())
-
-# ==========================================================
-# CURTAILMENT
-# ==========================================================
-
-@st.cache_data(show_spinner=False)
-def cached_curtailment(
-    power_tuple,
-    days,
-    peak_cap,
-    target_width,
-    window,
-    power_availability,
-):
-
-    percentile = (
-        np.asarray(
-            cached_percentile(
-                power_tuple,
-                days,
-            )
-        )
-        * 1.03
-    )
-
-    y = percentile.copy()
-    n = len(y)
-
-    result = np.zeros(n)
-
-    # ------------------------------------------------------
-    # Smooth and gradient
-    # ------------------------------------------------------
-
-    smooth = savgol_filter(
-        y,
-        7,
-        2,
-    )
-
-    gradient = np.gradient(
-        smooth
-    )
-
-    # ------------------------------------------------------
-    # LEFT SIDE
-    # ------------------------------------------------------
-
-    left_peak = np.argmax(
-        smooth[: n // 2]
-    )
-
-    left_peak = max(
-        left_peak,
-        2,
-    )
-
-    left_start = np.argmax(
-        gradient[:left_peak]
-    )
-
-    if left_start >= left_peak:
-        left_start = 0
-
-    x_left = np.arange(
-        left_start,
-        left_peak,
-    )
-
-    y_left = smooth[
-        left_start:left_peak
-    ]
-
-    if len(x_left) >= 2:
-
-        m1, c1 = np.polyfit(
-            x_left,
-            y_left,
-            1,
-        )
-
-    else:
-
-        m1 = 1
-        c1 = 0
-
-    # ------------------------------------------------------
-    # RIGHT SIDE
-    # ------------------------------------------------------
-
-    right_peak = (
-        np.argmax(
-            smooth[n // 2:]
-        )
-        + n // 2
-    )
-
-    threshold = (
-        0.02 * np.max(smooth)
-    )
-
-    active = np.where(
-        smooth > threshold
-    )[0]
-
-    if len(active) > 0:
-        right_end = active[-1]
-    else:
-        right_end = n - 1
-
-    if right_end <= right_peak:
-
-        right_end = min(
-            n - 1,
-            right_peak + 2,
-        )
-
-    x_right = np.arange(
-        right_peak,
-        right_end,
-    )
-
-    y_right = smooth[
-        right_peak:right_end
-    ]
-
-    if len(x_right) >= 2:
-
-        m2, c2 = np.polyfit(
-            x_right,
-            y_right,
-            1,
-        )
-
-    else:
-
-        m2 = -1
-        c2 = smooth[right_peak]
-
-    # ------------------------------------------------------
-    # Avoid division by zero
-    # ------------------------------------------------------
-
-    if abs(m1) < 1e-9:
-        m1 = 1e-9
-
-    if abs(m2) < 1e-9:
-        m2 = -1e-9
-
-    # ------------------------------------------------------
-    # Trip point
-    # ------------------------------------------------------
-
-    A = (
-        1 / m2
-        - 1 / m1
-    )
-
-    B = (
-        c1 / m1
-        - c2 / m2
-    )
-
-    if abs(A) < 1e-9:
-
-        trip = float(
-            target_width
-        )
-
-    else:
-
-        trip = max(
-            0,
-            (target_width - B) / A,
-        )
-
-    # ------------------------------------------------------
-    # Peak indices
-    # ------------------------------------------------------
-
-    left_idx = int(
-        np.clip(
-            round(
-                (trip - c1) / m1
-            ),
-            0,
-            n - 1,
-        )
-    )
-
-    right_idx = int(
-        np.clip(
-            round(
-                (trip - c2) / m2
-            ),
-            0,
-            n - 1,
-        )
-    )
-
-    if right_idx <= left_idx:
-
-        right_idx = min(
-            n - 1,
-            left_idx + 1,
-        )
-
-    # ======================================================
-    # DOME MODE
-    # ======================================================
-
-    if peak_cap >= trip:
-
-        left_curve = np.zeros(n)
-
-        for i in range(n):
-
-            value = (
-                m1 * i + c1
-            )
-
-            left_curve[i] = min(
-                value,
-                trip,
-            )
-
-            if value >= trip:
-
-                left_idx = i
-                break
-
-        right_curve = np.zeros(n)
-
-        for i in range(
-            n - 1,
-            -1,
-            -1,
-        ):
-
-            value = (
-                m2 * i + c2
-            )
-
-            right_curve[i] = min(
-                value,
-                trip,
-            )
-
-            if value >= trip:
-
-                right_idx = i
-                break
-
-        result = np.maximum(
-            left_curve,
-            right_curve,
-        )
-
-        width = max(
-            right_idx - left_idx,
-            2,
-        )
-
-        dome_height = max(
-            20,
-            0.12 * trip,
-        )
-
-        xc = np.linspace(
-            -1,
-            1,
-            width,
-        )
-
-        shape = np.sqrt(
-            np.maximum(
-                0,
-                1 - xc ** 2,
+        result[:shift] = profile[-shift:]
+
+    return result
+
+
+# -------------------------
+# 6. CHART HELPER
+# -------------------------
+def make_chart(x, curves, title):
+    """Build a reusable Plotly line chart."""
+    figure = go.Figure()
+
+    for curve_name, curve_values in curves.items():
+        figure.add_trace(
+            go.Scatter(
+                x=x,
+                y=curve_values,
+                mode="lines",
+                name=curve_name,
             )
         )
 
-        dome = (
-            trip
-            + dome_height * shape
-        )
-
-        dome[0] = trip
-        dome[-1] = trip
-
-        end_idx = min(
-            left_idx + width,
-            n,
-        )
-
-        result[
-            left_idx:end_idx
-        ] = dome[
-            :end_idx - left_idx
-        ]
-
-        result = savgol_filter(
-            result,
-            window,
-            3,
-        )
-
-        result = np.clip(
-            result,
-            0,
-            None,
-        )
-
-        result[
-            :left_start
-        ] = smooth[
-            :left_start
-        ]
-
-        result[
-            right_end:
-        ] = smooth[
-            right_end:
-        ]
-
-        result = savgol_filter(
-            result,
-            7,
-            3,
-        )
-
-        result *= (
-            power_availability / 100
-        )
-
-        result = np.clip(
-            result,
-            0,
-            None,
-        )
-
-        result[
-            result < 0.2
-        ] = 0
-
-    # ======================================================
-    # FLAT PEAK MODE
-    # ======================================================
-
-    else:
-
-        for i in range(n):
-
-            value = (
-                m1 * i + c1
-            )
-
-            result[i] = value
-
-            if value >= peak_cap:
-
-                left_idx = i
-                break
-
-        right_curve = np.zeros(n)
-
-        for i in range(
-            n - 1,
-            -1,
-            -1,
-        ):
-
-            value = (
-                m2 * i + c2
-            )
-
-            right_curve[i] = value
-
-            if value >= peak_cap:
-
-                right_idx = i
-                break
-
-        result = np.maximum(
-            result,
-            right_curve,
-        )
-
-        if right_idx > left_idx:
-
-            result[
-                left_idx:right_idx
-            ] = peak_cap
-
-        result = np.clip(
-            result,
-            0,
-            peak_cap,
-        )
-
-        result = savgol_filter(
-            result,
-            window,
-            3,
-        )
-
-        result[
-            :left_start
-        ] = smooth[
-            :left_start
-        ]
-
-        result[
-            right_end:
-        ] = smooth[
-            right_end:
-        ]
-
-        result = savgol_filter(
-            result,
-            7,
-            3,
-        )
-
-        result *= (
-            power_availability / 100
-        )
-
-        result = np.clip(
-            result,
-            0,
-            peak_cap,
-        )
-
-        result[
-            result < 1
-        ] = 0
-
-    # ------------------------------------------------------
-    # Best shift
-    # ------------------------------------------------------
-
-    best_shift = cached_best_shift(
-        tuple(result.tolist())
+    figure.update_layout(
+        title=title,
+        xaxis_title="Block",
+        yaxis_title="Power (MW)",
+        height=550,
+        hovermode="x unified",
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="left",
+            x=0,
+        ),
+        margin=dict(l=20, r=20, t=80, b=30),
     )
 
-    return (
-        tuple(percentile.tolist()),
-        tuple(result.tolist()),
-        best_shift,
-    )
+    return figure
 
 
-# ==========================================================
-# CURTAILMENT SYMMETRY
-# ==========================================================
-
-@st.cache_data(show_spinner=False)
-def cached_sym_shift_c(
-    final_profile_tuple,
-    shift,
-):
-
-    profile = np.asarray(
-        final_profile_tuple,
-        dtype=float,
-    )
-
-    shifted = np.roll(
-        profile,
-        -int(shift),
-    )
-
-    symmetric = (
-        profile + shifted[::-1]
-    ) / 2
-
-    return tuple(
-        symmetric.tolist()
-    )
-
-
-# ==========================================================
-# REPORT STYLING
-# ==========================================================
-
-def style_report_sheet(ws):
-
+# -------------------------
+# 7. EXCEL REPORT STYLING
+# -------------------------
+def style_report_sheet(worksheet):
+    """Apply consistent formatting to an Excel worksheet."""
     header_fill = PatternFill(
         fill_type="solid",
-        fgColor="0072FF",
+        fgColor="1F4E78",
     )
-
     header_font = Font(
-        color="FFFFFF",
         bold=True,
+        color="FFFFFF",
     )
 
-    # Header
-    for cell in ws[1]:
+    worksheet.freeze_panes = "A2"
+    worksheet.auto_filter.ref = worksheet.dimensions
 
+    for cell in worksheet[1]:
         cell.fill = header_fill
         cell.font = header_font
-
         cell.alignment = Alignment(
             horizontal="center",
             vertical="center",
         )
 
-    # Column widths
-    for column in ws.columns:
-
-        max_length = 0
-
+    for column_cells in worksheet.columns:
         column_letter = get_column_letter(
-            column[0].column
+            column_cells[0].column
         )
 
-        for cell in column:
-
-            if cell.value is not None:
-
-                max_length = max(
-                    max_length,
-                    len(str(cell.value)),
-                )
-
-        ws.column_dimensions[
-            column_letter
-        ].width = min(
-            max_length + 2,
-            25,
+        maximum_length = max(
+            len(str(cell.value or ""))
+            for cell in column_cells
         )
 
-    ws.freeze_panes = "A2"
-
-    ws.auto_filter.ref = ws.dimensions
-
-
-# ==========================================================
-# BUILD EXCEL REPORT
-# ==========================================================
-
-def build_excel_report(
-    original_bytes,
-    file_type,
-    source_df,
-    result_df,
-):
-
-    output = io.BytesIO()
-
-    # ======================================================
-    # EXCEL INPUT
-    # ======================================================
-
-    if file_type == "excel":
-
-        output.write(
-            original_bytes
+        worksheet.column_dimensions[column_letter].width = min(
+            maximum_length + 3,
+            35,
         )
 
-        output.seek(0)
 
-        wb = load_workbook(
-            output
-        )
+# -------------------------
+# 8. APPLICATION ENTRY POINT
+# -------------------------
+def main():
+    add_page_styling()
 
-        # Remove old report
-        if "Final Report" in wb.sheetnames:
+    if not authenticate():
+        st.stop()
 
-            del wb[
-                "Final Report"
-            ]
-
-        # Create clean report
-        ws = wb.create_sheet(
-            "Final Report"
-        )
-
-        # ONLY these columns
-        for col_idx, column in enumerate(
-            result_df.columns,
-            start=1,
-        ):
-
-            ws.cell(
-                row=1,
-                column=col_idx,
-                value=column,
-            )
-
-        for row_idx, values in enumerate(
-            result_df.itertuples(
-                index=False,
-                name=None,
-            ),
-            start=2,
-        ):
-
-            for col_idx, value in enumerate(
-                values,
-                start=1,
-            ):
-
-                if isinstance(
-                    value,
-                    (np.integer, np.floating),
-                ):
-
-                    value = float(value)
-
-                ws.cell(
-                    row=row_idx,
-                    column=col_idx,
-                    value=value,
-                )
-
-        style_report_sheet(
-            ws
-        )
-
-        wb.save(
-            output
-        )
-
-        output.seek(0)
-
-        return output.getvalue()
-
-    # ======================================================
-    # CSV INPUT
-    # ======================================================
-
-    with pd.ExcelWriter(
-        output,
-        engine="openpyxl",
-    ) as writer:
-
-        source_df.to_excel(
-            writer,
-            sheet_name="Source Data",
-            index=False,
-        )
-
-        result_df.to_excel(
-            writer,
-            sheet_name="Final Report",
-            index=False,
-        )
-
-    output.seek(0)
-
-    wb = load_workbook(
-        output
+    st.title(APP_TITLE)
+    st.caption(
+        "Solar generation profile analysis and correction"
     )
 
-    ws = wb[
-        "Final Report"
-    ]
-
-    style_report_sheet(
-        ws
-    )
-
-    wb.save(
-        output
-    )
-
-    output.seek(0)
-
-    return output.getvalue()
-
-
-# ==========================================================
-# CHART
-# ==========================================================
-
-def make_chart(
-    x,
-    curves,
-    title,
-):
-
-    fig = go.Figure()
-
-    for name, values, color in curves:
-
-        fig.add_trace(
-            go.Scatter(
-                x=x,
-                y=values,
-                name=name,
-                line=dict(
-                    color=color,
-                    width=4,
-                ),
-            )
-        )
-
-    fig.update_layout(
-        title=title,
-        height=550,
-        hovermode="x unified",
-        template="streamlit",
-        xaxis_title="Block",
-        yaxis_title="Power",
-        legend=dict(
-            orientation="h",
-            y=1.08,
-            x=0,
-        ),
-        margin=dict(
-            l=20,
-            r=20,
-            t=60,
-            b=20,
-        ),
-    )
-
-    return fig
-
-
-# ==========================================================
-# PAGE
-# ==========================================================
-
-st.title(
-    "Kaha hai Aeromal ka khauf?!!"
-)
-
-
-# ==========================================================
-# FILE UPLOADER
-# ==========================================================
-
-uploaded_file = st.file_uploader(
-    "📂 Upload CSV or Excel file",
-    type=[
-        "csv",
-        "xlsx",
-        "xls",
-    ],
-)
-
-
-if uploaded_file is None:
+    st.divider()
 
     st.info(
-        "Pehle CSV ya Excel file upload karo!!!"
+        "Upload your generation data to begin. "
+        "The file must contain complete days of 96 blocks each."
     )
 
-    st.stop()
+    uploaded_file = st.file_uploader(
+        "Upload generation data",
+        type=["csv", "xlsx", "xls"],
+        help="Supported formats: CSV, XLSX and XLS.",
+    )
 
-
-file_bytes = uploaded_file.getvalue()
-
-file_name = uploaded_file.name.lower()
-
-
-# ==========================================================
-# LOAD FILE
-# ==========================================================
-
-if file_name.endswith(".csv"):
-
-    file_type = "csv"
-
-    try:
-
-        source_df = read_csv(
-            file_bytes
-        )
-
-    except Exception as e:
-
-        st.error(
-            f"CSV read nahi ho payi: {e}"
-        )
-
+    if uploaded_file is None:
         st.stop()
 
-else:
-
-    file_type = "excel"
-
     try:
-
-        sheet_names = read_excel_sheets(
-            file_bytes
+        source_df = clean_dataframe(
+            read_uploaded_file(uploaded_file)
         )
-
-    except Exception as e:
-
-        st.error(
-            f"Excel read nahi ho payi: {e}"
-        )
-
+    except Exception as exc:
+        st.error(str(exc))
         st.stop()
 
-    sheet_name = st.selectbox(
-        "📑 Select Excel Sheet",
-        sheet_names,
+    available_columns = get_generation_columns(source_df)
+
+    if not available_columns:
+        st.error(
+            "No supported generation column was found in this file."
+        )
+        st.write("Available columns:", source_df.columns.tolist())
+        st.stop()
+
+    generation_column = st.selectbox(
+        "Select generation column",
+        options=available_columns,
     )
 
-    source_df = read_excel_sheet(
-        file_bytes,
-        sheet_name,
+    try:
+        power = prepare_generation_data(
+            source_df,
+            generation_column,
+        )
+    except Exception as exc:
+        st.error(str(exc))
+        st.stop()
+
+    days = len(power) // BLOCKS_PER_DAY
+
+    metric_1, metric_2, metric_3 = st.columns(3)
+
+    metric_1.metric("Total rows", f"{len(power):,}")
+    metric_2.metric("Complete days", f"{days:,}")
+    metric_3.metric("Blocks per day", BLOCKS_PER_DAY)
+
+    st.divider()
+
+    # The two mode renderers will be added in Part 2.
+    mode = st.radio(
+        "Select correction mode",
+        options=["No Curtailment", "Curtailment"],
+        horizontal=True,
     )
 
-
-# ==========================================================
-# CLEAN COLUMN NAMES
-# ==========================================================
-
-source_df.columns = [
-    str(column).strip()
-    for column in source_df.columns
-]
-
-
-# ==========================================================
-# FIND VALID COLUMNS
-# ==========================================================
-
-available_columns = [
-    column
-    for column in VALID_COLUMNS
-    if column in source_df.columns
-]
-
-
-if not available_columns:
-
-    st.error(
-        "Required generation column nahi mili."
-    )
-
-    st.write(
-        "Expected columns:"
-    )
-
-    st.write(
-        VALID_COLUMNS
-    )
-
-    st.write(
-        "Available columns:"
-    )
-
-    st.write(
-        list(source_df.columns)
-    )
-
-    st.stop()
-
-
-# ==========================================================
-# COLUMN SELECTION
-# ==========================================================
-
-st.subheader(
-    "⚙️ Calculation Input"
-)
-
-selected_column = st.selectbox(
-    "Select Generation / Power Column",
-    available_columns,
-)
-
-
-# ==========================================================
-# POWER DATA
-# ==========================================================
-
-power_series = pd.to_numeric(
-    source_df[
-        selected_column
-    ],
-    errors="coerce",
-).fillna(0)
-
-
-power_series = power_series[
-    np.isfinite(
-        power_series
-    )
-]
-
-
-power_list = power_series.tolist()
-
-
-if len(power_list) == 0:
+    st.session_state["source_df"] = source_df
+    st.session_state["power"] = power
+    st.session_state["days"] = days
+    st.session_state["generation_column"] = generation_column
+    st.session_state["uploaded_filename"] = uploaded_file.name
 
     st.warning(
-        "Selected column mein valid numerical data nahi hai."
-    )
-
-    st.stop()
-
-
-# ==========================================================
-# 96 BLOCK VALIDATION
-# ==========================================================
-
-n_rows = len(power_list)
-
-
-if n_rows % 96 != 0:
-
-    st.error(
-        f"""
-        Number of rows must be divisible by 96.
-
-        Current rows: {n_rows}
-
-        Required:
-        96 rows = 1 day
-        192 rows = 2 days
-        288 rows = 3 days
-        """
-    )
-
-    st.stop()
-
-
-days = n_rows // 96
-
-
-st.success(
-    f"✅ {n_rows} rows detected = {days} day(s)"
-)
-
-
-power_tuple = tuple(
-    float(value)
-    for value in power_list
-)
-
-
-# ==========================================================
-# MODE TOGGLE
-# ==========================================================
-
-st.markdown(
-    """
-    <style>
-
-    div[data-testid="stToggle"] {
-        background:#1f2937;
-        border:2px solid #0072ff;
-        border-radius:14px;
-        padding:14px 18px;
-        margin-bottom:15px;
-    }
-
-    div[data-testid="stToggle"] label {
-        font-size:18px !important;
-        font-weight:700 !important;
-    }
-
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
-
-curtailment = st.toggle(
-    "⚡ Curtailment Mode",
-    value=False,
-)
-
-
-# ==========================================================
-# X AXIS
-# ==========================================================
-
-x = np.arange(
-    1,
-    97,
-)
-
-
-# ==========================================================
-# NO CURTAILMENT
-# ==========================================================
-
-if not curtailment:
-
-    st.subheader(
-        "☀️ No Curtailment Mode"
-    )
-
-    col1, col2, col3 = st.columns(
-        3
-    )
-
-    # ------------------------------------------------------
-    # Parameters
-    # ------------------------------------------------------
-
-    window = col1.number_input(
-        "Window Length",
-        min_value=5,
-        max_value=31,
-        step=2,
-        value=11,
-    )
-
-    power_availability = col2.number_input(
-        "Power Availability (%)",
-        min_value=0,
-        max_value=1000,
-        value=100,
-    )
-
-    # ------------------------------------------------------
-    # Calculation
-    # ------------------------------------------------------
-
-    (
-        percentile_t,
-        profile_t,
-        symmetric_t,
-        best_shift,
-    ) = cached_no_curtailment(
-        power_tuple,
-        days,
-        window,
-        power_availability,
-    )
-
-    
-    
-    # ------------------------------------------------------
-    # Automatic + Manual Blockwise Shift
-    # ------------------------------------------------------
-
-    shift = col3.number_input(
-        "Shift (Blocks)",
-        min_value=-95,
-        max_value=95,
-        value=int(best_shift),
-        step=1,
-        key="no_curtailment_shift_blocks",
-    )
-
-    # Keep the automatically calculated profile unchanged
-    # when Shift (Blocks) equals best_shift.
-    shift_offset = int(shift) - int(best_shift)
-
-    symmetric = np.asarray(
-        cached_sym_shift_nc(
-            symmetric_t,
-            shift_offset,
-        ),
-        dtype=float,
-    )
-
-    percentile = np.asarray(
-        percentile_t,
-        dtype=float,
-    )
-
-    profile = np.asarray(
-        profile_t,
-        dtype=float,
+        f"The UI foundation is ready. Selected mode: {mode}. "
+        "The calculation and report sections are added in the next part."
     )
 
 
-
-    # ------------------------------------------------------
-    # Chart
-    # ------------------------------------------------------
-
-    fig = make_chart(
-        x,
-        [
-            (
-                "Sym Profile",
-                symmetric,
-                "#00c6ff",
-            ),
-            (
-                "Profile",
-                profile,
-                "#22c55e",
-            ),
-            (
-                "95th Percentile",
-                percentile,
-                "#ef4444",
-            ),
-        ],
-        "Aeromal - No Curtailment",
-    )
-
-    st.plotly_chart(
-        fig,
-        use_container_width=True,
-    )
-
-    # ------------------------------------------------------
-    # DISPLAY TABLE
-    # ------------------------------------------------------
-
-    result_df = pd.DataFrame(
-        {
-            "Block": x,
-            "Percentile": percentile,
-            "Profile": profile,
-            "Sym Profile": symmetric,
-        }
-    )
-
-    st.subheader(
-        "📊 Generated Curve"
-    )
-
-    st.dataframe(
-        result_df,
-        use_container_width=True,
-        hide_index=True,
-    )
-
-
-# ==========================================================
-# CURTAILMENT
-# ==========================================================
-
-else:
-
-    st.subheader(
-        "⚡ Curtailment Mode"
-    )
-
-    if not np.any(
-        np.asarray(power_list) > 0
-    ):
-
-        st.warning(
-            "Please enter Power values to continue."
-        )
-
-        st.stop()
-
-    col1, col2, col3 = st.columns(
-        3
-    )
-
-    # ------------------------------------------------------
-    # Parameters
-    # ------------------------------------------------------
-
-    power_availability = col1.number_input(
-        "Power Availability (%)",
-        min_value=0,
-        max_value=1000,
-        value=100,
-        step=1,
-    )
-
-    peak_cap = col1.number_input(
-        "Peak Cap",
-        min_value=1,
-        value=max(
-            1,
-            int(max(power_list)),
-        ),
-        step=1,
-    )
-
-    target_width = col2.number_input(
-        "Target Width",
-        min_value=1,
-        value=25,
-        step=1,
-    )
-
-    window = col2.slider(
-        "Window Length",
-        min_value=5,
-        max_value=31,
-        value=11,
-        step=2,
-    )
-
-    # ------------------------------------------------------
-    # Calculation
-    # ------------------------------------------------------
-
-    (
-        percentile_t,
-        profile_t,
-        best_shift,
-    ) = cached_curtailment(
-        power_tuple,
-        days,
-        peak_cap,
-        target_width,
-        window,
-        power_availability,
-    )
-
-    # ------------------------------------------------------
-    # Shift
-    # ------------------------------------------------------
-
-    shift = col3.number_input(
-        "Shift",
-        min_value=0,
-        max_value=95,
-        value=best_shift,
-        step=1,
-    )
-
-    symmetric_t = cached_sym_shift_c(
-        profile_t,
-        shift,
-    )
-
-    percentile = np.asarray(
-        percentile_t
-    )
-
-    profile = np.asarray(
-        profile_t
-    )
-
-    symmetric = np.asarray(
-        symmetric_t
-    )
-
-    # ------------------------------------------------------
-    # Chart
-    # ------------------------------------------------------
-
-    fig = make_chart(
-        x,
-        [
-            (
-                "Generation",
-                percentile,
-                "#ef4444",
-            ),
-            (
-                "Profile",
-                profile,
-                "#00c6ff",
-            ),
-            (
-                "Sym Profile",
-                symmetric,
-                "#0072ff",
-            ),
-        ],
-        "Aeromal - Curtailment",
-    )
-
-    st.plotly_chart(
-        fig,
-        use_container_width=True,
-    )
-
-    # ------------------------------------------------------
-    # DISPLAY TABLE
-    # ------------------------------------------------------
-
-    result_df = pd.DataFrame(
-        {
-            "Block": x,
-            "Percentile": percentile,
-            "Profile": profile,
-            "Sym Profile": symmetric,
-        }
-    )
-
-    st.subheader(
-        "📊 Generated Curve"
-    )
-
-    st.dataframe(
-        result_df,
-        use_container_width=True,
-        hide_index=True,
-    )
-
-
-# ==========================================================
-# FINAL REPORT
-# ==========================================================
-
-st.divider()
-
-st.subheader(
-    "📥 Final Report"
-)
-
-st.caption(
-    "Final Report contains only Block, Percentile, "
-    "Profile and Sym Profile."
-)
-
-
-# ==========================================================
-# BUILD REPORT
-# ==========================================================
-
-try:
-
-    report_bytes = build_excel_report(
-        original_bytes=file_bytes,
-        file_type=file_type,
-        source_df=source_df,
-        result_df=result_df,
-    )
-
-    base_name = uploaded_file.name.rsplit(
-        ".",
-        1,
-    )[0]
-
-    output_name = (
-        f"{base_name}_Aeromal_Report.xlsx"
-    )
-
-    st.download_button(
-        label="📥 Download Final Excel Report",
-        data=report_bytes,
-        file_name=output_name,
-        mime=(
-            "application/vnd.openxmlformats-officedocument."
-            "spreadsheetml.sheet"
-        ),
-        use_container_width=True,
-        type="primary",
-    )
-
-except Exception as e:
-
-    st.error(
-        f"Report generate nahi ho payi: {e}"
-    )
+if __name__ == "__main__":
+    main()
