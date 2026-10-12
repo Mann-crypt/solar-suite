@@ -275,68 +275,7 @@ def cached_no_curtailment(
         shifted
     )
 
-    # ------------------------------------------------------
-    # Morning / Evening blending
-    # ------------------------------------------------------
-
-    active = np.where(
-        percentile > 0.1
-    )[0]
-
-    if len(active) > 0:
-
-        start = active[0]
-        end = active[-1]
-
-        blend = 8
-
-        # Morning
-        morning_end = min(
-            start + 1 + blend,
-            96,
-        )
-
-        if morning_end > start + 1:
-
-            idx = np.arange(
-                start + 1,
-                morning_end,
-            )
-
-            weights = np.linspace(
-                1,
-                0,
-                len(idx),
-            )
-
-            symmetric[idx] = (
-                weights * percentile[idx]
-                + (1 - weights) * symmetric[idx]
-            )
-
-        # Evening
-        evening_start = max(
-            end - blend,
-            0,
-        )
-
-        if end > evening_start:
-
-            idx = np.arange(
-                evening_start,
-                end,
-            )
-
-            weights = np.linspace(
-                0,
-                1,
-                len(idx),
-            )
-
-            symmetric[idx] = (
-                weights * percentile[idx]
-                + (1 - weights) * symmetric[idx]
-            )
+    
 
     # ------------------------------------------------------
     # Final smoothing
