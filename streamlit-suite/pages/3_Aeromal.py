@@ -212,6 +212,58 @@ def cached_best_shift(
 
 
 # ==========================================================
+# SYM PROFILE EDGE ALIGNMENT
+# ==========================================================
+
+def align_sym_profile_to_percentile(sym_profile, percentile, threshold=0.1):
+    """Keep source-percentile rise/set edges and flatten repeated peak bumps.
+
+    The source percentile is copied on the outer rising and falling sections.
+    If the symmetric curve creates multiple occurrences of its peak, the
+    interval between the first and last peak is made into one flat plateau.
+    """
+    sym = np.asarray(sym_profile, dtype=float).copy()
+    source = np.asarray(percentile, dtype=float)
+
+    if len(sym) != len(source) or len(sym) == 0:
+        return tuple(sym.tolist())
+
+    active = np.flatnonzero(source > threshold)
+    if len(active) == 0:
+        return tuple(np.zeros_like(sym).tolist())
+
+    start = int(active[0])
+    end = int(active[-1])
+    region = sym[start:end + 1]
+    if len(region) == 0 or not np.any(np.isfinite(region)):
+        return tuple(sym.tolist())
+
+    # Peak plateau boundaries: first and last block at the maximum value.
+    peak_value = float(np.nanmax(region))
+    tolerance = max(1e-8, abs(peak_value) * 1e-8)
+    peak_indices = np.flatnonzero(np.abs(region - peak_value) <= tolerance) + start
+    if len(peak_indices) == 0:
+        return tuple(sym.tolist())
+
+    first_peak = int(peak_indices[0])
+    last_peak = int(peak_indices[-1])
+
+    # Match the source percentile exactly on the morning rise and evening set.
+    sym[start:first_peak] = source[start:first_peak]
+    sym[last_peak + 1:end + 1] = source[last_peak + 1:end + 1]
+
+    # Replace any dip/re-rise between repeated peaks with one flat top.
+    if last_peak > first_peak:
+        sym[first_peak:last_peak + 1] = peak_value
+
+    # Preserve zero/off-periods outside the source's active generation window.
+    sym[:start] = source[:start]
+    sym[end + 1:] = source[end + 1:]
+    sym = np.clip(sym, 0, None)
+    return tuple(sym.tolist())
+
+
+# ==========================================================
 # NO CURTAILMENT
 # ==========================================================
 
@@ -384,6 +436,7 @@ def cached_no_curtailment(
 def cached_sym_shift_nc(
     smooth_tuple,
     shift,
+    window,
 ):
 
     smooth = np.asarray(
@@ -1470,7 +1523,15 @@ if not curtailment:
         symmetric_t = cached_sym_shift_nc(
             profile_t,
             shift,
+            window,
         )
+
+    # Ensure one clean rise, one flat peak, and one set. The outer edges
+    # follow the source percentile exactly, matching the requested profile.
+    symmetric_t = align_sym_profile_to_percentile(
+        symmetric_t,
+        percentile_t,
+    )
 
     percentile = np.asarray(
         percentile_t
