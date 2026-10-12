@@ -290,11 +290,6 @@ def cached_no_curtailment(
         tuple(smooth.tolist())
     )
     
-    shifted = np.roll(
-        smooth,
-        -best_shift,
-    )
-    
     symmetric = create_symmetric_profile(
         shifted
     )
@@ -1398,18 +1393,6 @@ if not curtailment:
         days,
         window,
         power_availability,
-    )
-
-    # ------------------------------------------------------
-    # Shift
-    # ------------------------------------------------------
-
-    shift = col3.number_input(
-        "Shift",
-        min_value=0,
-        max_value=95,
-        value=best_shift,
-        step=1,
     )
 
     
