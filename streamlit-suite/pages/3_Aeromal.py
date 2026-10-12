@@ -212,94 +212,6 @@ def cached_best_shift(
 
 
 # ==========================================================
-# SYMMETRIC PROFILE WITH EXACT END MATCHING
-# ==========================================================
-
-def build_symmetric_profile(
-    percentile,
-    smooth,
-    match_blocks=6,
-    power_availability=100,
-):
-    percentile = np.asarray(percentile, dtype=float)
-    smooth = np.asarray(smooth, dtype=float)
-
-    n = len(percentile)
-    factor = power_availability / 100
-
-    result = np.zeros(n)
-
-    # Find actual generation start and end
-    active = np.where(percentile > 0.1)[0]
-
-    if len(active) == 0:
-        return result
-
-    start = int(active[0])
-    end = int(active[-1])
-
-    # Exact percentile matching at both ends
-    match_blocks = max(1, int(match_blocks))
-
-    left_end = min(start + match_blocks, end + 1)
-    right_start = max(end - match_blocks + 1, start)
-
-    result[start:left_end] = percentile[start:left_end]
-    result[right_start:end + 1] = percentile[right_start:end + 1]
-
-    # Central section
-    left = left_end
-    right = right_start - 1
-
-    if right <= left:
-        result *= factor
-        return result
-
-    # Symmetric core around the center
-    core_length = right - left + 1
-    half = (core_length + 1) // 2
-
-    # Average corresponding points to create mirror symmetry
-    core = smooth[left:right + 1].copy()
-
-    for i in range(core_length // 2):
-        j = core_length - 1 - i
-        avg = (core[i] + core[j]) / 2
-        core[i] = avg
-        core[j] = avg
-
-    # First half must never decrease
-    rising = np.maximum.accumulate(core[:half])
-    peak = float(np.max(rising)) if len(rising) else 0.0
-
-    # Keep the peak at the maximum reached value
-    rising = np.minimum(rising, peak)
-
-    # Second half is the exact reverse of the first
-    if core_length % 2:
-        symmetric_core = np.concatenate([
-            rising,
-            rising[:-1][::-1],
-        ])
-    else:
-        symmetric_core = np.concatenate([
-            rising,
-            rising[::-1],
-        ])
-
-    result[left:right + 1] = symmetric_core
-
-    # Apply availability to the generated symmetric section
-    # Exact percentile-matched edges remain unchanged
-    result[left:right + 1] *= factor
-
-    result = np.clip(result, 0, None)
-
-    return result
-
-
-
-# ==========================================================
 # NO CURTAILMENT
 # ==========================================================
 
@@ -346,41 +258,68 @@ def cached_no_curtailment(
         + 0.50 * shifted[::-1]
     )
 
-    
     # ------------------------------------------------------
-    # Smooth percentile profile
+    # Morning / Evening blending
     # ------------------------------------------------------
-    
-    smooth = savgol_filter(
-        percentile,
-        window_length=window,
-        polyorder=3,
-    )
-    
-    smooth = np.clip(smooth, 0, None)
-    smooth[smooth < 0.1] = 0
-    
-    # ------------------------------------------------------
-    # Build symmetric profile
-    # ------------------------------------------------------
-    
-    symmetric = build_symmetric_profile(
-        percentile=percentile,
-        smooth=smooth,
-        match_blocks=6,  # Exact match for 6 blocks at each end
-        power_availability=power_availability,
-    )
-    
-    # Scale the regular profile
-    smooth *= power_availability / 100
-    
-    return (
-        tuple(percentile.tolist()),
-        tuple(smooth.tolist()),
-        tuple(symmetric.tolist()),
-        cached_best_shift(tuple(smooth.tolist())),
-    )
 
+    active = np.where(
+        percentile > 0.1
+    )[0]
+
+    if len(active) > 0:
+
+        start = active[0]
+        end = active[-1]
+
+        blend = 8
+
+        # Morning
+        morning_end = min(
+            start + 1 + blend,
+            96,
+        )
+
+        if morning_end > start + 1:
+
+            idx = np.arange(
+                start + 1,
+                morning_end,
+            )
+
+            weights = np.linspace(
+                1,
+                0,
+                len(idx),
+            )
+
+            symmetric[idx] = (
+                weights * percentile[idx]
+                + (1 - weights) * symmetric[idx]
+            )
+
+        # Evening
+        evening_start = max(
+            end - blend,
+            0,
+        )
+
+        if end > evening_start:
+
+            idx = np.arange(
+                evening_start,
+                end,
+            )
+
+            weights = np.linspace(
+                0,
+                1,
+                len(idx),
+            )
+
+            symmetric[idx] = (
+                weights * percentile[idx]
+                + (1 - weights) * symmetric[idx]
+            )
 
     # ------------------------------------------------------
     # Final smoothing
