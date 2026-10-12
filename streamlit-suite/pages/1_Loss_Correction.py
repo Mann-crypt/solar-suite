@@ -559,12 +559,11 @@ def load_input_data(
     file_bytes,
     cluster,
 ):
-
-    sheet = (
-        "Fixed-CL1"
-        if cluster
-        else "Fixed"
-    )
+    """
+    Load only the workbook's row/date template.
+    GHI and Actual values are supplied by separate CSV uploads.
+    """
+    sheet = "Fixed-CL1" if cluster else "Fixed"
 
     df = pd.read_excel(
         io.BytesIO(file_bytes),
@@ -572,93 +571,11 @@ def load_input_data(
         header=1,
     )
 
-    df.columns = (
-        df.columns
-        .astype(str)
-        .str.strip()
-    )
-
+    df.columns = df.columns.astype(str).str.strip()
     df = clean_data_rows(df)
 
-    validate_columns(
-        df,
-        ["Actual"],
-        "Forecast Sheet",
-    )
-
-    if cluster:
-
-        try:
-
-            result = pd.read_excel(
-                io.BytesIO(file_bytes),
-                sheet_name="Result",
-                usecols=range(6),
-            )
-
-            result = result.fillna(0)
-
-            for i, column in enumerate(
-                CLUSTER_GHI_COLUMNS
-            ):
-
-                if column in df.columns:
-                    continue
-
-                if i >= len(result.columns):
-                    continue
-
-                values = pd.to_numeric(
-                    result.iloc[
-                        :len(df),
-                        i,
-                    ],
-                    errors="coerce",
-                ).fillna(0).to_numpy()
-
-                if len(values) < len(df):
-
-                    values = np.pad(
-                        values,
-                        (
-                            0,
-                            len(df) - len(values),
-                        ),
-                    )
-
-                df[column] = values
-
-        except Exception:
-            pass
-
-        validate_columns(
-            df,
-            CLUSTER_GHI_COLUMNS,
-            "Cluster Forecast",
-        )
-
-        for column in CLUSTER_GHI_COLUMNS:
-
-            df[column] = numeric(
-                df[column]
-            ).to_numpy()
-
-    else:
-
-        validate_columns(
-            df,
-            ["GHI_Forecast"],
-            "Fixed Forecast",
-        )
-
-        df["GHI_Forecast"] = numeric(
-            df["GHI_Forecast"]
-        ).to_numpy()
-
-    df["Actual"] = numeric(
-        df["Actual"]
-    ).to_numpy()
-
+    # Do not require GHI or Actual in the workbook anymore.
+    # They are mapped from the user's two CSV files in main().
     return df
 
 
@@ -2516,7 +2433,7 @@ def main():
 
     st.markdown(
         '<div class="subtitle">'
-        "Upload your workbook, edit GHI/Actual data, "
+        "Upload your workbook and separate GHI/Actual CSV files, "
         "select Fixed or Tracking, and run the correction."
         "</div>",
         unsafe_allow_html=True,
@@ -2625,22 +2542,173 @@ def main():
         return
 
     # --------------------------------------------------------
-    # INPUT DATA
+    # GHI + ACTUAL POWER CSV INPUTS
     # --------------------------------------------------------
 
-    if (
-        st.session_state.input_df
-        is None
-    ):
+    st.markdown(
+        '<div class="section">📊 Upload GHI & Actual Power CSVs</div>',
+        unsafe_allow_html=True,
+    )
+    st.caption(
+        "Upload two separate CSV files. Select the value column in each file. "
+        "Rows are aligned by row order, so keep both CSVs in the same time order."
+    )
 
-        st.session_state.input_df = (
-            original_input.copy()
+    ghi_col_ui, actual_col_ui = st.columns(2)
+
+    with ghi_col_ui:
+        ghi_file = st.file_uploader(
+            "Upload GHI CSV",
+            type=["csv"],
+            key="ghi_csv_upload",
+            help="CSV containing GHI data. Cluster workbooks require five mapped GHI columns.",
         )
 
-    input_df = input_data_editor(
-        st.session_state.input_df,
-        cluster,
+    with actual_col_ui:
+        actual_file = st.file_uploader(
+            "Upload Actual Power CSV",
+            type=["csv"],
+            key="actual_csv_upload",
+            help="CSV containing actual plant power generation.",
+        )
+
+    if ghi_file is None or actual_file is None:
+        st.info("Upload both the GHI CSV and Actual Power CSV to continue.")
+        return
+
+    try:
+        ghi_csv = pd.read_csv(io.BytesIO(ghi_file.getvalue()))
+        actual_csv = pd.read_csv(io.BytesIO(actual_file.getvalue()))
+
+        ghi_csv.columns = ghi_csv.columns.astype(str).str.strip()
+        actual_csv.columns = actual_csv.columns.astype(str).str.strip()
+
+        if ghi_csv.empty or actual_csv.empty:
+            st.error("One of the uploaded CSV files has no data rows.")
+            return
+        if len(ghi_csv.columns) == 0 or len(actual_csv.columns) == 0:
+            st.error("Could not find columns in one of the CSV files.")
+            return
+
+    except Exception as exc:
+        st.error(f"Unable to read CSV file: {exc}")
+        return
+
+    st.markdown("**Select columns**")
+    if cluster:
+        st.caption("This workbook uses cluster mode. Map a GHI CSV column to each cluster.")
+        ghi_mapping = {}
+        mapping_cols = st.columns(2)
+        for i, target_column in enumerate(CLUSTER_GHI_COLUMNS):
+            with mapping_cols[i % 2]:
+                ghi_mapping[target_column] = st.selectbox(
+                    f"{target_column} source column",
+                    options=list(ghi_csv.columns),
+                    key=f"ghi_mapping_{i}",
+                )
+    else:
+        selected_ghi_column = st.selectbox(
+            "GHI value column",
+            options=list(ghi_csv.columns),
+            key="selected_ghi_column",
+        )
+
+    selected_actual_column = st.selectbox(
+        "Actual Power value column",
+        options=list(actual_csv.columns),
+        key="selected_actual_column",
     )
+
+    # Use workbook dates/metadata when the row counts match.
+    # Actual and GHI are always sourced from the CSV uploads.
+    if len(ghi_csv) != len(actual_csv):
+        st.error(
+            f"Row count mismatch: GHI CSV has {len(ghi_csv)} rows, "
+            f"but Actual Power CSV has {len(actual_csv)} rows. "
+            "Please upload files with matching intervals and row counts."
+        )
+        return
+
+    if len(original_input) != len(ghi_csv):
+        st.error(
+            f"Row count mismatch: workbook template has {len(original_input)} rows, "
+            f"but the CSV files have {len(ghi_csv)} rows. "
+            "The workbook and both CSV files must cover the same number of intervals."
+        )
+        return
+
+    input_df = original_input.copy()
+
+    try:
+        if cluster:
+            for target_column, source_column in ghi_mapping.items():
+                values = pd.to_numeric(
+                    ghi_csv[source_column],
+                    errors="coerce",
+                )
+                if values.isna().all():
+                    st.error(f"Selected GHI column '{source_column}' has no numeric values.")
+                    return
+                input_df[target_column] = values.fillna(0).to_numpy(dtype=float)
+        else:
+            values = pd.to_numeric(
+                ghi_csv[selected_ghi_column],
+                errors="coerce",
+            )
+            if values.isna().all():
+                st.error(f"Selected GHI column '{selected_ghi_column}' has no numeric values.")
+                return
+            input_df["GHI_Forecast"] = values.fillna(0).to_numpy(dtype=float)
+
+        actual_values = pd.to_numeric(
+            actual_csv[selected_actual_column],
+            errors="coerce",
+        )
+        if actual_values.isna().all():
+            st.error(
+                f"Selected Actual Power column '{selected_actual_column}' has no numeric values."
+            )
+            return
+        input_df["Actual"] = actual_values.fillna(0).to_numpy(dtype=float)
+
+    except (KeyError, ValueError, TypeError) as exc:
+        st.error(f"Unable to map selected CSV columns: {exc}")
+        return
+
+    # Any change to either CSV or its selected columns invalidates prior results.
+    csv_signature_payload = (
+        ghi_file.getvalue()
+        + b"||ACTUAL||"
+        + actual_file.getvalue()
+        + b"||MAP||"
+        + repr(
+            (
+                tuple(ghi_mapping.items()) if cluster else selected_ghi_column,
+                selected_actual_column,
+            )
+        ).encode("utf-8")
+    )
+    csv_signature = workbook_signature(csv_signature_payload)
+    if st.session_state.get("csv_input_signature") != csv_signature:
+        st.session_state.csv_input_signature = csv_signature
+        st.session_state.model_started = False
+        reset_calculation_state()
+
+    st.success(
+        f"Loaded {len(input_df):,} aligned rows. "
+        "GHI and Actual Power values are taken from the selected CSV columns."
+    )
+    with st.expander("Preview mapped input data"):
+        preview_columns = (
+            ["Actual"] + CLUSTER_GHI_COLUMNS
+            if cluster
+            else ["GHI_Forecast", "Actual"]
+        )
+        st.dataframe(
+            input_df[preview_columns].head(20),
+            width="stretch",
+            hide_index=True,
+        )
 
     # --------------------------------------------------------
     # PLANT TYPE
