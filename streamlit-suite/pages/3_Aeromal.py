@@ -311,12 +311,6 @@ def cached_no_curtailment(
         polyorder=3,
     )
 
-    symmetric = savgol_filter(
-        symmetric,
-        window_length=window,
-        polyorder=3,
-    )
-
     smooth = np.clip(
         smooth,
         0,
@@ -356,24 +350,24 @@ def cached_no_curtailment(
     )
 
 
+
 # ==========================================================
-# MANUAL SYMMETRY SHIFT
+# MANUAL BLOCKWISE SHIFT: NO CURTAILMENT
 # ==========================================================
 
 @st.cache_data(show_spinner=False)
-@st.cache_data(show_spinner=False)
-def cached_sym_shift_nc(smooth_tuple, shift):
-    smooth = np.asarray(smooth_tuple, dtype=float)
+def cached_sym_shift_nc(symmetric_tuple, shift):
+    symmetric = np.asarray(
+        symmetric_tuple,
+        dtype=float,
+    )
 
-    shifted = shift_profile_blockwise(smooth, shift)
+    shifted = shift_profile_blockwise(
+        symmetric,
+        shift,
+    )
 
-    symmetric = create_symmetric_profile(shifted)
-
-    symmetric = np.clip(symmetric, 0, None)
-    symmetric[symmetric < 0.1] = 0
-
-    return tuple(symmetric.tolist())
-
+    return tuple(shifted.tolist())
 
 # ==========================================================
 # CURTAILMENT
@@ -1418,24 +1412,23 @@ if not curtailment:
         step=1,
     )
 
-    if shift != best_shift:
-
-        symmetric_t = cached_sym_shift_nc(
-            profile_t,
-            shift,
-        )
-
-    percentile = np.asarray(
-        percentile_t
+    # ------------------------------------------------------
+    # Manual blockwise shift
+    # ------------------------------------------------------
+    
+    shift = col3.number_input(
+        "Shift (Blocks)",
+        min_value=-95,
+        max_value=95,
+        value=0,
+        step=1,
+    )
+    
+    symmetric_t = cached_sym_shift_nc(
+        symmetric_t,
+        shift,
     )
 
-    profile = np.asarray(
-        profile_t
-    )
-
-    symmetric = np.asarray(
-        symmetric_t
-    )
 
     # ------------------------------------------------------
     # Chart
