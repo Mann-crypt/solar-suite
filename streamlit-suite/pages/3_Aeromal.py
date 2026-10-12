@@ -1413,32 +1413,42 @@ if not curtailment:
     )
 
     
-    # ------------------------------------------------------
-    # Manual blockwise shift
-    # ------------------------------------------------------
     
+    # ------------------------------------------------------
+    # Automatic + Manual Blockwise Shift
+    # ------------------------------------------------------
+
     shift = col3.number_input(
         "Shift (Blocks)",
         min_value=-95,
         max_value=95,
-        value=0,
+        value=int(best_shift),
         step=1,
+        key="no_curtailment_shift_blocks",
     )
-    
-    # Convert the calculated symmetric profile to an array
+
+    # Keep the automatically calculated profile unchanged
+    # when Shift (Blocks) equals best_shift.
+    shift_offset = int(shift) - int(best_shift)
+
     symmetric = np.asarray(
-        symmetric_t,
+        cached_sym_shift_nc(
+            symmetric_t,
+            shift_offset,
+        ),
         dtype=float,
     )
-    
-    # Apply blockwise shift without changing profile shape
-    symmetric = shift_profile_blockwise(
-        symmetric,
-        shift,
+
+    percentile = np.asarray(
+        percentile_t,
+        dtype=float,
     )
-    
-    percentile = np.asarray(percentile_t)
-    profile = np.asarray(profile_t)
+
+    profile = np.asarray(
+        profile_t,
+        dtype=float,
+    )
+
 
 
     # ------------------------------------------------------
