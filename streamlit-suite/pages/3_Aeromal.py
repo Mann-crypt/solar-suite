@@ -482,3 +482,70 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+@st.cache_data(show_spinner=False)
+def cached_no_curtailment(
+    power_tuple,
+    days,
+    window,
+    power_availability,
+):
+    """
+    Calculate percentile, smoothed generation profile,
+    symmetric profile and recommended initial shift.
+    """
+    power = np.asarray(power_tuple, dtype=float)
+
+    percentile = np.asarray(
+        cached_percentile(tuple(power.tolist()), int(days)),
+        dtype=float,
+    )
+
+    # Smooth the percentile profile
+    smooth = smooth_profile(percentile, int(window))
+
+    # Calculate the suggested shift, but do not apply it here
+    best_shift = cached_best_shift(tuple(smooth.tolist()))
+
+    # Create the symmetric profile from the unshifted profile
+    symmetric = create_symmetric_profile(smooth)
+
+    # Smooth the resulting profiles
+    profile = smooth_profile(smooth, int(window))
+    symmetric = smooth_profile(symmetric, int(window))
+
+    # Avoid negative generation values
+    profile = np.maximum(profile, 0)
+    symmetric = np.maximum(symmetric, 0)
+
+    # Remove very small values
+    profile[profile < 0.1] = 0
+    symmetric[symmetric < 0.1] = 0
+
+    # Apply power availability percentage
+    availability_factor = float(power_availability) / 100.0
+
+    profile *= availability_factor
+    symmetric *= availability_factor
+
+    return (
+        tuple(percentile.tolist()),
+        tuple(profile.tolist()),
+        tuple(symmetric.tolist()),
+        int(best_shift),
+    )
+
+
+@st.cache_data(show_spinner=False)
+def cached_sym_shift_nc(symmetric_tuple, shift):
+    """Apply a non-circular block shift to the symmetric profile."""
+    profile = np.asarray(symmetric_tuple, dtype=float)
+
+    shifted = shift_profile_blockwise(
+        profile,
+        int(shift),
+    )
+
+    return tuple(shifted.tolist())
+
