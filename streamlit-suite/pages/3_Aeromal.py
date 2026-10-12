@@ -1412,6 +1412,7 @@ if not curtailment:
         step=1,
     )
 
+    
     # ------------------------------------------------------
     # Manual blockwise shift
     # ------------------------------------------------------
@@ -1424,10 +1425,20 @@ if not curtailment:
         step=1,
     )
     
-    symmetric_t = cached_sym_shift_nc(
+    # Convert the calculated symmetric profile to an array
+    symmetric = np.asarray(
         symmetric_t,
+        dtype=float,
+    )
+    
+    # Apply blockwise shift without changing profile shape
+    symmetric = shift_profile_blockwise(
+        symmetric,
         shift,
     )
+    
+    percentile = np.asarray(percentile_t)
+    profile = np.asarray(profile_t)
 
 
     # ------------------------------------------------------
