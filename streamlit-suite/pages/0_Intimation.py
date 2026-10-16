@@ -363,6 +363,369 @@ st.html("""
 </style>
 """)
 
+<style>
+    /* Theme-aware colors from Streamlit */
+    :root {
+        color-scheme: light dark;
+    }
+
+    .stApp {
+        background: var(--background-color);
+        color: var(--text-color);
+    }
+
+    .block-container {
+        max-width: 1450px;
+        padding-top: 1.15rem;
+        padding-bottom: 1.5rem;
+    }
+
+    /* Header keeps its gradient in both themes */
+    .dashboard-header {
+        padding: 19px 22px;
+        margin-bottom: 18px;
+        border-radius: 15px;
+        background: linear-gradient(115deg, #172554, #1d4ed8 70%, #3b82f6);
+        color: #ffffff;
+        box-shadow: 0 5px 16px rgba(37, 99, 235, .15);
+    }
+
+    .header-label {
+        display: inline-block;
+        padding: 4px 9px;
+        margin-bottom: 8px;
+        border: 1px solid rgba(255,255,255,.25);
+        border-radius: 20px;
+        background: rgba(255,255,255,.10);
+        color: #dbeafe;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 1px;
+    }
+
+    .dashboard-header h1 {
+        margin: 0;
+        color: #ffffff !important;
+        font-size: 28px;
+        font-weight: 800;
+        letter-spacing: -.5px;
+    }
+
+    .dashboard-header p {
+        margin: 5px 0 0;
+        color: #dbeafe !important;
+        font-size: 12px;
+    }
+
+    /* Section headings */
+    .section-heading {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        margin: 18px 0 10px;
+        color: var(--text-color);
+        font-size: 15px;
+        font-weight: 800;
+    }
+
+    .section-icon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        border-radius: 8px;
+        background: var(--secondary-background-color);
+        color: #60a5fa;
+        font-size: 14px;
+    }
+
+    .filter-caption,
+    .results-caption {
+        color: var(--text-color);
+        opacity: .72;
+        font-size: 11px;
+    }
+
+    .filter-caption {
+        margin: 0 0 8px;
+    }
+
+    .results-caption {
+        margin: 2px 0 11px;
+    }
+
+    /* Overview cards */
+    .metric-card {
+        position: relative;
+        overflow: hidden;
+        min-height: 91px;
+        padding: 14px 17px;
+        border-radius: 13px;
+        color: #ffffff;
+        box-shadow: 0 4px 12px rgba(15,23,42,.12);
+    }
+
+    .metric-records {
+        background: linear-gradient(120deg, #1d4ed8, #3b82f6);
+    }
+
+    .metric-capacity {
+        background: linear-gradient(120deg, #047857, #10b981);
+    }
+
+    .metric-label {
+        color: #eaf2ff !important;
+        font-size: 10px;
+        font-weight: 750;
+        letter-spacing: .8px;
+        text-transform: uppercase;
+    }
+
+    .metric-value {
+        margin-top: 6px;
+        color: #ffffff !important;
+        font-size: 27px;
+        line-height: 1.2;
+        font-weight: 800;
+    }
+
+    .metric-icon {
+        position: absolute;
+        top: 13px;
+        right: 15px;
+        color: #ffffff;
+        font-size: 23px;
+        opacity: .65;
+    }
+
+    /* Cards adapt to active Streamlit theme */
+    div[data-testid="stVerticalBlockBorderWrapper"] {
+        border-color: var(--border-color) !important;
+        border-radius: 13px !important;
+        background: var(--secondary-background-color) !important;
+        box-shadow: 0 2px 8px rgba(15,23,42,.06);
+        transition: border-color .15s ease, box-shadow .15s ease;
+    }
+
+    div[data-testid="stVerticalBlockBorderWrapper"]:hover {
+        border-color: #6095ef !important;
+        box-shadow: 0 5px 13px rgba(37,99,235,.12);
+    }
+
+    /* PSS title */
+    .pss-title-row {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        min-width: 0;
+        margin-bottom: 12px;
+    }
+
+    .pss-icon {
+        display: flex;
+        flex: 0 0 34px;
+        align-items: center;
+        justify-content: center;
+        width: 34px;
+        height: 34px;
+        border-radius: 10px;
+        background: var(--secondary-background-color);
+        border: 1px solid var(--border-color);
+        font-size: 16px;
+    }
+
+    .pss-heading {
+        color: var(--text-color) !important;
+        font-size: 13px;
+        font-weight: 800;
+        line-height: 1.4;
+        overflow-wrap: anywhere;
+    }
+
+    .pss-subheading {
+        margin-top: 2px;
+        color: var(--text-color);
+        opacity: .6;
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: .65px;
+        text-transform: uppercase;
+    }
+
+    /* Information tiles */
+    .pss-info-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        margin-bottom: 8px;
+    }
+
+    .pss-info {
+        min-width: 0;
+        padding: 9px 10px;
+        border: 1px solid var(--border-color);
+        border-radius: 9px;
+        background: var(--background-color);
+    }
+
+    .pss-info-label {
+        margin-bottom: 4px;
+        color: var(--text-color);
+        opacity: .65;
+        font-size: 9px;
+        font-weight: 800;
+        letter-spacing: .65px;
+        text-transform: uppercase;
+    }
+
+    .pss-info-value {
+        color: var(--text-color) !important;
+        font-size: 12px;
+        font-weight: 700;
+        line-height: 1.4;
+        overflow-wrap: anywhere;
+    }
+
+    /* Keep these accent tiles readable in either theme */
+    .capacity-tile {
+        background: color-mix(in srgb, #3b82f6 11%, var(--secondary-background-color));
+        border-color: color-mix(in srgb, #3b82f6 30%, var(--border-color));
+    }
+
+    .capacity-tile .pss-info-value {
+        color: #60a5fa !important;
+    }
+
+    .state-tile {
+        background: color-mix(in srgb, #10b981 10%, var(--secondary-background-color));
+        border-color: color-mix(in srgb, #10b981 27%, var(--border-color));
+    }
+
+    .state-tile .pss-info-value {
+        color: #34d399 !important;
+    }
+
+    /* Expanded details */
+    div[data-testid="stExpander"] {
+        margin-top: 8px;
+        border: 1px solid var(--border-color) !important;
+        border-radius: 9px !important;
+        background: var(--secondary-background-color) !important;
+        overflow: hidden;
+    }
+
+    div[data-testid="stExpander"] summary {
+        color: var(--text-color) !important;
+        padding-top: 7px !important;
+        padding-bottom: 7px !important;
+        font-size: 11px !important;
+        font-weight: 700 !important;
+    }
+
+    .detail-tile {
+        min-height: 48px;
+        margin-bottom: 7px;
+        padding: 9px;
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        background: var(--background-color);
+    }
+
+    .detail-label {
+        margin-bottom: 4px;
+        color: var(--text-color);
+        opacity: .7;
+        font-size: 9px;
+        font-weight: 800;
+        letter-spacing: .5px;
+        text-transform: uppercase;
+    }
+
+    .detail-value {
+        color: var(--text-color) !important;
+        font-size: 12px;
+        font-weight: 650;
+        line-height: 1.4;
+        overflow-wrap: anywhere;
+    }
+
+    .status-pill {
+        display: inline-block;
+        max-width: 100%;
+        padding: 4px 8px;
+        border-radius: 6px;
+        background: color-mix(in srgb, #3b82f6 18%, var(--secondary-background-color));
+        color: #60a5fa;
+        font-size: 10px;
+        font-weight: 800;
+        overflow-wrap: anywhere;
+    }
+
+    /* Copy button */
+    div[data-testid="stVerticalBlock"] iframe {
+        border: 0;
+    }
+
+    /* Inputs */
+    div[data-testid="stTextInput"] input,
+    div[data-testid="stSelectbox"] div[data-baseweb="select"] {
+        border-radius: 9px;
+    }
+
+    /* Buttons */
+    .stButton > button {
+        border-radius: 9px;
+        font-weight: 650;
+    }
+
+    /* Empty state */
+    .empty-state {
+        padding: 24px 15px;
+        border: 1px dashed var(--border-color);
+        border-radius: 12px;
+        background: var(--secondary-background-color);
+        color: var(--text-color);
+        text-align: center;
+    }
+
+    .empty-state strong {
+        display: block;
+        margin-bottom: 5px;
+        color: var(--text-color);
+        font-size: 15px;
+    }
+
+    .page-label {
+        padding-top: 7px;
+        color: var(--text-color);
+        opacity: .75;
+        text-align: center;
+        font-size: 12px;
+        font-weight: 700;
+    }
+
+    @media (max-width: 700px) {
+        .block-container {
+            padding-left: .7rem;
+            padding-right: .7rem;
+        }
+
+        .dashboard-header {
+            padding: 16px;
+        }
+
+        .dashboard-header h1 {
+            font-size: 23px;
+        }
+
+        .metric-value {
+            font-size: 23px;
+        }
+    }
+</style>
+""")
+
 
 # =========================================================
 # HELPER FUNCTIONS
