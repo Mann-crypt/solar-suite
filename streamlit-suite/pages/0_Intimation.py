@@ -116,7 +116,7 @@ def load_data(file_path, modified_time):
             "Required Excel columns missing: " + ", ".join(missing)
         )
 
-    for col in ["PSS", "State", "POC1", "POC2", "POC3", "Check Status"]:
+    for col in ["PSS", "State", "POC1", "POC 2", "POC 3", "Check Status"]:
         data[col] = data[col].fillna("").astype(str).str.strip()
 
     # Use the first available priority column for the display.
@@ -213,8 +213,8 @@ display_columns = [
     "Capacity (MW)",
     "Priority",
     "POC1",
-    "POC2",
-    "POC3",
+    "POC 2",
+    "POC 3",
     "Check Status",
 ]
 
