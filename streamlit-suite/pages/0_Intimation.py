@@ -1,1188 +1,807 @@
 
-from pathlib import Path
-from html import escape
+import html
 import json
-import re
+from pathlib import Path
 
 import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
 
 
-# =========================================================
+# ============================================================
 # PAGE CONFIG
-# =========================================================
+# ============================================================
+
 st.set_page_config(
     page_title="Intimation Dashboard",
     page_icon="⚡",
     layout="wide",
-    initial_sidebar_state="collapsed",
 )
 
-EXCEL_PATH = Path(__file__).resolve().parent.parent / "intimation.xlsx"
-PAGE_SIZE = 20
-ALL_USERS = "All Users"
+
+# ============================================================
+# STYLING
+# ============================================================
+
+st.html("""
+<style>
+    .block-container {
+        max-width: 1500px;
+        padding-top: 1.2rem;
+        padding-bottom: 2.5rem;
+    }
+
+    .dashboard-header {
+        background: linear-gradient(120deg, #123c69 0%, #176b87 55%, #19a7a0 100%);
+        color: white;
+        padding: 25px 28px;
+        border-radius: 18px;
+        margin-bottom: 22px;
+        box-shadow: 0 8px 24px rgba(18, 60, 105, 0.18);
+    }
+
+    .dashboard-header h1 {
+        color: white !important;
+        font-size: 30px !important;
+        font-weight: 800 !important;
+        margin: 0 0 7px 0 !important;
+    }
+
+    .dashboard-header p {
+        color: #e1f5f5 !important;
+        margin: 0 !important;
+        font-size: 14px;
+    }
+
+    .metric-card {
+        padding: 20px 22px;
+        border-radius: 16px;
+        color: white;
+        min-height: 112px;
+        box-shadow: 0 7px 20px rgba(15, 23, 42, 0.12);
+        margin-bottom: 8px;
+    }
+
+    .metric-blue {
+        background: linear-gradient(135deg, #164e8a, #3182ce);
+    }
+
+    .metric-teal {
+        background: linear-gradient(135deg, #087f8c, #20b2aa);
+    }
+
+    .metric-label {
+        font-size: 13px;
+        font-weight: 600;
+        opacity: 0.92;
+        margin-bottom: 10px;
+    }
+
+    .metric-value {
+        font-size: 29px;
+        font-weight: 800;
+        line-height: 1.2;
+    }
+
+    .metric-subtitle {
+        font-size: 12px;
+        margin-top: 7px;
+        opacity: 0.88;
+    }
+
+    .section-heading {
+        font-size: 20px;
+        font-weight: 800;
+        color: var(--text-color);
+        margin: 18px 0 10px 0;
+    }
+
+    .pss-name {
+        font-size: 16px;
+        font-weight: 800;
+        overflow-wrap: anywhere;
+        padding-top: 5px;
+    }
+
+    .pss-summary {
+        color: #64748b;
+        font-size: 12px;
+        margin-top: 5px;
+    }
+
+    .detail-label {
+        color: #64748b;
+        font-size: 12px;
+        font-weight: 600;
+    }
+
+    .detail-value {
+        font-size: 14px;
+        font-weight: 700;
+        overflow-wrap: anywhere;
+    }
+
+    div[data-testid="stVerticalBlockBorderWrapper"] {
+        border-radius: 15px;
+    }
+
+    div[data-testid="stExpander"] {
+        border-radius: 10px;
+    }
+
+    div[data-testid="stButton"] button {
+        border-radius: 10px;
+        font-weight: 650;
+    }
+
+    div[data-testid="stSelectbox"] label,
+    div[data-testid="stTextInput"] label {
+        font-weight: 650;
+    }
+
+    .results-caption {
+        color: #64748b;
+        font-size: 13px;
+        padding: 5px 0 12px 0;
+    }
+</style>
+""")
 
 
-# =========================================================
+# ============================================================
+# HEADER
+# ============================================================
+
+st.html("""
+<div class="dashboard-header">
+    <h1>⚡ Intimation Dashboard</h1>
+    <p>Power System Sites · Intimation Tracking · PSS Overview</p>
+</div>
+""")
+
+
+# ============================================================
 # HELPERS
-# =========================================================
-def clean(value):
-    if pd.isna(value):
-        return ""
-    if isinstance(value, float) and value.is_integer():
-        return str(int(value))
-    return str(value).strip()
+# ============================================================
+
+def normalize_column(value):
+    """Normalize column labels for flexible matching."""
+    return "".join(
+        char.lower()
+        for char in str(value).strip()
+        if char.isalnum()
+    )
 
 
-def safe_html(value):
-    return escape(clean(value), quote=True)
-
-
-def normalize_header(value):
-    value = str(value).strip().lower()
-    value = re.sub(r"[\n\r\t]+", " ", value)
-    value = re.sub(r"[^a-z0-9]+", " ", value)
-    return re.sub(r"\s+", " ", value).strip()
-
-
-def find_column(columns, candidates=(), starts_with=()):
-    normalized = {col: normalize_header(col) for col in columns}
+def find_column(df, candidates, starts_with=None):
+    """
+    Find a dataframe column using preferred names first.
+    Matching ignores spaces, underscores and punctuation.
+    """
+    normalized = {
+        normalize_column(col): col
+        for col in df.columns
+    }
 
     for candidate in candidates:
-        target = normalize_header(candidate)
-        for col, value in normalized.items():
-            if value == target:
-                return col
+        key = normalize_column(candidate)
+        if key in normalized:
+            return normalized[key]
 
-    for prefix in starts_with:
-        target = normalize_header(prefix)
-        for col, value in normalized.items():
-            if value.startswith(target):
+    if starts_with:
+        prefix = normalize_column(starts_with)
+
+        for col in df.columns:
+            if normalize_column(col).startswith(prefix):
                 return col
 
     return None
 
 
-def unique_sorted(series):
-    values = [clean(v) for v in series.tolist()]
-    return sorted({v for v in values if v}, key=str.casefold)
+def clean_text(value):
+    """Convert missing values into readable display text."""
+    if pd.isna(value):
+        return "—"
 
+    text = str(value).strip()
 
-def format_capacity(value):
-    try:
-        return f"{float(value):,.2f}".rstrip("0").rstrip(".")
-    except (TypeError, ValueError):
-        return clean(value) or "0"
+    if text.lower() in {"nan", "none", "nat"}:
+        return "—"
 
+    return text if text else "—"
 
-def reset_page():
-    st.session_state["intimation_page"] = 0
 
+def numeric_value(value):
+    """Safely convert a capacity value to a number."""
+    return pd.to_numeric(
+        pd.Series([value]),
+        errors="coerce"
+    ).iloc[0]
 
-def status_style(status):
-    text = clean(status).lower()
 
-    if any(word in text for word in (
-        "complete", "done", "checked", "yes", "clear"
-    )):
-        return "status-good"
+def display_capacity(value):
+    number = numeric_value(value)
 
-    if any(word in text for word in (
-        "pending", "not", "hold", "no", "issue"
-    )):
-        return "status-pending"
+    if pd.isna(number):
+        return clean_text(value)
 
-    return "status-neutral"
+    return f"{number:,.2f}".rstrip("0").rstrip(".")
 
 
-BOLT_SVG = """
-<svg viewBox="0 0 32 32" aria-hidden="true">
-  <defs>
-    <linearGradient id="boltFill" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#fff5b8"/>
-      <stop offset="48%" stop-color="#ffd044"/>
-      <stop offset="100%" stop-color="#ff8a22"/>
-    </linearGradient>
-  </defs>
-  <path d="M17.9 2.7 7 17.1h7l-1.1 12.2L25 13.7h-7.3l.2-11Z"
-        fill="url(#boltFill)"
-        stroke="#8278ff"
-        stroke-width="1.1"
-        stroke-linejoin="round"/>
-</svg>
-"""
-
-
-# =========================================================
-# LOAD EXCEL
-# =========================================================
-@st.cache_data(show_spinner=False)
-def load_data(file_path, modified_time):
-    # File modification time invalidates the cache after Excel updates.
-    del modified_time
-
-    raw = pd.read_excel(file_path, engine="openpyxl")
-    raw.columns = [str(c).strip() for c in raw.columns]
-    columns = list(raw.columns)
-
-    mapping = {
-        "PSS": find_column(
-            columns,
-            ["PSS", "PSS Name", "Substation", "Power Substation"],
-        ),
-        "State": find_column(columns, ["State", "States"]),
-        "Capacity (MW)": find_column(
-            columns,
-            ["Capacity (MW)", "Capacity MW", "Capacity", "MW"],
-        ),
-        "POC1": find_column(
-            columns,
-            ["POC1", "POC 1", "POC-1", "Point of Contact 1"],
-        ),
-        "POC 2": find_column(
-            columns,
-            ["POC 2", "POC2", "POC-2", "Point of Contact 2"],
-        ),
-        "POC 3": find_column(
-            columns,
-            ["POC 3", "POC3", "POC-3", "Point of Contact 3"],
-        ),
-        "Lat": find_column(columns, ["Lat", "Latitude"]),
-        "Long": find_column(columns, ["Long", "Longitude", "Lon"]),
-        "Check Status": find_column(
-            columns,
-            ["Check Status", "Status", "Checking Status"],
-        ),
-    }
-
-    # Priority source order:
-    # 1. Priority as per 003 sheet
-    # 2. Priority as per Amresh Sir 28.07.2023
-    # 3. First column starting with Priority
-    priority_col = find_column(
-        columns,
-        ["Priority as per 003 sheet"],
-    )
-
-    if priority_col is None:
-        priority_col = find_column(
-            columns,
-            ["Priority as per Amresh Sir 28.07.2023"],
-        )
-
-    if priority_col is None:
-        priority_col = find_column(
-            columns,
-            starts_with=["Priority"],
-        )
-
-    result = pd.DataFrame(index=raw.index)
-
-    for target, source in mapping.items():
-        result[target] = raw[source] if source else ""
-
-    result["Priority"] = raw[priority_col] if priority_col else ""
-
-    result["Capacity (MW)"] = pd.to_numeric(
-        result["Capacity (MW)"]
-        .astype(str)
-        .str.replace(",", "", regex=False),
-        errors="coerce",
-    ).fillna(0)
-
-    text_columns = [
-        "PSS", "State", "Priority", "POC1",
-        "POC 2", "POC 3", "Lat", "Long", "Check Status",
-    ]
-
-    for col in text_columns:
-        result[col] = result[col].map(clean)
-
-    result = result[
-        result["PSS"].astype(str).str.strip().ne("")
-    ].copy()
-
-    return result.reset_index(drop=True)
-
-
-# =========================================================
-# DASHBOARD STYLING
-# =========================================================
-st.html("""
-<style>
-.stApp {
-    background:
-        radial-gradient(ellipse at 0% 0%, #e7edff 0%, transparent 32%),
-        radial-gradient(ellipse at 100% 0%, #f0eaff 0%, transparent 29%),
-        #f6f8fd;
-}
-
-[data-testid="stHeader"] {
-    background: transparent;
-}
-
-.block-container {
-    max-width: 1500px;
-    padding-top: 1.2rem;
-    padding-bottom: 2rem;
-}
-
-.dashboard-hero {
-    position: relative;
-    overflow: hidden;
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    padding: 23px 25px;
-    margin-bottom: 18px;
-    border-radius: 22px;
-    color: white;
-    background: linear-gradient(115deg, #243f9d 0%, #4267e8 53%, #8058ed 100%);
-    box-shadow: 0 12px 30px rgba(58, 75, 175, .19);
-}
-
-.dashboard-hero:after {
-    content: "";
-    position: absolute;
-    width: 240px;
-    height: 240px;
-    right: -55px;
-    top: -130px;
-    border-radius: 50%;
-    background: rgba(255,255,255,.10);
-    box-shadow: 0 0 0 27px rgba(255,255,255,.045),
-                0 0 0 54px rgba(255,255,255,.025);
-}
-
-.hero-logo {
-    position: relative;
-    z-index: 1;
-    width: 55px;
-    height: 55px;
-    flex: 0 0 55px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border: 1px solid rgba(255,255,255,.28);
-    border-radius: 17px;
-    background: rgba(255,255,255,.16);
-    box-shadow: inset 0 1px 0 rgba(255,255,255,.15);
-}
-
-.hero-logo svg {
-    width: 34px;
-    height: 34px;
-}
-
-.hero-content {
-    position: relative;
-    z-index: 1;
-}
-
-.hero-title {
-    color: #fff;
-    font-size: 27px;
-    line-height: 1.2;
-    letter-spacing: -.7px;
-    font-weight: 850;
-}
-
-.hero-subtitle {
-    color: rgba(255,255,255,.79);
-    font-size: 12px;
-    margin-top: 6px;
-}
-
-.hero-tag {
-    display: inline-block;
-    margin-top: 10px;
-    padding: 4px 9px;
-    border: 1px solid rgba(255,255,255,.24);
-    border-radius: 30px;
-    background: rgba(255,255,255,.12);
-    color: #fff;
-    font-size: 10px;
-    font-weight: 750;
-    letter-spacing: .5px;
-}
-
-.section-label {
-    color: #68748b;
-    font-size: 11px;
-    font-weight: 850;
-    letter-spacing: 1.2px;
-    text-transform: uppercase;
-    margin: 20px 0 10px;
-}
-
-.metric-card {
-    position: relative;
-    overflow: hidden;
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    padding: 16px 18px;
-    min-height: 91px;
-    border: 1px solid rgba(255,255,255,.85);
-    border-radius: 18px;
-    box-shadow: 0 7px 20px rgba(42,58,111,.055);
-}
-
-.metric-records {
-    background: linear-gradient(120deg, #e8efff 0%, #f7f5ff 100%);
-}
-
-.metric-capacity {
-    background: linear-gradient(120deg, #ddf8f1 0%, #f0fbff 100%);
-}
-
-.metric-icon {
-    width: 47px;
-    height: 47px;
-    flex: 0 0 47px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 15px;
-    background: rgba(255,255,255,.78);
-    box-shadow: 0 4px 11px rgba(39,60,120,.07);
-}
-
-.metric-icon svg {
-    width: 24px;
-    height: 24px;
-    fill: none;
-    stroke: currentColor;
-    stroke-width: 1.8;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-}
-
-.metric-records .metric-icon {
-    color: #4169f5;
-}
-
-.metric-capacity .metric-icon {
-    color: #0b9b83;
-}
-
-.metric-label {
-    color: #65728c;
-    font-size: 10px;
-    font-weight: 850;
-    text-transform: uppercase;
-    letter-spacing: .85px;
-}
-
-.metric-value {
-    color: #202c49;
-    font-size: 25px;
-    font-weight: 900;
-    line-height: 1.2;
-    letter-spacing: -.5px;
-    margin-top: 4px;
-}
-
-.results-line {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 8px;
-    color: #768198;
-    font-size: 12px;
-    margin: 15px 0 8px;
-}
-
-.results-line strong {
-    color: #26324a;
-}
-
-div[data-testid="stButton"] > button {
-    min-height: 32px;
-    padding: 4px 10px;
-    border-radius: 9px;
-    font-weight: 750;
-    border-color: #e1e7f1;
-    background: rgba(255,255,255,.9);
-}
-
-div[data-testid="stTextInput"] label,
-div[data-testid="stSelectbox"] label,
-div[data-testid="stMultiSelect"] label {
-    color: #59667d;
-    font-size: 12px;
-    font-weight: 750;
-}
-
-.empty-state {
-    padding: 34px 15px;
-    text-align: center;
-    color: #77839a;
-    background: white;
-    border: 1px dashed #dbe2ee;
-    border-radius: 17px;
-}
-
-@media (max-width: 700px) {
-    .block-container {
-        padding-left: .8rem;
-        padding-right: .8rem;
-    }
-
-    .dashboard-hero {
-        padding: 17px;
-        border-radius: 18px;
-        gap: 12px;
-    }
-
-    .hero-logo {
-        width: 45px;
-        height: 45px;
-        flex-basis: 45px;
-    }
-
-    .hero-title {
-        font-size: 22px;
-    }
-
-    .metric-card {
-        padding: 12px;
-        gap: 9px;
-    }
-
-    .metric-value {
-        font-size: 21px;
-    }
-}
-</style>
-""")
-
-
-# =========================================================
-# HEADER
-# =========================================================
-st.html(f"""
-<div class="dashboard-hero">
-  <div class="hero-logo">{BOLT_SVG}</div>
-  <div class="hero-content">
-    <div class="hero-title">Intimation Dashboard</div>
-    <div class="hero-subtitle">
-      Power Substation Intelligence · Records, capacity and contacts
-    </div>
-    <div class="hero-tag">⚡ PSS MANAGEMENT</div>
-  </div>
-</div>
-""")
-
-
-# =========================================================
-# LOAD DATA
-# =========================================================
-if not EXCEL_PATH.exists():
-    st.error(f"Excel file nahi mili: `{EXCEL_PATH}`")
-    st.info(
-        "`intimation.xlsx` ko project root mein rakho aur "
-        "is code ko `pages/9_Intimation_Dashboard.py` mein save karo."
-    )
-    st.stop()
-
-try:
-    data = load_data(
-        str(EXCEL_PATH),
-        EXCEL_PATH.stat().st_mtime,
-    )
-except Exception as exc:
-    st.error("Excel file load nahi ho paayi. File aur column headers check karo.")
-    st.exception(exc)
-    st.stop()
-
-if data.empty:
-    st.warning("Excel file mein koi PSS record nahi mila.")
-    st.stop()
-
-
-# =========================================================
-# FILTERS
-# =========================================================
-st.html('<div class="section-label">Find records</div>')
-
-filter_a, filter_b, filter_c = st.columns(
-    [1.5, 1, 1.2],
-    gap="medium",
-)
-
-with filter_a:
-    pss_search = st.text_input(
-        "Search PSS",
-        placeholder="Type PSS name...",
-        key="intimation_pss_search",
-        on_change=reset_page,
-    ).strip()
-
-search_base = data.copy()
-
-if pss_search:
-    search_base = search_base[
-        search_base["PSS"].str.contains(
-            pss_search,
-            case=False,
-            na=False,
-            regex=False,
-        )
-    ]
-
-poc_options = unique_sorted(search_base["POC1"])
-poc_choices = [ALL_USERS] + poc_options
-
-# Reset an old POC selection if it is no longer available.
-if (
-    "intimation_poc_filter" in st.session_state
-    and st.session_state["intimation_poc_filter"] not in poc_choices
-):
-    st.session_state["intimation_poc_filter"] = ALL_USERS
-
-with filter_b:
-    selected_poc = st.selectbox(
-        "POC 1",
-        options=poc_choices,
-        key="intimation_poc_filter",
-        on_change=reset_page,
-    )
-
-state_base = search_base.copy()
-
-if selected_poc != ALL_USERS:
-    state_base = state_base[
-        state_base["POC1"] == selected_poc
-    ]
-
-state_options = unique_sorted(state_base["State"])
-
-# Keep only state selections valid for the current PSS and POC filters.
-if "intimation_state_filter" in st.session_state:
-    st.session_state["intimation_state_filter"] = [
-        state
-        for state in st.session_state["intimation_state_filter"]
-        if state in state_options
-    ]
-
-with filter_c:
-    selected_states = st.multiselect(
-        "State",
-        options=state_options,
-        default=[],
-        placeholder="All states",
-        key="intimation_state_filter",
-        on_change=reset_page,
-    )
-
-filtered = search_base.copy()
-
-if selected_poc != ALL_USERS:
-    filtered = filtered[
-        filtered["POC1"] == selected_poc
-    ]
-
-if selected_states:
-    filtered = filtered[
-        filtered["State"].isin(selected_states)
-    ]
-
-filtered = filtered.reset_index(drop=True)
-
-
-# =========================================================
-# OVERVIEW METRIC ICONS
-# =========================================================
-def metric_svg(kind):
-    if kind == "records":
-        return """
-        <svg viewBox="0 0 24 24">
-          <rect x="4" y="3.5" width="16" height="17" rx="3"></rect>
-          <path d="M8 8h8M8 12h8M8 16h5"></path>
-        </svg>
-        """
-
-    return """
-    <svg viewBox="0 0 24 24">
-      <path d="M13.2 2.8 5.8 13h5.1l-.4 8.2L18.2 10h-5.1l.1-7.2Z"></path>
-    </svg>
+def render_copy_button(pss_name, unique_key):
     """
+    Render a small independent copy button.
+    This iframe is used only for copying; card expansion is
+    handled by Streamlit outside the iframe.
+    """
+    safe_name = json.dumps(str(pss_name), ensure_ascii=False)
 
-
-# =========================================================
-# OVERVIEW — ONLY TWO CARDS
-# =========================================================
-total_records = len(filtered)
-total_capacity = float(filtered["Capacity (MW)"].sum())
-
-st.html('<div class="section-label">Overview</div>')
-
-metric1, metric2 = st.columns(2, gap="medium")
-
-with metric1:
-    st.html(f"""
-    <div class="metric-card metric-records">
-      <div class="metric-icon">{metric_svg("records")}</div>
-      <div>
-        <div class="metric-label">Matching Records</div>
-        <div class="metric-value">{total_records:,}</div>
-      </div>
-    </div>
-    """)
-
-with metric2:
-    st.html(f"""
-    <div class="metric-card metric-capacity">
-      <div class="metric-icon">{metric_svg("capacity")}</div>
-      <div>
-        <div class="metric-label">Total Capacity</div>
-        <div class="metric-value">
-          {format_capacity(total_capacity)}
-          <span style="font-size:12px;color:#718198;font-weight:750">MW</span>
-        </div>
-      </div>
-    </div>
-    """)
-
-
-# =========================================================
-# PAGINATION
-# =========================================================
-st.html(f"""
-<div class="results-line">
-  <span><strong>{total_records:,}</strong> PSS records found</span>
-  <span>Click a card to expand · ⚡ to copy PSS name</span>
-</div>
-""")
-
-if "intimation_page" not in st.session_state:
-    st.session_state["intimation_page"] = 0
-
-max_pages = max(
-    1,
-    (total_records + PAGE_SIZE - 1) // PAGE_SIZE,
-)
-
-st.session_state["intimation_page"] = max(
-    0,
-    min(st.session_state["intimation_page"], max_pages - 1),
-)
-
-nav_left, nav_mid, nav_right = st.columns([1, 3, 1])
-
-with nav_left:
-    if st.button(
-        "← Previous",
-        disabled=st.session_state["intimation_page"] <= 0,
-        use_container_width=True,
-    ):
-        st.session_state["intimation_page"] -= 1
-        st.rerun()
-
-with nav_mid:
-    st.markdown(
-        f"""
-        <div style="text-align:center;padding-top:7px;
-                    color:#78849a;font-size:12px">
-          Page <b style="color:#26324a">
-          {st.session_state['intimation_page'] + 1}</b>
-          of <b style="color:#26324a">{max_pages}</b>
-          · {PAGE_SIZE} records per page
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-with nav_right:
-    if st.button(
-        "Next →",
-        disabled=st.session_state["intimation_page"] >= max_pages - 1,
-        use_container_width=True,
-    ):
-        st.session_state["intimation_page"] += 1
-        st.rerun()
-
-page_start = st.session_state["intimation_page"] * PAGE_SIZE
-page_df = filtered.iloc[page_start:page_start + PAGE_SIZE]
-
-
-# =========================================================
-# CARD RENDERER
-# =========================================================
-def render_pss_card(record, card_key):
-    pss_name = clean(record["PSS"])
-    state_name = clean(record["State"]) or "—"
-    poc1 = clean(record["POC1"]) or "—"
-    capacity = format_capacity(record["Capacity (MW)"])
-
-    details = {
-        "Priority": clean(record["Priority"]) or "—",
-        "POC 2": clean(record["POC 2"]) or "—",
-        "POC 3": clean(record["POC 3"]) or "—",
-        "Latitude": clean(record["Lat"]) or "—",
-        "Longitude": clean(record["Long"]) or "—",
-        "Check Status": clean(record["Check Status"]) or "—",
-    }
-
-    details_html = ""
-
-    for label, value in details.items():
-        if label == "Check Status":
-            status_class = status_style(value)
-            value_html = (
-                f'<span class="status-pill {status_class}">'
-                f'{safe_html(value)}</span>'
-            )
-        else:
-            value_html = safe_html(value)
-
-        details_html += f"""
-        <div class="detail-item">
-          <div class="detail-label">{safe_html(label)}</div>
-          <div class="detail-value">{value_html}</div>
-        </div>
-        """
-
-    pss_json = json.dumps(pss_name, ensure_ascii=False)
-
-    html = f"""
-    <!doctype html>
+    copy_html = f"""
+    <!DOCTYPE html>
     <html>
-    <head>
-      <meta charset="utf-8">
-      <style>
-        * {{ box-sizing: border-box; }}
-
-        html, body {{
-          margin: 0;
-          padding: 0;
-          background: transparent;
-          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        }}
-
-        .pss-card {{
-          padding: 11px 12px 10px;
-          margin: 0 0 10px;
-          border: 1px solid #e5eaf4;
-          border-radius: 15px;
-          background: linear-gradient(145deg, #ffffff, #fcfdff);
-          box-shadow: 0 4px 13px rgba(28,42,78,.04);
-          cursor: pointer;
-          transition: border-color .17s ease, box-shadow .17s ease,
-                      transform .17s ease;
-          outline: none;
-        }}
-
-        .pss-card:hover {{
-          border-color: #c7d3ff;
-          box-shadow: 0 8px 20px rgba(42,65,130,.085);
-          transform: translateY(-1px);
-        }}
-
-        .pss-card:focus-visible {{
-          border-color: #6681ff;
-          box-shadow: 0 0 0 3px rgba(88,115,255,.14);
-        }}
-
-        .card-top {{
-          display: flex;
-          align-items: center;
-          gap: 8px;
-        }}
-
-        .card-heading {{
-          flex: 1;
-          min-width: 0;
-        }}
-
-        .pss-name {{
-          color: #202b43;
-          font-size: 14px;
-          font-weight: 850;
-          line-height: 1.3;
-          overflow-wrap: anywhere;
-        }}
-
-        .pss-caption {{
-          color: #9aa3b4;
-          font-size: 9px;
-          letter-spacing: .55px;
-          margin-top: 2px;
-        }}
-
-        .bolt-copy {{
-          width: 34px;
-          height: 34px;
-          flex: 0 0 34px;
-          padding: 0;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          border: 1px solid #dfe3ff;
-          border-radius: 11px;
-          background: linear-gradient(145deg, #edf3ff, #f0eaff);
-          box-shadow: 0 3px 8px rgba(78,91,202,.10);
-          cursor: pointer;
-          transition: transform .15s ease, box-shadow .15s ease;
-        }}
-
-        .bolt-copy:hover {{
-          transform: translateY(-1px) scale(1.05);
-          box-shadow: 0 5px 12px rgba(78,91,202,.18);
-        }}
-
-        .bolt-copy svg {{ width: 22px; height: 22px; }}
-
-        .card-stats {{
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 7px;
-          margin-top: 9px;
-        }}
-
-        .card-stat {{
-          min-width: 0;
-          padding: 6px 8px;
-          border: 1px solid #edf0f7;
-          border-radius: 9px;
-          background: #f7f9fd;
-        }}
-
-        .stat-label {{
-          color: #8a94a8;
-          font-size: 9px;
-          font-weight: 850;
-          letter-spacing: .65px;
-          text-transform: uppercase;
-        }}
-
-        .stat-value {{
-          color: #34415a;
-          font-size: 12px;
-          font-weight: 750;
-          line-height: 1.35;
-          margin-top: 2px;
-          overflow-wrap: anywhere;
-        }}
-
-        .poc-row {{
-          display: flex;
-          align-items: baseline;
-          gap: 7px;
-          margin-top: 7px;
-        }}
-
-        .poc-label {{
-          flex: 0 0 auto;
-          color: #929caf;
-          font-size: 10px;
-          font-weight: 800;
-        }}
-
-        .poc-value {{
-          color: #4b5870;
-          font-size: 11px;
-          font-weight: 650;
-          overflow-wrap: anywhere;
-        }}
-
-        .expand-hint {{
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-top: 8px;
-          padding-top: 7px;
-          border-top: 1px solid #f0f2f8;
-          color: #9aa3b5;
-          font-size: 9px;
-          font-weight: 750;
-        }}
-
-        .chevron {{
-          display: inline-block;
-          color: #7688d9;
-          font-size: 13px;
-          transition: transform .18s ease;
-        }}
-
-        .pss-card.expanded .chevron {{
-          transform: rotate(180deg);
-        }}
-
-        .detail-panel {{
-          display: none;
-          grid-template-columns: 1fr 1fr;
-          gap: 10px 12px;
-          margin-top: 10px;
-          padding-top: 10px;
-          border-top: 1px solid #e9edf6;
-        }}
-
-        .pss-card.expanded .detail-panel {{
-          display: grid;
-        }}
-
-        .detail-item {{ min-width: 0; }}
-
-        .detail-label {{
-          color: #929caf;
-          font-size: 9px;
-          font-weight: 850;
-          letter-spacing: .6px;
-          text-transform: uppercase;
-        }}
-
-        .detail-value {{
-          color: #3b4760;
-          font-size: 11px;
-          font-weight: 650;
-          margin-top: 3px;
-          overflow-wrap: anywhere;
-        }}
-
-        .status-pill {{
-          display: inline-block;
-          padding: 3px 7px;
-          border-radius: 7px;
-          font-size: 10px;
-          font-weight: 750;
-        }}
-
-        .status-good {{ background: #e2f8ee; color: #11825a; }}
-        .status-pending {{ background: #fff0db; color: #a96308; }}
-        .status-neutral {{ background: #edf1f8; color: #5e6a80; }}
-
-        .toast {{
-          position: fixed;
-          right: 9px;
-          top: 8px;
-          z-index: 10;
-          max-width: calc(100% - 18px);
-          padding: 7px 10px;
-          border-radius: 9px;
-          color: #fff;
-          background: #202b43;
-          font-size: 11px;
-          font-weight: 750;
-          box-shadow: 0 5px 18px #17203325;
-          opacity: 0;
-          transform: translateY(-4px);
-          transition: all .18s ease;
-          pointer-events: none;
-          overflow-wrap: anywhere;
-        }}
-
-        .toast.show {{
-          opacity: 1;
-          transform: translateY(0);
-        }}
-      </style>
-    </head>
-
-    <body>
-      <div class="pss-card"
-           id="pssCard"
-           role="button"
-           tabindex="0"
-           aria-expanded="false"
-           title="Click to expand or collapse details">
-
-        <div class="card-top">
-          <div class="card-heading">
-            <div class="pss-name">{safe_html(pss_name)}</div>
-            <div class="pss-caption">POWER SUBSTATION</div>
-          </div>
-
-          <button class="bolt-copy"
-                  type="button"
-                  title="Copy PSS name"
-                  aria-label="Copy PSS name">
-            {BOLT_SVG}
-          </button>
-        </div>
-
-        <div class="card-stats">
-          <div class="card-stat">
-            <div class="stat-label">Capacity</div>
-            <div class="stat-value">{safe_html(capacity)} MW</div>
-          </div>
-          <div class="card-stat">
-            <div class="stat-label">State</div>
-            <div class="stat-value">{safe_html(state_name)}</div>
-          </div>
-        </div>
-
-        <div class="poc-row">
-          <span class="poc-label">POC 1</span>
-          <span class="poc-value">{safe_html(poc1)}</span>
-        </div>
-
-        <div class="expand-hint">
-          <span class="hint-text">Click card to view details</span>
-          <span class="chevron">⌄</span>
-        </div>
-
-        <div class="detail-panel">
-          {details_html}
-        </div>
-      </div>
-
-      <div class="toast" id="copyToast" role="status">
-        ✓ PSS name copied
-      </div>
+    <body style="margin:0;padding:0;background:transparent;">
+      <button id="copyBtn"
+        style="
+          width:100%;
+          height:38px;
+          border:1px solid #dbeafe;
+          border-radius:10px;
+          background:#eff6ff;
+          color:#1d4ed8;
+          font-size:18px;
+          font-weight:700;
+          cursor:pointer;
+        "
+        title="Copy PSS name"
+        aria-label="Copy PSS name">⚡</button>
 
       <script>
-        const card = document.getElementById("pssCard");
-        const copyButton = card.querySelector(".bolt-copy");
-        const hint = card.querySelector(".hint-text");
-        const toast = document.getElementById("copyToast");
-        let toastTimer;
+        const pssName = {safe_name};
+        const btn = document.getElementById("copyBtn");
 
-        function updateFrameHeight() {{
-          // Ask the Streamlit iframe to fit the card's current height.
-          const height = Math.ceil(
-            document.documentElement.scrollHeight
-          ) + 2;
-
-          window.parent.postMessage(
-            {{
-              isStreamlitMessage: true,
-              type: "streamlit:setFrameHeight",
-              height: height
-            }},
-            "*"
-          );
-        }}
-
-        function toggleCard() {{
-          const expanded = card.classList.toggle("expanded");
-
-          card.setAttribute("aria-expanded", String(expanded));
-          hint.textContent = expanded
-            ? "Click card to hide details"
-            : "Click card to view details";
-
-          requestAnimationFrame(updateFrameHeight);
-          setTimeout(updateFrameHeight, 100);
-        }}
-
-        card.addEventListener("click", function(event) {{
-          if (event.target.closest(".bolt-copy")) return;
-          toggleCard();
-        }});
-
-        card.addEventListener("keydown", function(event) {{
-          if (event.target !== card) return;
-
-          if (event.key === "Enter" || event.key === " ") {{
-            event.preventDefault();
-            toggleCard();
-          }}
-        }});
-
-        copyButton.addEventListener("click", async function(event) {{
+        btn.addEventListener("click", async function(event) {{
+          event.preventDefault();
           event.stopPropagation();
 
-          const name = {pss_json};
-
           try {{
-            if (navigator.clipboard && window.isSecureContext) {{
-              await navigator.clipboard.writeText(name);
-            }} else {{
-              const textarea = document.createElement("textarea");
-              textarea.value = name;
-              textarea.style.position = "fixed";
-              textarea.style.left = "-9999px";
-              document.body.appendChild(textarea);
-              textarea.focus();
-              textarea.select();
+            await navigator.clipboard.writeText(pssName);
+            btn.textContent = "✓";
+            btn.style.background = "#dcfce7";
+            btn.style.color = "#166534";
+          }} catch (error) {{
+            const textarea = document.createElement("textarea");
+            textarea.value = pssName;
+            textarea.style.position = "fixed";
+            textarea.style.left = "-9999px";
+            document.body.appendChild(textarea);
+            textarea.select();
 
-              const copied = document.execCommand("copy");
-              textarea.remove();
-
-              if (!copied) throw new Error("Clipboard unavailable");
+            try {{
+              document.execCommand("copy");
+              btn.textContent = "✓";
+              btn.style.background = "#dcfce7";
+              btn.style.color = "#166534";
+            }} catch (fallbackError) {{
+              btn.textContent = "!";
             }}
 
-            toast.textContent = "✓ Copied: " + name;
-            toast.classList.add("show");
-
-            copyButton.style.background =
-              "linear-gradient(145deg,#dffaf0,#e8f5ff)";
-
-            clearTimeout(toastTimer);
-
-            toastTimer = setTimeout(function() {{
-              toast.classList.remove("show");
-              copyButton.style.background =
-                "linear-gradient(145deg,#edf3ff,#f0eaff)";
-            }}, 1600);
-
-          }} catch (error) {{
-            toast.textContent = "Browser clipboard access unavailable";
-            toast.classList.add("show");
-
-            clearTimeout(toastTimer);
-
-            toastTimer = setTimeout(function() {{
-              toast.classList.remove("show");
-            }}, 1800);
+            textarea.remove();
           }}
-        }});
 
-        window.addEventListener("load", function() {{
-          updateFrameHeight();
-          setTimeout(updateFrameHeight, 150);
+          setTimeout(() => {{
+            btn.textContent = "⚡";
+            btn.style.background = "#eff6ff";
+            btn.style.color = "#1d4ed8";
+          }}, 1200);
         }});
       </script>
     </body>
     </html>
     """
 
-    # The card expands within its iframe and requests a matching height.
-    # This keeps collapsed cards compact without a separate details button.
     components.html(
-        html,
-        height=155,
-        scrolling=False
+        copy_html,
+        height=42,
+        scrolling=False,
     )
 
 
-# =========================================================
-# DISPLAY CARDS — 2 COLUMNS, 20 RECORDS PER PAGE
-# =========================================================
-if page_df.empty:
-    st.html("""
-    <div class="empty-state">
-      <strong>No records found</strong><br>
-      Search ya filters change karke dekho.
+def detail_item(label, value):
+    st.markdown(
+        f"""
+        <div style="margin-bottom:12px;">
+            <div class="detail-label">{html.escape(str(label))}</div>
+            <div class="detail-value">{html.escape(clean_text(value))}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_pss_card(record, card_key, columns):
+    """
+    Native Streamlit card.
+
+    Important:
+    - The expander and details are rendered in the parent page.
+    - Expanded cards increase their actual layout height.
+    - Other cards automatically move down.
+    - The copy button does not control expansion.
+    """
+    pss_name = clean_text(record.get(columns["PSS"], "—"))
+
+    with st.container(border=True):
+        title_col, copy_col = st.columns(
+            [5.5, 1],
+            vertical_alignment="center",
+        )
+
+        with title_col:
+            st.markdown(
+                f'<div class="pss-name">{html.escape(pss_name)}</div>',
+                unsafe_allow_html=True,
+            )
+
+            capacity = display_capacity(
+                record.get(columns["Capacity"], "—")
+            )
+
+            state = clean_text(
+                record.get(columns["State"], "—")
+            )
+
+            poc1 = clean_text(
+                record.get(columns["POC1"], "—")
+            )
+
+            st.markdown(
+                f"""
+                <div class="pss-summary">
+                    Capacity: <b>{html.escape(capacity)}</b>
+                    &nbsp; · &nbsp;
+                    State: <b>{html.escape(state)}</b>
+                </div>
+                <div class="pss-summary">
+                    POC1: <b>{html.escape(poc1)}</b>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+        with copy_col:
+            render_copy_button(
+                pss_name,
+                card_key,
+            )
+
+        with st.expander(
+            "View site details",
+            key=f"details_{card_key}",
+        ):
+            left, right = st.columns(2)
+
+            with left:
+                detail_item(
+                    "Priority",
+                    record.get(columns["Priority"], "—"),
+                )
+                detail_item(
+                    "POC 2",
+                    record.get(columns["POC2"], "—"),
+                )
+                detail_item(
+                    "POC 3",
+                    record.get(columns["POC3"], "—"),
+                )
+
+            with right:
+                detail_item(
+                    "Latitude",
+                    record.get(columns["Latitude"], "—"),
+                )
+                detail_item(
+                    "Longitude",
+                    record.get(columns["Longitude"], "—"),
+                )
+                detail_item(
+                    "Check Status",
+                    record.get(columns["Check Status"], "—"),
+                )
+
+
+# ============================================================
+# LOAD EXCEL
+# ============================================================
+
+DATA_FILE = Path(__file__).resolve().parent.parent / "intimation.xlsx"
+
+if not DATA_FILE.exists():
+    st.error(
+        f"Excel file not found: {DATA_FILE}\n\n"
+        "Please place intimation.xlsx in the project root "
+        "alongside the pages folder."
+    )
+    st.stop()
+
+
+@st.cache_data(show_spinner="Loading intimation data...")
+def load_data(file_path, modified_time):
+    return pd.read_excel(file_path)
+
+
+try:
+    df = load_data(
+        str(DATA_FILE),
+        DATA_FILE.stat().st_mtime,
+    )
+except Exception as exc:
+    st.error(f"Unable to read intimation.xlsx: {exc}")
+    st.stop()
+
+
+if df.empty:
+    st.warning("The Excel file contains no records.")
+    st.stop()
+
+
+df.columns = [
+    str(col).strip()
+    for col in df.columns
+]
+
+
+# ============================================================
+# COLUMN MAPPING
+# ============================================================
+
+columns = {
+    "PSS": find_column(
+        df,
+        ["PSS", "PSS Name", "Substation", "Site Name"],
+    ),
+    "Capacity": find_column(
+        df,
+        ["Capacity (MW)", "Capacity MW", "Capacity", "MW"],
+    ),
+    "State": find_column(
+        df,
+        ["State", "State Name"],
+    ),
+    "POC1": find_column(
+        df,
+        ["POC1", "POC 1", "POC-1", "POC 1 Name"],
+    ),
+    "POC2": find_column(
+        df,
+        ["POC 2", "POC2", "POC-2"],
+    ),
+    "POC3": find_column(
+        df,
+        ["POC 3", "POC3", "POC-3"],
+    ),
+    "Latitude": find_column(
+        df,
+        ["Lat", "Latitude"],
+    ),
+    "Longitude": find_column(
+        df,
+        ["Long", "Longitude", "Lon"],
+    ),
+    "Check Status": find_column(
+        df,
+        ["Check Status", "Status", "Intimation Status"],
+    ),
+}
+
+# Preserve the requested priority preference.
+columns["Priority"] = find_column(
+    df,
+    [
+        "Priority as per 003 sheet",
+        "Priority as per Amresh Sir 28.07.2023",
+    ],
+    starts_with="Priority",
+)
+
+
+# Check the essential columns.
+required_columns = [
+    "PSS",
+    "Capacity",
+    "State",
+    "POC1",
+]
+
+missing_columns = [
+    name
+    for name in required_columns
+    if columns.get(name) is None
+]
+
+if missing_columns:
+    st.error(
+        "Required columns could not be identified: "
+        + ", ".join(missing_columns)
+    )
+    st.write("Available Excel columns:", list(df.columns))
+    st.stop()
+
+
+# Optional columns receive a blank placeholder.
+for name in [
+    "Priority",
+    "POC2",
+    "POC3",
+    "Latitude",
+    "Longitude",
+    "Check Status",
+]:
+    if columns.get(name) is None:
+        df[f"__missing_{name}"] = "—"
+        columns[name] = f"__missing_{name}"
+
+
+# Remove fully empty PSS rows.
+df = df[
+    df[columns["PSS"]].notna()
+].copy()
+
+if df.empty:
+    st.warning("No records with a PSS name were found.")
+    st.stop()
+
+
+# ============================================================
+# FILTERS
+# ============================================================
+
+st.markdown(
+    '<div class="section-heading">🔎 Search & Filters</div>',
+    unsafe_allow_html=True,
+)
+
+search_col, poc_col, state_col = st.columns(
+    [2, 1, 1],
+)
+
+with search_col:
+    pss_search = st.text_input(
+        "Search PSS",
+        placeholder="Enter PSS or site name...",
+        key="intimation_pss_search",
+    )
+
+# Search is applied first.
+search_df = df.copy()
+
+if pss_search.strip():
+    search_df = search_df[
+        search_df[columns["PSS"]]
+        .astype(str)
+        .str.contains(
+            pss_search.strip(),
+            case=False,
+            na=False,
+        )
+    ]
+
+# POC1 options depend on the current PSS search.
+poc_options = sorted(
+    search_df[columns["POC1"]]
+    .dropna()
+    .astype(str)
+    .str.strip()
+    .loc[lambda s: s.ne("")]
+    .unique()
+    .tolist(),
+    key=str.casefold,
+)
+
+with poc_col:
+    selected_poc = st.selectbox(
+        "POC1",
+        options=["All"] + poc_options,
+        key="intimation_poc_filter",
+    )
+
+# State options depend on PSS search and selected POC1.
+state_source = search_df.copy()
+
+if selected_poc != "All":
+    state_source = state_source[
+        state_source[columns["POC1"]]
+        .astype(str)
+        .str.strip()
+        .eq(selected_poc)
+    ]
+
+state_options = sorted(
+    state_source[columns["State"]]
+    .dropna()
+    .astype(str)
+    .str.strip()
+    .loc[lambda s: s.ne("")]
+    .unique()
+    .tolist(),
+    key=str.casefold,
+)
+
+with state_col:
+    selected_state = st.selectbox(
+        "State",
+        options=["All"] + state_options,
+        key="intimation_state_filter",
+    )
+
+
+# Apply all filters.
+filtered_df = search_df.copy()
+
+if selected_poc != "All":
+    filtered_df = filtered_df[
+        filtered_df[columns["POC1"]]
+        .astype(str)
+        .str.strip()
+        .eq(selected_poc)
+    ]
+
+if selected_state != "All":
+    filtered_df = filtered_df[
+        filtered_df[columns["State"]]
+        .astype(str)
+        .str.strip()
+        .eq(selected_state)
+    ]
+
+
+# ============================================================
+# OVERVIEW METRICS
+# ============================================================
+
+total_records = len(filtered_df)
+
+capacity_series = pd.to_numeric(
+    filtered_df[columns["Capacity"]]
+    .astype(str)
+    .str.replace(",", "", regex=False)
+    .str.replace("MW", "", case=False, regex=False)
+    .str.strip(),
+    errors="coerce",
+)
+
+total_capacity = capacity_series.sum()
+
+if pd.isna(total_capacity):
+    total_capacity = 0.0
+
+
+st.markdown(
+    '<div class="section-heading">📊 Overview</div>',
+    unsafe_allow_html=True,
+)
+
+metric1, metric2 = st.columns(2)
+
+with metric1:
+    st.html(f"""
+    <div class="metric-card metric-blue">
+        <div class="metric-label">MATCHING RECORDS</div>
+        <div class="metric-value">{total_records:,}</div>
+        <div class="metric-subtitle">PSS records matching the selected filters</div>
     </div>
     """)
+
+with metric2:
+    st.html(f"""
+    <div class="metric-card metric-teal">
+        <div class="metric-label">TOTAL CAPACITY</div>
+        <div class="metric-value">{total_capacity:,.2f} MW</div>
+        <div class="metric-subtitle">Combined capacity of matching records</div>
+    </div>
+    """)
+
+
+# ============================================================
+# PAGINATION
+# ============================================================
+
+st.markdown(
+    '<div class="section-heading">⚡ PSS Sites</div>',
+    unsafe_allow_html=True,
+)
+
+PAGE_SIZE = 20
+
+total_pages = max(
+    1,
+    (total_records + PAGE_SIZE - 1) // PAGE_SIZE,
+)
+
+if "intimation_page" not in st.session_state:
+    st.session_state.intimation_page = 1
+
+# Keep the current page valid when filters change.
+st.session_state.intimation_page = min(
+    max(1, st.session_state.intimation_page),
+    total_pages,
+)
+
+page_col, info_col = st.columns(
+    [1, 3],
+    vertical_alignment="center",
+)
+
+with page_col:
+    current_page = st.selectbox(
+        "Page",
+        options=list(range(1, total_pages + 1)),
+        index=st.session_state.intimation_page - 1,
+        format_func=lambda page: f"Page {page} of {total_pages}",
+        key="intimation_page_selector",
+    )
+
+st.session_state.intimation_page = current_page
+
+start_index = (current_page - 1) * PAGE_SIZE
+end_index = min(start_index + PAGE_SIZE, total_records)
+
+with info_col:
+    st.markdown(
+        f"""
+        <div class="results-caption">
+            Showing <b>{start_index + 1 if total_records else 0}
+            – {end_index}</b> of <b>{total_records:,}</b> matching records
+            · 20 records per page
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+# ============================================================
+# RENDER CARDS
+# ============================================================
+
+if filtered_df.empty:
+    st.info(
+        "No matching PSS records found. Try changing the search or filters."
+    )
 else:
-    for pair_start in range(0, len(page_df), 2):
-        card_columns = st.columns(2, gap="medium")
-        pair = page_df.iloc[pair_start:pair_start + 2]
+    page_df = filtered_df.iloc[
+        start_index:end_index
+    ]
 
-        for offset, (_, record) in enumerate(pair.iterrows()):
-            row_number = page_start + pair_start + offset
+    records = page_df.to_dict(orient="records")
 
-            # Stable key for this displayed row.
-            card_key = re.sub(
-                r"[^a-zA-Z0-9_-]",
-                "_",
-                f"{row_number}_{clean(record['PSS'])}",
-            )[:90]
+    # Render two cards per row. Each card expands in the actual
+    # Streamlit layout, so following rows shift down naturally.
+    for row_start in range(0, len(records), 2):
+        card_cols = st.columns(2, gap="medium")
 
-            with card_columns[offset]:
-                render_pss_card(record, card_key)
+        with card_cols[0]:
+            record = records[row_start]
+            render_pss_card(
+                record,
+                card_key=f"{current_page}_{row_start}",
+                columns=columns,
+            )
+
+        if row_start + 1 < len(records):
+            with card_cols[1]:
+                record = records[row_start + 1]
+                render_pss_card(
+                    record,
+                    card_key=f"{current_page}_{row_start + 1}",
+                    columns=columns,
+                )
 
 
-# =========================================================
+# ============================================================
 # FOOTER
-# =========================================================
+# ============================================================
+
+st.divider()
+
 st.caption(
-    "Tip: Card par click karke details expand/collapse karo. "
-    "⚡ sticker par click karke PSS name copy karo."
+    "Intimation Dashboard · Data source: intimation.xlsx"
 )
