@@ -27,31 +27,6 @@ ALL_USERS = "All Users"
 # =========================================================
 # HELPERS
 # =========================================================
-def normalize_header(value):
-    value = str(value).strip().lower()
-    value = re.sub(r"[\n\r\t]+", " ", value)
-    value = re.sub(r"[^a-z0-9]+", " ", value)
-    return re.sub(r"\s+", " ", value).strip()
-
-
-def find_column(columns, candidates=(), starts_with=()):
-    normalized = {column: normalize_header(column) for column in columns}
-
-    for candidate in candidates:
-        target = normalize_header(candidate)
-        for column, value in normalized.items():
-            if value == target:
-                return column
-
-    for prefix in starts_with:
-        target = normalize_header(prefix)
-        for column, value in normalized.items():
-            if value.startswith(target):
-                return column
-
-    return None
-
-
 def clean(value):
     if pd.isna(value):
         return ""
@@ -64,18 +39,40 @@ def safe_html(value):
     return escape(clean(value), quote=True)
 
 
+def normalize_header(value):
+    value = str(value).strip().lower()
+    value = re.sub(r"[\n\r\t]+", " ", value)
+    value = re.sub(r"[^a-z0-9]+", " ", value)
+    return re.sub(r"\s+", " ", value).strip()
+
+
+def find_column(columns, candidates=(), starts_with=()):
+    normalized = {col: normalize_header(col) for col in columns}
+
+    for candidate in candidates:
+        target = normalize_header(candidate)
+        for col, value in normalized.items():
+            if value == target:
+                return col
+
+    for prefix in starts_with:
+        target = normalize_header(prefix)
+        for col, value in normalized.items():
+            if value.startswith(target):
+                return col
+
+    return None
+
+
 def unique_sorted(series):
-    values = [clean(value) for value in series.tolist()]
-    return sorted(
-        {value for value in values if value},
-        key=str.casefold,
-    )
+    values = [clean(v) for v in series.tolist()]
+    return sorted({v for v in values if v}, key=str.casefold)
 
 
 def format_capacity(value):
     try:
         return f"{float(value):,.2f}".rstrip("0").rstrip(".")
-    except (ValueError, TypeError):
+    except (TypeError, ValueError):
         return clean(value) or "0"
 
 
@@ -103,14 +100,14 @@ BOLT_SVG = """
 <svg viewBox="0 0 32 32" aria-hidden="true">
   <defs>
     <linearGradient id="boltFill" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#fff3a6"/>
-      <stop offset="48%" stop-color="#ffc83d"/>
+      <stop offset="0%" stop-color="#fff5b8"/>
+      <stop offset="48%" stop-color="#ffd044"/>
       <stop offset="100%" stop-color="#ff8a22"/>
     </linearGradient>
   </defs>
   <path d="M17.9 2.7 7 17.1h7l-1.1 12.2L25 13.7h-7.3l.2-11Z"
         fill="url(#boltFill)"
-        stroke="#8c83ff"
+        stroke="#8278ff"
         stroke-width="1.1"
         stroke-linejoin="round"/>
 </svg>
@@ -122,11 +119,11 @@ BOLT_SVG = """
 # =========================================================
 @st.cache_data(show_spinner=False)
 def load_data(file_path, modified_time):
-    # modified_time refreshes the cache when the Excel file changes.
+    # File modification time invalidates the cache after Excel updates.
     del modified_time
 
     raw = pd.read_excel(file_path, engine="openpyxl")
-    raw.columns = [str(column).strip() for column in raw.columns]
+    raw.columns = [str(c).strip() for c in raw.columns]
     columns = list(raw.columns)
 
     mapping = {
@@ -159,10 +156,10 @@ def load_data(file_path, modified_time):
         ),
     }
 
-    # Priority source preference:
+    # Priority source order:
     # 1. Priority as per 003 sheet
     # 2. Priority as per Amresh Sir 28.07.2023
-    # 3. First column beginning with Priority
+    # 3. First column starting with Priority
     priority_col = find_column(
         columns,
         ["Priority as per 003 sheet"],
@@ -183,15 +180,9 @@ def load_data(file_path, modified_time):
     result = pd.DataFrame(index=raw.index)
 
     for target, source in mapping.items():
-        if source is not None:
-            result[target] = raw[source]
-        else:
-            result[target] = ""
+        result[target] = raw[source] if source else ""
 
-    if priority_col is not None:
-        result["Priority"] = raw[priority_col]
-    else:
-        result["Priority"] = ""
+    result["Priority"] = raw[priority_col] if priority_col else ""
 
     result["Capacity (MW)"] = pd.to_numeric(
         result["Capacity (MW)"]
@@ -205,8 +196,8 @@ def load_data(file_path, modified_time):
         "POC 2", "POC 3", "Lat", "Long", "Check Status",
     ]
 
-    for column in text_columns:
-        result[column] = result[column].map(clean)
+    for col in text_columns:
+        result[col] = result[col].map(clean)
 
     result = result[
         result["PSS"].astype(str).str.strip().ne("")
@@ -216,15 +207,15 @@ def load_data(file_path, modified_time):
 
 
 # =========================================================
-# CSS
+# DASHBOARD STYLING
 # =========================================================
 st.html("""
 <style>
 .stApp {
     background:
-        radial-gradient(ellipse at 5% 0%, rgba(91,130,255,.08), transparent 34%),
-        radial-gradient(ellipse at 96% 3%, rgba(158,104,255,.07), transparent 30%),
-        #f7f9fd;
+        radial-gradient(ellipse at 0% 0%, #e7edff 0%, transparent 32%),
+        radial-gradient(ellipse at 100% 0%, #f0eaff 0%, transparent 29%),
+        #f6f8fd;
 }
 
 [data-testid="stHeader"] {
@@ -232,83 +223,135 @@ st.html("""
 }
 
 .block-container {
-    padding-top: 1.3rem;
-    padding-bottom: 2rem;
     max-width: 1500px;
+    padding-top: 1.2rem;
+    padding-bottom: 2rem;
 }
 
-.dashboard-header {
+.dashboard-hero {
+    position: relative;
+    overflow: hidden;
     display: flex;
     align-items: center;
-    gap: 12px;
-    margin-bottom: 5px;
+    gap: 16px;
+    padding: 23px 25px;
+    margin-bottom: 18px;
+    border-radius: 22px;
+    color: white;
+    background: linear-gradient(115deg, #243f9d 0%, #4267e8 53%, #8058ed 100%);
+    box-shadow: 0 12px 30px rgba(58, 75, 175, .19);
 }
 
-.dashboard-logo {
-    width: 46px;
-    height: 46px;
+.dashboard-hero:after {
+    content: "";
+    position: absolute;
+    width: 240px;
+    height: 240px;
+    right: -55px;
+    top: -130px;
+    border-radius: 50%;
+    background: rgba(255,255,255,.10);
+    box-shadow: 0 0 0 27px rgba(255,255,255,.045),
+                0 0 0 54px rgba(255,255,255,.025);
+}
+
+.hero-logo {
+    position: relative;
+    z-index: 1;
+    width: 55px;
+    height: 55px;
+    flex: 0 0 55px;
     display: flex;
     align-items: center;
     justify-content: center;
-    flex-shrink: 0;
-    border-radius: 15px;
-    background: linear-gradient(135deg, #3767f5, #8057f4);
-    box-shadow: 0 7px 19px rgba(70,93,232,.23);
+    border: 1px solid rgba(255,255,255,.28);
+    border-radius: 17px;
+    background: rgba(255,255,255,.16);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.15);
 }
 
-.dashboard-logo svg {
-    width: 28px;
-    height: 28px;
+.hero-logo svg {
+    width: 34px;
+    height: 34px;
 }
 
-.dashboard-title {
-    font-size: 26px;
-    font-weight: 850;
-    letter-spacing: -.7px;
-    color: #182238;
+.hero-content {
+    position: relative;
+    z-index: 1;
+}
+
+.hero-title {
+    color: #fff;
+    font-size: 27px;
     line-height: 1.2;
+    letter-spacing: -.7px;
+    font-weight: 850;
 }
 
-.dashboard-subtitle {
-    color: #7a8599;
+.hero-subtitle {
+    color: rgba(255,255,255,.79);
     font-size: 12px;
-    margin-top: 4px;
+    margin-top: 6px;
+}
+
+.hero-tag {
+    display: inline-block;
+    margin-top: 10px;
+    padding: 4px 9px;
+    border: 1px solid rgba(255,255,255,.24);
+    border-radius: 30px;
+    background: rgba(255,255,255,.12);
+    color: #fff;
+    font-size: 10px;
+    font-weight: 750;
+    letter-spacing: .5px;
 }
 
 .section-label {
-    color: #69758b;
+    color: #68748b;
     font-size: 11px;
-    font-weight: 800;
+    font-weight: 850;
     letter-spacing: 1.2px;
     text-transform: uppercase;
-    margin: 20px 0 9px;
+    margin: 20px 0 10px;
 }
 
 .metric-card {
+    position: relative;
+    overflow: hidden;
     display: flex;
     align-items: center;
-    gap: 13px;
-    padding: 13px 16px;
-    min-height: 80px;
-    background: rgba(255,255,255,.95);
-    border: 1px solid #e8ecf5;
-    border-radius: 16px;
-    box-shadow: 0 5px 18px rgba(27,43,83,.035);
+    gap: 14px;
+    padding: 16px 18px;
+    min-height: 91px;
+    border: 1px solid rgba(255,255,255,.85);
+    border-radius: 18px;
+    box-shadow: 0 7px 20px rgba(42,58,111,.055);
+}
+
+.metric-records {
+    background: linear-gradient(120deg, #e8efff 0%, #f7f5ff 100%);
+}
+
+.metric-capacity {
+    background: linear-gradient(120deg, #ddf8f1 0%, #f0fbff 100%);
 }
 
 .metric-icon {
-    width: 43px;
-    height: 43px;
+    width: 47px;
+    height: 47px;
+    flex: 0 0 47px;
     display: flex;
     align-items: center;
     justify-content: center;
-    flex-shrink: 0;
-    border-radius: 13px;
+    border-radius: 15px;
+    background: rgba(255,255,255,.78);
+    box-shadow: 0 4px 11px rgba(39,60,120,.07);
 }
 
 .metric-icon svg {
-    width: 23px;
-    height: 23px;
+    width: 24px;
+    height: 24px;
     fill: none;
     stroke: currentColor;
     stroke-width: 1.8;
@@ -316,41 +359,40 @@ st.html("""
     stroke-linejoin: round;
 }
 
-.metric-icon.records {
+.metric-records .metric-icon {
     color: #4169f5;
-    background: linear-gradient(135deg, #e8efff, #f0edff);
 }
 
-.metric-icon.capacity {
-    color: #0e9f8b;
-    background: linear-gradient(135deg, #dcfaf2, #e9f8ff);
+.metric-capacity .metric-icon {
+    color: #0b9b83;
 }
 
 .metric-label {
-    color: #7b8599;
+    color: #65728c;
     font-size: 10px;
-    font-weight: 800;
+    font-weight: 850;
     text-transform: uppercase;
-    letter-spacing: .8px;
+    letter-spacing: .85px;
 }
 
 .metric-value {
-    color: #182238;
-    font-size: 23px;
+    color: #202c49;
+    font-size: 25px;
+    font-weight: 900;
     line-height: 1.2;
-    font-weight: 850;
     letter-spacing: -.5px;
-    margin-top: 3px;
+    margin-top: 4px;
 }
 
 .results-line {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    gap: 10px;
-    margin: 15px 0 8px;
-    color: #69758b;
+    flex-wrap: wrap;
+    gap: 8px;
+    color: #768198;
     font-size: 12px;
+    margin: 15px 0 8px;
 }
 
 .results-line strong {
@@ -358,20 +400,16 @@ st.html("""
 }
 
 div[data-testid="stButton"] > button {
-    border-radius: 9px;
-    font-weight: 700;
     min-height: 32px;
     padding: 4px 10px;
+    border-radius: 9px;
+    font-weight: 750;
+    border-color: #e1e7f1;
+    background: rgba(255,255,255,.9);
 }
 
-div[data-testid="stButton"] > button[kind="secondary"] {
-    border: 1px solid #e1e7f1;
-    background: #fff;
-    color: #4e5b73;
-}
-
-div[data-testid="stSelectbox"] label,
 div[data-testid="stTextInput"] label,
+div[data-testid="stSelectbox"] label,
 div[data-testid="stMultiSelect"] label {
     color: #59667d;
     font-size: 12px;
@@ -379,12 +417,12 @@ div[data-testid="stMultiSelect"] label {
 }
 
 .empty-state {
+    padding: 34px 15px;
     text-align: center;
-    padding: 30px 15px;
-    color: #7c879a;
-    background: #fff;
+    color: #77839a;
+    background: white;
     border: 1px dashed #dbe2ee;
-    border-radius: 15px;
+    border-radius: 17px;
 }
 
 @media (max-width: 700px) {
@@ -393,17 +431,29 @@ div[data-testid="stMultiSelect"] label {
         padding-right: .8rem;
     }
 
-    .dashboard-title {
+    .dashboard-hero {
+        padding: 17px;
+        border-radius: 18px;
+        gap: 12px;
+    }
+
+    .hero-logo {
+        width: 45px;
+        height: 45px;
+        flex-basis: 45px;
+    }
+
+    .hero-title {
         font-size: 22px;
     }
 
     .metric-card {
-        padding: 11px;
+        padding: 12px;
         gap: 9px;
     }
 
     .metric-value {
-        font-size: 20px;
+        font-size: 21px;
     }
 }
 </style>
@@ -414,26 +464,27 @@ div[data-testid="stMultiSelect"] label {
 # HEADER
 # =========================================================
 st.html(f"""
-<div class="dashboard-header">
-  <div class="dashboard-logo">{BOLT_SVG}</div>
-  <div>
-    <div class="dashboard-title">Intimation Dashboard</div>
-    <div class="dashboard-subtitle">
-      Power Substation records · Overview and contact details
+<div class="dashboard-hero">
+  <div class="hero-logo">{BOLT_SVG}</div>
+  <div class="hero-content">
+    <div class="hero-title">Intimation Dashboard</div>
+    <div class="hero-subtitle">
+      Power Substation Intelligence · Records, capacity and contacts
     </div>
+    <div class="hero-tag">⚡ PSS MANAGEMENT</div>
   </div>
 </div>
 """)
 
 
 # =========================================================
-# READ DATA
+# LOAD DATA
 # =========================================================
 if not EXCEL_PATH.exists():
     st.error(f"Excel file nahi mili: `{EXCEL_PATH}`")
     st.info(
-        "Ensure `intimation.xlsx` project root mein ho aur "
-        "dashboard `pages/9_Intimation_Dashboard.py` mein ho."
+        "`intimation.xlsx` ko project root mein rakho aur "
+        "is code ko `pages/9_Intimation_Dashboard.py` mein save karo."
     )
     st.stop()
 
@@ -443,7 +494,7 @@ try:
         EXCEL_PATH.stat().st_mtime,
     )
 except Exception as exc:
-    st.error("Excel file load nahi ho paayi. File aur column headers check karein.")
+    st.error("Excel file load nahi ho paayi. File aur column headers check karo.")
     st.exception(exc)
     st.stop()
 
@@ -467,6 +518,7 @@ with filter_a:
         "Search PSS",
         placeholder="Type PSS name...",
         key="intimation_pss_search",
+        on_change=reset_page,
     ).strip()
 
 search_base = data.copy()
@@ -484,6 +536,13 @@ if pss_search:
 poc_options = unique_sorted(search_base["POC1"])
 poc_choices = [ALL_USERS] + poc_options
 
+# Reset an old POC selection if it is no longer available.
+if (
+    "intimation_poc_filter" in st.session_state
+    and st.session_state["intimation_poc_filter"] not in poc_choices
+):
+    st.session_state["intimation_poc_filter"] = ALL_USERS
+
 with filter_b:
     selected_poc = st.selectbox(
         "POC 1",
@@ -500,6 +559,14 @@ if selected_poc != ALL_USERS:
     ]
 
 state_options = unique_sorted(state_base["State"])
+
+# Keep only state selections valid for the current PSS and POC filters.
+if "intimation_state_filter" in st.session_state:
+    st.session_state["intimation_state_filter"] = [
+        state
+        for state in st.session_state["intimation_state_filter"]
+        if state in state_options
+    ]
 
 with filter_c:
     selected_states = st.multiselect(
@@ -525,40 +592,29 @@ if selected_states:
 
 filtered = filtered.reset_index(drop=True)
 
-# Reset invalid selections when search results change.
-if selected_poc not in poc_choices:
-    st.session_state["intimation_poc_filter"] = ALL_USERS
-    selected_poc = ALL_USERS
-
-valid_states = [
-    state for state in selected_states
-    if state in state_options
-]
-
-if valid_states != selected_states:
-    st.session_state["intimation_state_filter"] = valid_states
-    selected_states = valid_states
-
 
 # =========================================================
-# OVERVIEW — ONLY TWO METRICS
+# OVERVIEW METRIC ICONS
 # =========================================================
 def metric_svg(kind):
     if kind == "records":
         return """
-        <svg viewBox="0 0 24 24" aria-hidden="true">
+        <svg viewBox="0 0 24 24">
           <rect x="4" y="3.5" width="16" height="17" rx="3"></rect>
           <path d="M8 8h8M8 12h8M8 16h5"></path>
         </svg>
         """
 
     return """
-    <svg viewBox="0 0 24 24" aria-hidden="true">
+    <svg viewBox="0 0 24 24">
       <path d="M13.2 2.8 5.8 13h5.1l-.4 8.2L18.2 10h-5.1l.1-7.2Z"></path>
     </svg>
     """
 
 
+# =========================================================
+# OVERVIEW — ONLY TWO CARDS
+# =========================================================
 total_records = len(filtered)
 total_capacity = float(filtered["Capacity (MW)"].sum())
 
@@ -568,8 +624,8 @@ metric1, metric2 = st.columns(2, gap="medium")
 
 with metric1:
     st.html(f"""
-    <div class="metric-card">
-      <div class="metric-icon records">{metric_svg("records")}</div>
+    <div class="metric-card metric-records">
+      <div class="metric-icon">{metric_svg("records")}</div>
       <div>
         <div class="metric-label">Matching Records</div>
         <div class="metric-value">{total_records:,}</div>
@@ -579,13 +635,13 @@ with metric1:
 
 with metric2:
     st.html(f"""
-    <div class="metric-card">
-      <div class="metric-icon capacity">{metric_svg("capacity")}</div>
+    <div class="metric-card metric-capacity">
+      <div class="metric-icon">{metric_svg("capacity")}</div>
       <div>
         <div class="metric-label">Total Capacity</div>
         <div class="metric-value">
           {format_capacity(total_capacity)}
-          <span style="font-size:12px;color:#7c879a;font-weight:700">MW</span>
+          <span style="font-size:12px;color:#718198;font-weight:750">MW</span>
         </div>
       </div>
     </div>
@@ -598,7 +654,7 @@ with metric2:
 st.html(f"""
 <div class="results-line">
   <span><strong>{total_records:,}</strong> PSS records found</span>
-  <span>⚡ Click lightning to copy PSS name</span>
+  <span>Click a card to expand · ⚡ to copy PSS name</span>
 </div>
 """)
 
@@ -654,13 +710,455 @@ page_df = filtered.iloc[page_start:page_start + PAGE_SIZE]
 
 
 # =========================================================
-# COMPACT PSS CARDS
+# CARD RENDERER
+# =========================================================
+def render_pss_card(record, card_key):
+    pss_name = clean(record["PSS"])
+    state_name = clean(record["State"]) or "—"
+    poc1 = clean(record["POC1"]) or "—"
+    capacity = format_capacity(record["Capacity (MW)"])
+
+    details = {
+        "Priority": clean(record["Priority"]) or "—",
+        "POC 2": clean(record["POC 2"]) or "—",
+        "POC 3": clean(record["POC 3"]) or "—",
+        "Latitude": clean(record["Lat"]) or "—",
+        "Longitude": clean(record["Long"]) or "—",
+        "Check Status": clean(record["Check Status"]) or "—",
+    }
+
+    details_html = ""
+
+    for label, value in details.items():
+        if label == "Check Status":
+            status_class = status_style(value)
+            value_html = (
+                f'<span class="status-pill {status_class}">'
+                f'{safe_html(value)}</span>'
+            )
+        else:
+            value_html = safe_html(value)
+
+        details_html += f"""
+        <div class="detail-item">
+          <div class="detail-label">{safe_html(label)}</div>
+          <div class="detail-value">{value_html}</div>
+        </div>
+        """
+
+    pss_json = json.dumps(pss_name, ensure_ascii=False)
+
+    html = f"""
+    <!doctype html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <style>
+        * {{ box-sizing: border-box; }}
+
+        html, body {{
+          margin: 0;
+          padding: 0;
+          background: transparent;
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }}
+
+        .pss-card {{
+          padding: 11px 12px 10px;
+          margin: 0 0 10px;
+          border: 1px solid #e5eaf4;
+          border-radius: 15px;
+          background: linear-gradient(145deg, #ffffff, #fcfdff);
+          box-shadow: 0 4px 13px rgba(28,42,78,.04);
+          cursor: pointer;
+          transition: border-color .17s ease, box-shadow .17s ease,
+                      transform .17s ease;
+          outline: none;
+        }}
+
+        .pss-card:hover {{
+          border-color: #c7d3ff;
+          box-shadow: 0 8px 20px rgba(42,65,130,.085);
+          transform: translateY(-1px);
+        }}
+
+        .pss-card:focus-visible {{
+          border-color: #6681ff;
+          box-shadow: 0 0 0 3px rgba(88,115,255,.14);
+        }}
+
+        .card-top {{
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }}
+
+        .card-heading {{
+          flex: 1;
+          min-width: 0;
+        }}
+
+        .pss-name {{
+          color: #202b43;
+          font-size: 14px;
+          font-weight: 850;
+          line-height: 1.3;
+          overflow-wrap: anywhere;
+        }}
+
+        .pss-caption {{
+          color: #9aa3b4;
+          font-size: 9px;
+          letter-spacing: .55px;
+          margin-top: 2px;
+        }}
+
+        .bolt-copy {{
+          width: 34px;
+          height: 34px;
+          flex: 0 0 34px;
+          padding: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border: 1px solid #dfe3ff;
+          border-radius: 11px;
+          background: linear-gradient(145deg, #edf3ff, #f0eaff);
+          box-shadow: 0 3px 8px rgba(78,91,202,.10);
+          cursor: pointer;
+          transition: transform .15s ease, box-shadow .15s ease;
+        }}
+
+        .bolt-copy:hover {{
+          transform: translateY(-1px) scale(1.05);
+          box-shadow: 0 5px 12px rgba(78,91,202,.18);
+        }}
+
+        .bolt-copy svg {{ width: 22px; height: 22px; }}
+
+        .card-stats {{
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 7px;
+          margin-top: 9px;
+        }}
+
+        .card-stat {{
+          min-width: 0;
+          padding: 6px 8px;
+          border: 1px solid #edf0f7;
+          border-radius: 9px;
+          background: #f7f9fd;
+        }}
+
+        .stat-label {{
+          color: #8a94a8;
+          font-size: 9px;
+          font-weight: 850;
+          letter-spacing: .65px;
+          text-transform: uppercase;
+        }}
+
+        .stat-value {{
+          color: #34415a;
+          font-size: 12px;
+          font-weight: 750;
+          line-height: 1.35;
+          margin-top: 2px;
+          overflow-wrap: anywhere;
+        }}
+
+        .poc-row {{
+          display: flex;
+          align-items: baseline;
+          gap: 7px;
+          margin-top: 7px;
+        }}
+
+        .poc-label {{
+          flex: 0 0 auto;
+          color: #929caf;
+          font-size: 10px;
+          font-weight: 800;
+        }}
+
+        .poc-value {{
+          color: #4b5870;
+          font-size: 11px;
+          font-weight: 650;
+          overflow-wrap: anywhere;
+        }}
+
+        .expand-hint {{
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-top: 8px;
+          padding-top: 7px;
+          border-top: 1px solid #f0f2f8;
+          color: #9aa3b5;
+          font-size: 9px;
+          font-weight: 750;
+        }}
+
+        .chevron {{
+          display: inline-block;
+          color: #7688d9;
+          font-size: 13px;
+          transition: transform .18s ease;
+        }}
+
+        .pss-card.expanded .chevron {{
+          transform: rotate(180deg);
+        }}
+
+        .detail-panel {{
+          display: none;
+          grid-template-columns: 1fr 1fr;
+          gap: 10px 12px;
+          margin-top: 10px;
+          padding-top: 10px;
+          border-top: 1px solid #e9edf6;
+        }}
+
+        .pss-card.expanded .detail-panel {{
+          display: grid;
+        }}
+
+        .detail-item {{ min-width: 0; }}
+
+        .detail-label {{
+          color: #929caf;
+          font-size: 9px;
+          font-weight: 850;
+          letter-spacing: .6px;
+          text-transform: uppercase;
+        }}
+
+        .detail-value {{
+          color: #3b4760;
+          font-size: 11px;
+          font-weight: 650;
+          margin-top: 3px;
+          overflow-wrap: anywhere;
+        }}
+
+        .status-pill {{
+          display: inline-block;
+          padding: 3px 7px;
+          border-radius: 7px;
+          font-size: 10px;
+          font-weight: 750;
+        }}
+
+        .status-good {{ background: #e2f8ee; color: #11825a; }}
+        .status-pending {{ background: #fff0db; color: #a96308; }}
+        .status-neutral {{ background: #edf1f8; color: #5e6a80; }}
+
+        .toast {{
+          position: fixed;
+          right: 9px;
+          top: 8px;
+          z-index: 10;
+          max-width: calc(100% - 18px);
+          padding: 7px 10px;
+          border-radius: 9px;
+          color: #fff;
+          background: #202b43;
+          font-size: 11px;
+          font-weight: 750;
+          box-shadow: 0 5px 18px #17203325;
+          opacity: 0;
+          transform: translateY(-4px);
+          transition: all .18s ease;
+          pointer-events: none;
+          overflow-wrap: anywhere;
+        }}
+
+        .toast.show {{
+          opacity: 1;
+          transform: translateY(0);
+        }}
+      </style>
+    </head>
+
+    <body>
+      <div class="pss-card"
+           id="pssCard"
+           role="button"
+           tabindex="0"
+           aria-expanded="false"
+           title="Click to expand or collapse details">
+
+        <div class="card-top">
+          <div class="card-heading">
+            <div class="pss-name">{safe_html(pss_name)}</div>
+            <div class="pss-caption">POWER SUBSTATION</div>
+          </div>
+
+          <button class="bolt-copy"
+                  type="button"
+                  title="Copy PSS name"
+                  aria-label="Copy PSS name">
+            {BOLT_SVG}
+          </button>
+        </div>
+
+        <div class="card-stats">
+          <div class="card-stat">
+            <div class="stat-label">Capacity</div>
+            <div class="stat-value">{safe_html(capacity)} MW</div>
+          </div>
+          <div class="card-stat">
+            <div class="stat-label">State</div>
+            <div class="stat-value">{safe_html(state_name)}</div>
+          </div>
+        </div>
+
+        <div class="poc-row">
+          <span class="poc-label">POC 1</span>
+          <span class="poc-value">{safe_html(poc1)}</span>
+        </div>
+
+        <div class="expand-hint">
+          <span class="hint-text">Click card to view details</span>
+          <span class="chevron">⌄</span>
+        </div>
+
+        <div class="detail-panel">
+          {details_html}
+        </div>
+      </div>
+
+      <div class="toast" id="copyToast" role="status">
+        ✓ PSS name copied
+      </div>
+
+      <script>
+        const card = document.getElementById("pssCard");
+        const copyButton = card.querySelector(".bolt-copy");
+        const hint = card.querySelector(".hint-text");
+        const toast = document.getElementById("copyToast");
+        let toastTimer;
+
+        function updateFrameHeight() {{
+          // Ask the Streamlit iframe to fit the card's current height.
+          const height = Math.ceil(
+            document.documentElement.scrollHeight
+          ) + 2;
+
+          window.parent.postMessage(
+            {{
+              isStreamlitMessage: true,
+              type: "streamlit:setFrameHeight",
+              height: height
+            }},
+            "*"
+          );
+        }}
+
+        function toggleCard() {{
+          const expanded = card.classList.toggle("expanded");
+
+          card.setAttribute("aria-expanded", String(expanded));
+          hint.textContent = expanded
+            ? "Click card to hide details"
+            : "Click card to view details";
+
+          requestAnimationFrame(updateFrameHeight);
+          setTimeout(updateFrameHeight, 100);
+        }}
+
+        card.addEventListener("click", function(event) {{
+          if (event.target.closest(".bolt-copy")) return;
+          toggleCard();
+        }});
+
+        card.addEventListener("keydown", function(event) {{
+          if (event.target !== card) return;
+
+          if (event.key === "Enter" || event.key === " ") {{
+            event.preventDefault();
+            toggleCard();
+          }}
+        }});
+
+        copyButton.addEventListener("click", async function(event) {{
+          event.stopPropagation();
+
+          const name = {pss_json};
+
+          try {{
+            if (navigator.clipboard && window.isSecureContext) {{
+              await navigator.clipboard.writeText(name);
+            }} else {{
+              const textarea = document.createElement("textarea");
+              textarea.value = name;
+              textarea.style.position = "fixed";
+              textarea.style.left = "-9999px";
+              document.body.appendChild(textarea);
+              textarea.focus();
+              textarea.select();
+
+              const copied = document.execCommand("copy");
+              textarea.remove();
+
+              if (!copied) throw new Error("Clipboard unavailable");
+            }}
+
+            toast.textContent = "✓ Copied: " + name;
+            toast.classList.add("show");
+
+            copyButton.style.background =
+              "linear-gradient(145deg,#dffaf0,#e8f5ff)";
+
+            clearTimeout(toastTimer);
+
+            toastTimer = setTimeout(function() {{
+              toast.classList.remove("show");
+              copyButton.style.background =
+                "linear-gradient(145deg,#edf3ff,#f0eaff)";
+            }}, 1600);
+
+          }} catch (error) {{
+            toast.textContent = "Browser clipboard access unavailable";
+            toast.classList.add("show");
+
+            clearTimeout(toastTimer);
+
+            toastTimer = setTimeout(function() {{
+              toast.classList.remove("show");
+            }}, 1800);
+          }}
+        }});
+
+        window.addEventListener("load", function() {{
+          updateFrameHeight();
+          setTimeout(updateFrameHeight, 150);
+        }});
+      </script>
+    </body>
+    </html>
+    """
+
+    # The card expands within its iframe and requests a matching height.
+    # This keeps collapsed cards compact without a separate details button.
+    components.html(
+        html,
+        height=155,
+        scrolling=False,
+        key=f"pss_card_{card_key}",
+    )
+
+
+# =========================================================
+# DISPLAY CARDS — 2 COLUMNS, 20 RECORDS PER PAGE
 # =========================================================
 if page_df.empty:
     st.html("""
     <div class="empty-state">
       <strong>No records found</strong><br>
-      Search ya filters change karke dekhein.
+      Search ya filters change karke dekho.
     </div>
     """)
 else:
@@ -669,356 +1167,23 @@ else:
         pair = page_df.iloc[pair_start:pair_start + 2]
 
         for offset, (_, record) in enumerate(pair.iterrows()):
-            pss_name = clean(record["PSS"])
-            state_name = clean(record["State"]) or "—"
-            poc1 = clean(record["POC1"]) or "—"
-            capacity = format_capacity(record["Capacity (MW)"])
-
-            priority = clean(record["Priority"]) or "—"
-            poc2 = clean(record["POC 2"]) or "—"
-            poc3 = clean(record["POC 3"]) or "—"
-            latitude = clean(record["Lat"]) or "—"
-            longitude = clean(record["Long"]) or "—"
-            check_status = clean(record["Check Status"]) or "—"
-
             row_number = page_start + pair_start + offset
-            unique_key = f"{row_number}_{pss_name}_{state_name}_{poc1}"
-            unique_key = re.sub(r"[^a-zA-Z0-9_-]", "_", unique_key)[:100]
 
-            expanded_key = f"intimation_expanded_{unique_key}"
+            # Stable key for this displayed row.
+            card_key = re.sub(
+                r"[^a-zA-Z0-9_-]",
+                "_",
+                f"{row_number}_{clean(record['PSS'])}",
+            )[:90]
 
-            if expanded_key not in st.session_state:
-                st.session_state[expanded_key] = False
-
-            expanded = st.session_state[expanded_key]
-            status_class = status_style(check_status)
-
-            details_html = ""
-
-            if expanded:
-                details_html = f"""
-                <div class="detail-panel">
-                  <div class="detail-item">
-                    <div class="detail-label">Priority</div>
-                    <div class="detail-value">{safe_html(priority)}</div>
-                  </div>
-                  <div class="detail-item">
-                    <div class="detail-label">POC 2</div>
-                    <div class="detail-value">{safe_html(poc2)}</div>
-                  </div>
-                  <div class="detail-item">
-                    <div class="detail-label">POC 3</div>
-                    <div class="detail-value">{safe_html(poc3)}</div>
-                  </div>
-                  <div class="detail-item">
-                    <div class="detail-label">Latitude</div>
-                    <div class="detail-value">{safe_html(latitude)}</div>
-                  </div>
-                  <div class="detail-item">
-                    <div class="detail-label">Longitude</div>
-                    <div class="detail-value">{safe_html(longitude)}</div>
-                  </div>
-                  <div class="detail-item">
-                    <div class="detail-label">Check Status</div>
-                    <div class="detail-value">
-                      <span class="status-pill {status_class}">
-                        {safe_html(check_status)}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-                """
-
-            # JSON escaping protects PSS names containing quotes or symbols.
-            pss_json = json.dumps(pss_name, ensure_ascii=False)
-
-            card_html = f"""
-            <div class="compact-card">
-              <div class="card-top">
-                <div class="card-heading">
-                  <div class="pss-name">{safe_html(pss_name)}</div>
-                  <div class="pss-caption">POWER SUBSTATION</div>
-                </div>
-
-                <button class="bolt-copy"
-                        type="button"
-                        title="Copy PSS name"
-                        aria-label="Copy PSS name"
-                        onclick='copyPssName(this, {pss_json})'>
-                  {BOLT_SVG}
-                </button>
-              </div>
-
-              <div class="card-stats">
-                <div class="card-stat">
-                  <div class="stat-label">Capacity</div>
-                  <div class="stat-value">{safe_html(capacity)} MW</div>
-                </div>
-
-                <div class="card-stat">
-                  <div class="stat-label">State</div>
-                  <div class="stat-value">{safe_html(state_name)}</div>
-                </div>
-              </div>
-
-              <div class="poc-row">
-                <span class="poc-label">POC 1</span>
-                <span class="poc-value">{safe_html(poc1)}</span>
-              </div>
-
-              {details_html}
-            </div>
-            """
-
-            # Isolated iframe makes the lightning sticker clickable and
-            # enables browser clipboard access without a separate copy button.
             with card_columns[offset]:
-                components.html(
-                    f"""
-                    <!doctype html>
-                    <html>
-                    <head>
-                      <meta charset="utf-8">
-                      <style>
-                        * {{ box-sizing: border-box; }}
-                        html, body {{
-                          margin: 0;
-                          padding: 0;
-                          font-family: -apple-system, BlinkMacSystemFont,
-                                       "Segoe UI", sans-serif;
-                          background: transparent;
-                        }}
-                        .compact-card {{
-                          border: 1px solid #e7ebf4;
-                          border-radius: 15px;
-                          background: #fff;
-                          box-shadow: 0 4px 14px rgba(28,42,78,.035);
-                          padding: 11px 12px 10px;
-                          margin: 0;
-                          transition: border-color .16s ease,
-                                      box-shadow .16s ease;
-                        }}
-                        .compact-card:hover {{
-                          border-color: #cdd7ff;
-                          box-shadow: 0 7px 18px rgba(42,65,130,.07);
-                        }}
-                        .card-top {{
-                          display: flex;
-                          align-items: center;
-                          gap: 8px;
-                          min-width: 0;
-                        }}
-                        .card-heading {{ min-width: 0; flex: 1; }}
-                        .pss-name {{
-                          font-size: 14px;
-                          font-weight: 800;
-                          color: #202b43;
-                          line-height: 1.3;
-                          overflow-wrap: anywhere;
-                        }}
-                        .pss-caption {{
-                          font-size: 9px;
-                          color: #9aa3b4;
-                          margin-top: 2px;
-                          letter-spacing: .5px;
-                        }}
-                        .bolt-copy {{
-                          width: 33px;
-                          height: 33px;
-                          flex: 0 0 33px;
-                          border: 1px solid rgba(113,133,255,.23);
-                          border-radius: 11px;
-                          padding: 0;
-                          display: flex;
-                          align-items: center;
-                          justify-content: center;
-                          background: linear-gradient(145deg,#edf3ff,#f0eaff);
-                          box-shadow: 0 3px 8px rgba(78,91,202,.10);
-                          cursor: pointer;
-                          transition: transform .15s ease,
-                                      box-shadow .15s ease;
-                        }}
-                        .bolt-copy:hover {{
-                          transform: translateY(-1px) scale(1.04);
-                          box-shadow: 0 5px 12px rgba(78,91,202,.18);
-                        }}
-                        .bolt-copy svg {{ width: 22px; height: 22px; }}
-                        .card-stats {{
-                          display: grid;
-                          grid-template-columns: 1fr 1fr;
-                          gap: 7px;
-                          margin-top: 9px;
-                        }}
-                        .card-stat {{
-                          min-width: 0;
-                          background: #f7f9fd;
-                          border: 1px solid #eef1f7;
-                          border-radius: 9px;
-                          padding: 6px 8px;
-                        }}
-                        .stat-label {{
-                          font-size: 9px;
-                          color: #8a94a8;
-                          text-transform: uppercase;
-                          letter-spacing: .65px;
-                          font-weight: 800;
-                        }}
-                        .stat-value {{
-                          font-size: 12px;
-                          font-weight: 750;
-                          color: #34415a;
-                          margin-top: 2px;
-                          overflow-wrap: anywhere;
-                          line-height: 1.35;
-                        }}
-                        .poc-row {{
-                          margin-top: 7px;
-                          display: flex;
-                          align-items: baseline;
-                          gap: 7px;
-                          min-width: 0;
-                        }}
-                        .poc-label {{
-                          flex: 0 0 auto;
-                          font-size: 10px;
-                          color: #929caf;
-                          font-weight: 750;
-                        }}
-                        .poc-value {{
-                          font-size: 11px;
-                          color: #4b5870;
-                          font-weight: 650;
-                          overflow-wrap: anywhere;
-                        }}
-                        .detail-panel {{
-                          border-top: 1px solid #edf0f6;
-                          margin-top: 9px;
-                          padding-top: 9px;
-                          display: grid;
-                          grid-template-columns: 1fr 1fr;
-                          gap: 9px 12px;
-                        }}
-                        .detail-item {{ min-width: 0; }}
-                        .detail-label {{
-                          font-size: 9px;
-                          text-transform: uppercase;
-                          letter-spacing: .65px;
-                          color: #929caf;
-                          font-weight: 800;
-                        }}
-                        .detail-value {{
-                          color: #3b4760;
-                          font-size: 11px;
-                          font-weight: 650;
-                          margin-top: 3px;
-                          overflow-wrap: anywhere;
-                        }}
-                        .status-pill {{
-                          display: inline-block;
-                          padding: 3px 7px;
-                          border-radius: 7px;
-                          font-size: 10px;
-                          font-weight: 750;
-                        }}
-                        .status-good {{ background: #e2f8ee; color: #11825a; }}
-                        .status-pending {{ background: #fff0db; color: #a96308; }}
-                        .status-neutral {{ background: #edf1f8; color: #5e6a80; }}
-                        .toast {{
-                          position: fixed;
-                          right: 8px;
-                          top: 7px;
-                          z-index: 10;
-                          padding: 7px 10px;
-                          border-radius: 9px;
-                          color: white;
-                          background: #202b43;
-                          font-size: 11px;
-                          font-weight: 700;
-                          box-shadow: 0 5px 18px #17203325;
-                          opacity: 0;
-                          transform: translateY(-4px);
-                          transition: all .18s ease;
-                          pointer-events: none;
-                        }}
-                        .toast.show {{
-                          opacity: 1;
-                          transform: translateY(0);
-                        }}
-                      </style>
-                    </head>
-
-                    <body>
-                      {card_html}
-
-                      <div class="toast" id="copyToast" role="status">
-                        ✓ PSS name copied
-                      </div>
-
-                      <script>
-                        async function copyPssName(button, name) {{
-                          try {{
-                            if (navigator.clipboard && window.isSecureContext) {{
-                              await navigator.clipboard.writeText(name);
-                            }} else {{
-                              const input = document.createElement("textarea");
-                              input.value = name;
-                              input.style.position = "fixed";
-                              input.style.opacity = "0";
-                              document.body.appendChild(input);
-                              input.focus();
-                              input.select();
-
-                              const ok = document.execCommand("copy");
-                              input.remove();
-
-                              if (!ok) throw new Error("Copy failed");
-                            }}
-
-                            const toast = document.getElementById("copyToast");
-                            toast.textContent = "✓ Copied: " + name;
-                            toast.classList.add("show");
-
-                            button.style.background =
-                              "linear-gradient(145deg,#dffaf0,#e8f5ff)";
-
-                            setTimeout(() => {{
-                              toast.classList.remove("show");
-                              button.style.background =
-                                "linear-gradient(145deg,#edf3ff,#f0eaff)";
-                            }}, 1500);
-
-                          }} catch (error) {{
-                            const toast = document.getElementById("copyToast");
-                            toast.textContent = "Copy not supported by browser";
-                            toast.classList.add("show");
-
-                            setTimeout(() => {{
-                              toast.classList.remove("show");
-                            }}, 1800);
-                          }}
-                        }}
-                      </script>
-                    </body>
-                    </html>
-                    """,
-                    height=(
-                        205 + 125
-                        if expanded
-                        else 160
-                    ),
-                    scrolling=False,
-                )
-
-                if st.button(
-                    "⌄  Show details" if not expanded else "⌃  Hide details",
-                    key=f"toggle_{unique_key}",
-                    use_container_width=True,
-                ):
-                    st.session_state[expanded_key] = not expanded
-                    st.rerun()
+                render_pss_card(record, card_key)
 
 
+# =========================================================
+# FOOTER
+# =========================================================
 st.caption(
-    "Tip: ⚡ sticker par click karke PSS name copy karein. "
-    "Excel update karne ke baad dashboard refresh karein."
+    "Tip: Card par click karke details expand/collapse karo. "
+    "⚡ sticker par click karke PSS name copy karo."
 )
