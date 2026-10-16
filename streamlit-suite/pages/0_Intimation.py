@@ -696,19 +696,13 @@ else:
         with left_col:
             _, row = records[index]
 
-            st.markdown(
-                make_card(row),
-                unsafe_allow_html=True,
-            )
+            st.html(make_card(row))
 
         if index + 1 < len(records):
             with right_col:
                 _, row = records[index + 1]
 
-                st.markdown(
-                    make_card(row),
-                    unsafe_allow_html=True,
-                )
+                st.html(make_card(row))
 
 
 # =========================================================
