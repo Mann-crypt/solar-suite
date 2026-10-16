@@ -99,8 +99,8 @@ def load_data(file_path, modified_time):
         "State",
         "Capacity (MW)",
         "POC1",
-        "POC2",
-        "POC3",
+        "POC 2",
+        "POC 3",
         "Check Status",
     ]
 
