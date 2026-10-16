@@ -609,10 +609,15 @@ def render_pss_card(row, columns, card_key):
                     <div class="pss-info-value">{safe_html(capacity)}</div>
                 </div>
 
-                <div class="pss-info location-tile">
-                    <div class="pss-info-label">📍 Location</div>
-                    <div class="pss-info-value">{safe_html(state)}</div>
-                </div>
+                st.markdown(
+                        f"""
+                        <div class="pss-info location-tile">
+                        <div class="pss-info-label">📍 Location</div>
+                        <div class="pss-info-value">{location}</div>
+                        </div>
+                        """,
+                        unsafe_allow_html=True
+                        )
             </div>
 
             <div class="poc-tile">
