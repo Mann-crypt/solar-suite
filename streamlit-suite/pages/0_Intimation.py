@@ -23,232 +23,227 @@ EXCEL_PATH = Path(__file__).resolve().parent.parent / "intimation.xlsx"
 # =========================================================
 # CUSTOM CSS
 # =========================================================
-st.markdown(
-    """
-    <style>
-    .block-container {
-        max-width: 1550px;
-        padding-top: 1.5rem;
-        padding-bottom: 2.5rem;
-    }
+st.html("""
+<style>
+.block-container {
+    max-width: 1550px;
+    padding-top: 1.4rem;
+    padding-bottom: 2.5rem;
+}
 
+.dashboard-header {
+    background: linear-gradient(120deg, #102A43, #176B87 60%, #218CA5);
+    padding: 25px 28px;
+    border-radius: 16px;
+    margin-bottom: 22px;
+    box-shadow: 0 5px 18px rgba(15, 50, 75, 0.12);
+}
+
+.dashboard-header h1 {
+    color: white !important;
+    font-size: 1.9rem;
+    font-weight: 800;
+    margin: 0;
+}
+
+.dashboard-header p {
+    color: #D9EEF5 !important;
+    margin: 7px 0 0;
+    font-size: 0.92rem;
+}
+
+.section-heading {
+    font-size: 1.15rem;
+    font-weight: 750;
+    margin: 12px 0 5px;
+}
+
+.section-description {
+    font-size: 0.84rem;
+    opacity: 0.72;
+    margin-bottom: 14px;
+}
+
+/* Compact record card */
+.record-card {
+    border: 1px solid rgba(128, 128, 128, 0.24);
+    border-radius: 12px;
+    padding: 12px;
+    margin-bottom: 8px;
+    background: var(--secondary-background-color);
+    box-shadow: 0 2px 7px rgba(0, 0, 0, 0.035);
+    overflow-wrap: anywhere;
+    transition: border-color 0.2s ease;
+}
+
+.record-card:hover {
+    border-color: #2693AD;
+}
+
+.record-top {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.record-icon {
+    flex-shrink: 0;
+    width: 35px;
+    height: 35px;
+    border-radius: 9px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(38, 147, 173, 0.13);
+    font-size: 18px;
+}
+
+.record-title {
+    font-size: 0.98rem;
+    font-weight: 800;
+    line-height: 1.35;
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+
+.record-state {
+    font-size: 0.78rem;
+    opacity: 0.72;
+    margin-top: 3px;
+}
+
+.record-primary {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+.record-primary-item {
+    min-width: 0;
+    padding: 9px;
+    border-radius: 8px;
+    background: rgba(128, 128, 128, 0.07);
+}
+
+.record-label {
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.45px;
+    text-transform: uppercase;
+    opacity: 0.65;
+    margin-bottom: 4px;
+}
+
+.record-value {
+    font-size: 0.84rem;
+    font-weight: 700;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.record-status-row {
+    margin-top: 9px;
+}
+
+.record-status {
+    display: inline-block;
+    border-radius: 6px;
+    padding: 4px 7px;
+    font-size: 0.70rem;
+    font-weight: 700;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+}
+
+.status-ok {
+    color: #16794B;
+    background: rgba(34, 197, 94, 0.13);
+}
+
+.status-pending {
+    color: #A16207;
+    background: rgba(234, 179, 8, 0.16);
+}
+
+.status-issue {
+    color: #B42318;
+    background: rgba(239, 68, 68, 0.12);
+}
+
+.status-neutral {
+    color: var(--text-color);
+    background: rgba(128, 128, 128, 0.13);
+}
+
+/* Details */
+.details-heading {
+    font-size: 0.82rem;
+    font-weight: 750;
+    margin: 10px 0 3px;
+}
+
+.details-value {
+    font-size: 0.88rem;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+div[data-testid="stMetric"] {
+    padding: 15px;
+    border: 1px solid rgba(128, 128, 128, 0.2);
+    border-radius: 12px;
+    background: var(--secondary-background-color);
+}
+
+div[data-testid="stMetricLabel"] {
+    font-weight: 650;
+}
+
+div[data-testid="stMetricValue"] {
+    font-size: 1.6rem;
+}
+
+div[data-testid="stTextInput"] input {
+    border-radius: 9px;
+}
+
+div[data-testid="stSelectbox"] > div > div,
+div[data-testid="stMultiSelect"] > div > div {
+    border-radius: 9px;
+}
+
+@media (max-width: 600px) {
     .dashboard-header {
-        background: linear-gradient(120deg, #102A43 0%, #176B87 60%, #218CA5 100%);
-        padding: 27px 30px;
-        border-radius: 18px;
-        margin-bottom: 25px;
-        box-shadow: 0 5px 18px rgba(15, 50, 75, 0.12);
+        padding: 19px;
     }
 
     .dashboard-header h1 {
-        color: #FFFFFF !important;
-        font-size: 2rem;
-        font-weight: 800;
-        letter-spacing: -0.5px;
-        margin: 0;
-    }
-
-    .dashboard-header p {
-        color: #D9EEF5 !important;
-        margin: 8px 0 0 0;
-        font-size: 0.95rem;
-    }
-
-    .section-heading {
-        font-size: 1.18rem;
-        font-weight: 750;
-        margin: 12px 0 5px 0;
-    }
-
-    .section-description {
-        font-size: 0.85rem;
-        opacity: 0.72;
-        margin-bottom: 15px;
+        font-size: 1.5rem;
     }
 
     .record-card {
-        border: 1px solid rgba(128, 128, 128, 0.24);
-        border-radius: 15px;
-        padding: 17px;
-        margin-bottom: 16px;
-        background: var(--secondary-background-color);
-        box-shadow: 0 3px 10px rgba(0, 0, 0, 0.035);
-        min-height: 260px;
-        overflow-wrap: anywhere;
-        transition: border-color 0.2s ease, transform 0.2s ease;
+        padding: 10px;
     }
 
-    .record-card:hover {
-        border-color: #2693AD;
-        transform: translateY(-2px);
+    .record-primary-item {
+        padding: 8px;
     }
-
-    .record-top {
-        display: flex;
-        align-items: flex-start;
-        gap: 11px;
-        margin-bottom: 13px;
-    }
-
-    .record-icon {
-        flex-shrink: 0;
-        width: 39px;
-        height: 39px;
-        border-radius: 11px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background: rgba(38, 147, 173, 0.13);
-        font-size: 20px;
-    }
-
-    .record-title {
-        font-size: 1.03rem;
-        font-weight: 800;
-        line-height: 1.4;
-        margin: 0;
-        overflow-wrap: anywhere;
-    }
-
-    .record-state {
-        font-size: 0.81rem;
-        opacity: 0.72;
-        margin-top: 4px;
-    }
-
-    .record-status-row {
-        margin: 9px 0 15px 0;
-    }
-
-    .record-status {
-        display: inline-block;
-        border-radius: 7px;
-        padding: 5px 9px;
-        font-size: 0.73rem;
-        font-weight: 750;
-        line-height: 1.4;
-        overflow-wrap: anywhere;
-    }
-
-    .status-ok {
-        color: #16794B;
-        background: rgba(34, 197, 94, 0.13);
-    }
-
-    .status-pending {
-        color: #A16207;
-        background: rgba(234, 179, 8, 0.16);
-    }
-
-    .status-issue {
-        color: #B42318;
-        background: rgba(239, 68, 68, 0.12);
-    }
-
-    .status-neutral {
-        color: var(--text-color);
-        background: rgba(128, 128, 128, 0.13);
-    }
-
-    .record-grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        column-gap: 13px;
-        row-gap: 14px;
-    }
-
-    .record-field {
-        min-width: 0;
-    }
-
-    .record-label {
-        font-size: 0.69rem;
-        font-weight: 650;
-        letter-spacing: 0.65px;
-        text-transform: uppercase;
-        opacity: 0.65;
-        margin-bottom: 4px;
-    }
-
-    .record-value {
-        font-size: 0.87rem;
-        font-weight: 650;
-        line-height: 1.4;
-        overflow-wrap: anywhere;
-        word-break: break-word;
-    }
-
-    .record-coordinates {
-        font-size: 0.78rem;
-        font-weight: 600;
-        line-height: 1.5;
-        overflow-wrap: anywhere;
-    }
-
-    div[data-testid="stMetric"] {
-        padding: 17px;
-        border: 1px solid rgba(128, 128, 128, 0.2);
-        border-radius: 13px;
-        background: var(--secondary-background-color);
-    }
-
-    div[data-testid="stMetricLabel"] {
-        font-weight: 650;
-    }
-
-    div[data-testid="stMetricValue"] {
-        font-size: 1.7rem;
-    }
-
-    div[data-testid="stTextInput"] input {
-        border-radius: 10px;
-    }
-
-    div[data-testid="stSelectbox"] > div > div,
-    div[data-testid="stMultiSelect"] > div > div {
-        border-radius: 10px;
-    }
-
-    div.stButton > button {
-        border-radius: 9px;
-        font-weight: 650;
-    }
-
-    @media (max-width: 600px) {
-        .dashboard-header {
-            padding: 21px;
-        }
-
-        .dashboard-header h1 {
-            font-size: 1.55rem;
-        }
-
-        .record-card {
-            padding: 14px;
-            min-height: auto;
-        }
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
+}
+</style>
+""")
 
 
 # =========================================================
 # HEADER
 # =========================================================
-st.markdown(
-    """
-    <div class="dashboard-header">
-        <h1>📊 Intimation Dashboard</h1>
-        <p>
-            Search, filter and review intimation records
-            with a clear, card-based view.
-        </p>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
+st.html("""
+<div class="dashboard-header">
+    <h1>📊 Intimation Dashboard</h1>
+    <p>Search, filter and review intimation records.</p>
+</div>
+""")
 
 
 # =========================================================
@@ -257,7 +252,6 @@ st.markdown(
 @st.cache_data(ttl=300)
 def load_data(file_path, modified_time):
     data = pd.read_excel(file_path, engine="openpyxl")
-
     data.columns = data.columns.astype(str).str.strip()
 
     required_columns = [
@@ -272,38 +266,29 @@ def load_data(file_path, modified_time):
         "Check Status",
     ]
 
-    missing_columns = [
-        column
-        for column in required_columns
-        if column not in data.columns
+    missing = [
+        col for col in required_columns
+        if col not in data.columns
     ]
 
-    if missing_columns:
+    if missing:
         raise ValueError(
-            "Missing Excel columns: "
-            + ", ".join(missing_columns)
+            "Missing Excel columns: " + ", ".join(missing)
         )
 
-    # Clean text columns without changing numeric coordinates.
     text_columns = [
-        "PSS",
-        "State",
-        "POC1",
-        "POC 2",
-        "POC 3",
-        "Check Status",
+        "PSS", "State", "POC1",
+        "POC 2", "POC 3", "Check Status",
     ]
 
-    for column in text_columns:
-        data[column] = (
-            data[column]
+    for col in text_columns:
+        data[col] = (
+            data[col]
             .fillna("")
             .astype(str)
             .str.strip()
         )
 
-    # Select the preferred priority column.
-    # Prefer the 003 sheet; otherwise use Amresh Sir's priority.
     priority_candidates = [
         "Priority as per 003 sheet",
         "Priority as per Amresh Sir 28.07.2023",
@@ -311,34 +296,33 @@ def load_data(file_path, modified_time):
 
     priority_column = next(
         (
-            column
-            for column in priority_candidates
-            if column in data.columns
+            col for col in priority_candidates
+            if col in data.columns
         ),
         None,
     )
 
     if priority_column is None:
         priority_columns = [
-            column
-            for column in data.columns
-            if column.lower().startswith("priority")
+            col for col in data.columns
+            if col.lower().startswith("priority")
         ]
         priority_column = (
             priority_columns[0] if priority_columns else None
         )
 
-    if priority_column:
-        data["Priority"] = data[priority_column]
-    else:
-        data["Priority"] = ""
+    data["Priority"] = (
+        data[priority_column]
+        if priority_column
+        else ""
+    )
 
     return data
 
 
 if not EXCEL_PATH.exists():
     st.error(
-        "The file intimation.xlsx was not found in the repository root."
+        "intimation.xlsx was not found in the repository root."
     )
     st.stop()
 
@@ -348,33 +332,34 @@ try:
         EXCEL_PATH.stat().st_mtime,
     )
 except Exception as exc:
-    st.error(f"Unable to load the Excel file: {exc}")
+    st.error(f"Unable to load Excel data: {exc}")
     st.info(
-        "Check that intimation.xlsx is a valid Excel workbook "
+        "Verify that intimation.xlsx is a valid Excel workbook "
         "and contains the required columns."
     )
     st.stop()
 
 
 # =========================================================
-# FILTER RESET CALLBACK
+# FILTER CALLBACKS
 # =========================================================
-def reset_state_filter():
-    # When the user or PSS search changes, the state selection
-    # is recreated from the newly matching records.
+def reset_dependent_filters():
     st.session_state.pop("intimation_states", None)
+    st.session_state["intimation_card_page"] = 0
+
+
+def reset_page():
+    st.session_state["intimation_card_page"] = 0
 
 
 # =========================================================
 # FILTER OPTIONS
 # =========================================================
 user_options = ["All Users"] + sorted(
-    value
-    for value in df["POC1"].unique()
+    value for value in df["POC1"].unique()
     if value
 )
 
-# Keep an existing valid user selection; otherwise use All Users.
 if st.session_state.get("intimation_user") not in user_options:
     st.session_state["intimation_user"] = "All Users"
 
@@ -382,17 +367,12 @@ if st.session_state.get("intimation_user") not in user_options:
 # =========================================================
 # FILTERS
 # =========================================================
-st.markdown(
-    '<div class="section-heading">🔎 Find Records</div>',
-    unsafe_allow_html=True,
-)
-
-st.markdown(
-    '<div class="section-description">'
-    'Choose a user, search for a PSS, and narrow the results by state.'
-    '</div>',
-    unsafe_allow_html=True,
-)
+st.html("""
+<div class="section-heading">🔎 Find Records</div>
+<div class="section-description">
+Select a POC1 user, search for a PSS and filter by state.
+</div>
+""")
 
 filter_col1, filter_col2, filter_col3 = st.columns(
     [1, 1.1, 1.5],
@@ -404,7 +384,7 @@ with filter_col1:
         "👤 POC1 / User",
         options=user_options,
         key="intimation_user",
-        on_change=reset_state_filter,
+        on_change=reset_dependent_filters,
     )
 
 with filter_col3:
@@ -412,11 +392,11 @@ with filter_col3:
         "🔍 Search PSS",
         placeholder="Enter PSS name or identifier...",
         key="intimation_pss",
-        on_change=reset_state_filter,
+        on_change=reset_dependent_filters,
     )
 
 
-# Filter by user and PSS before creating the State options.
+# Filter by user and PSS first.
 base_df = df.copy()
 
 if selected_user != "All Users":
@@ -435,19 +415,9 @@ if pss_search.strip():
     ]
 
 available_states = sorted(
-    value
-    for value in base_df["State"].unique()
+    value for value in base_df["State"].unique()
     if value
 )
-
-# Remove state selections that no longer exist in the filtered data.
-if "intimation_states" in st.session_state:
-    current_states = st.session_state["intimation_states"]
-    st.session_state["intimation_states"] = [
-        state
-        for state in current_states
-        if state in available_states
-    ]
 
 with filter_col2:
     selected_states = st.multiselect(
@@ -455,44 +425,30 @@ with filter_col2:
         options=available_states,
         default=available_states,
         key="intimation_states",
-        placeholder="Select one or more states",
+        placeholder="Select states",
+        on_change=reset_page,
     )
 
-
-# Apply all active filters.
 filtered_df = base_df[
     base_df["State"].isin(selected_states)
 ].copy()
 
-
-# =========================================================
-# DISPLAY DATA
-# =========================================================
 display_columns = [
-    "Lat",
-    "Long",
-    "PSS",
-    "State",
-    "Capacity (MW)",
-    "Priority",
-    "POC1",
-    "POC 2",
-    "POC 3",
-    "Check Status",
+    "Lat", "Long", "PSS", "State", "Capacity (MW)",
+    "Priority", "POC1", "POC 2", "POC 3", "Check Status",
 ]
 
 display_df = filtered_df[display_columns].copy()
 
 
 # =========================================================
-# CARD HELPERS
+# DISPLAY HELPERS
 # =========================================================
 def safe_text(value):
     if pd.isna(value):
         return "—"
 
     value = str(value).strip()
-
     return value if value else "—"
 
 
@@ -508,6 +464,29 @@ def safe_number(value, decimals=2):
     return f"{number:,.{decimals}f}"
 
 
+def status_class_for(value):
+    status = safe_text(value).lower()
+
+    if any(word in status for word in [
+        "pass", "checked", "complete",
+        "completed", "verified", "ok",
+    ]):
+        return "status-ok"
+
+    if any(word in status for word in [
+        "pending", "progress", "waiting",
+    ]):
+        return "status-pending"
+
+    if any(word in status for word in [
+        "fail", "error", "issue",
+        "mismatch", "reject",
+    ]):
+        return "status-issue"
+
+    return "status-neutral"
+
+
 def make_card(row):
     def val(column):
         value = row.get(column, "")
@@ -519,37 +498,19 @@ def make_card(row):
 
     pss = val("PSS")
     state = val("State")
-    priority = val("Priority")
     poc1 = val("POC1")
-    poc2 = val("POC 2")
-    poc3 = val("POC 3")
     status = val("Check Status")
 
-    capacity = safe_number(row.get("Capacity (MW)", ""), 2)
-    lat = safe_number(row.get("Lat", ""), 6)
-    long = safe_number(row.get("Long", ""), 6)
+    capacity = escape(
+        safe_number(row.get("Capacity (MW)", ""), 2)
+    )
 
-    # Assign a visual status class based on the text.
-    status_text = safe_text(row.get("Check Status", "")).lower()
-
-    if any(word in status_text for word in [
-        "pass", "checked", "complete", "completed", "verified", "ok"
-    ]):
-        status_class = "status-ok"
-    elif any(word in status_text for word in [
-        "pending", "progress", "waiting"
-    ]):
-        status_class = "status-pending"
-    elif any(word in status_text for word in [
-        "fail", "error", "issue", "mismatch", "reject"
-    ]):
-        status_class = "status-issue"
-    else:
-        status_class = "status-neutral"
+    status_class = status_class_for(
+        row.get("Check Status", "")
+    )
 
     return dedent(f"""
     <div class="record-card">
-
         <div class="record-top">
             <div class="record-icon">⚡</div>
             <div>
@@ -558,73 +519,53 @@ def make_card(row):
             </div>
         </div>
 
+        <div class="record-primary">
+            <div class="record-primary-item">
+                <div class="record-label">POC1 / User</div>
+                <div class="record-value">{poc1}</div>
+            </div>
+
+            <div class="record-primary-item">
+                <div class="record-label">Capacity</div>
+                <div class="record-value">{capacity} MW</div>
+            </div>
+        </div>
+
         <div class="record-status-row">
             <span class="record-status {status_class}">
                 {status}
             </span>
         </div>
-
-        <div class="record-grid">
-
-            <div class="record-field">
-                <div class="record-label">Capacity</div>
-                <div class="record-value">{capacity} MW</div>
-            </div>
-
-            <div class="record-field">
-                <div class="record-label">Priority</div>
-                <div class="record-value">{priority}</div>
-            </div>
-
-            <div class="record-field">
-                <div class="record-label">POC 1</div>
-                <div class="record-value">{poc1}</div>
-            </div>
-
-            <div class="record-field">
-                <div class="record-label">POC 2</div>
-                <div class="record-value">{poc2}</div>
-            </div>
-
-            <div class="record-field">
-                <div class="record-label">POC 3</div>
-                <div class="record-value">{poc3}</div>
-            </div>
-
-            <div class="record-field">
-                <div class="record-label">Latitude / Longitude</div>
-                <div class="record-coordinates">
-                    {lat}<br>{long}
-                </div>
-            </div>
-
-        </div>
     </div>
     """).strip()
+
+
+def show_detail(label, value):
+    st.markdown(
+        f'<div class="details-heading">{escape(label)}</div>'
+        f'<div class="details-value">{escape(safe_text(value))}</div>',
+        unsafe_allow_html=True,
+    )
 
 
 # =========================================================
 # INTIMATION CARDS
 # =========================================================
-st.markdown("---")
+st.divider()
 
-st.markdown(
-    '<div class="section-heading">📋 Intimation Records</div>',
-    unsafe_allow_html=True,
-)
+st.html("""
+<div class="section-heading">📋 Intimation Records</div>
+""")
 
-st.markdown(
-    f'<div class="section-description">'
-    f'Showing {len(display_df):,} matching records out of '
-    f'{len(df):,} total records.'
-    f'</div>',
-    unsafe_allow_html=True,
+st.caption(
+    f"Showing {len(display_df):,} matching records "
+    f"out of {len(df):,} total records."
 )
 
 if display_df.empty:
     st.info(
-        "No matching records found. Try changing the selected user, "
-        "PSS search, or state."
+        "No matching records found. Try changing the user, "
+        "PSS search or selected states."
     )
 
 else:
@@ -634,93 +575,80 @@ else:
         len(display_df) + cards_per_page - 1
     ) // cards_per_page
 
-    # Keep the current page valid when filters change.
-    if "intimation_card_page" not in st.session_state:
-        st.session_state["intimation_card_page"] = 0
-
-    st.session_state["intimation_card_page"] = max(
-        0,
-        min(
-            st.session_state["intimation_card_page"],
-            total_pages - 1,
-        ),
+    current_page = st.session_state.get(
+        "intimation_card_page", 0
     )
+    current_page = max(0, min(current_page, total_pages - 1))
+    st.session_state["intimation_card_page"] = current_page
 
     page_col1, page_col2 = st.columns([3, 1])
 
-    with page_col1:
-        start = (
-            st.session_state["intimation_card_page"]
-            * cards_per_page
-        )
-        end = min(
-            start + cards_per_page,
-            len(display_df),
-        )
+    start = current_page * cards_per_page
+    end = min(start + cards_per_page, len(display_df))
 
+    with page_col1:
         st.caption(
-            f"Displaying records {start + 1}–{end} "
-            f"of {len(display_df):,}"
+            f"Records {start + 1}–{end} of {len(display_df):,}"
         )
 
     with page_col2:
         selected_page = st.selectbox(
             "Page",
             options=list(range(1, total_pages + 1)),
-            index=st.session_state["intimation_card_page"],
+            index=current_page,
             key="intimation_card_page_selector",
             label_visibility="collapsed",
         )
 
-        st.session_state["intimation_card_page"] = (
-            selected_page - 1
-        )
+    current_page = selected_page - 1
+    st.session_state["intimation_card_page"] = current_page
 
-    start = (
-        st.session_state["intimation_card_page"]
-        * cards_per_page
-    )
-
-    page_df = display_df.iloc[
-        start:start + cards_per_page
-    ]
+    start = current_page * cards_per_page
+    page_df = display_df.iloc[start:start + cards_per_page]
 
     records = list(page_df.iterrows())
 
     for index in range(0, len(records), 2):
-        left_col, right_col = st.columns(
-            2,
-            gap="medium",
-        )
+        left_col, right_col = st.columns(2, gap="medium")
 
-        with left_col:
-            _, row = records[index]
+        for offset, col in enumerate([left_col, right_col]):
+            record_index = index + offset
 
-            st.html(make_card(row))
+            if record_index >= len(records):
+                continue
 
-        if index + 1 < len(records):
-            with right_col:
-                _, row = records[index + 1]
+            row_index, row = records[record_index]
 
+            with col:
+                # Compact summary card
                 st.html(make_card(row))
 
+                # Click to reveal additional information
+                with st.expander("＋ View details", expanded=False):
+                    detail_col1, detail_col2 = st.columns(2)
+
+                    with detail_col1:
+                        show_detail("Priority", row["Priority"])
+                        show_detail("POC 2", row["POC 2"])
+                        show_detail("Latitude", safe_number(row["Lat"], 6))
+
+                    with detail_col2:
+                        show_detail("POC 3", row["POC 3"])
+                        show_detail("Longitude", safe_number(row["Long"], 6))
+                        show_detail("Check Status", row["Check Status"])
+
 
 # =========================================================
-# OVERVIEW — AT THE BOTTOM
+# OVERVIEW
 # =========================================================
-st.markdown("---")
+st.divider()
 
-st.markdown(
-    '<div class="section-heading">📈 Overview</div>',
-    unsafe_allow_html=True,
-)
-
-st.markdown(
-    '<div class="section-description">'
-    'Summary based on your current filters.'
-    '</div>',
-    unsafe_allow_html=True,
-)
+st.html("""
+<div class="section-heading">📈 Overview</div>
+<div class="section-description">
+Summary based on your current filters.
+</div>
+""")
 
 capacity_values = pd.to_numeric(
     filtered_df["Capacity (MW)"]
