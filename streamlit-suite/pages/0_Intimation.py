@@ -326,7 +326,7 @@ def render_copy_button(pss_name, unique_id):
     </head>
     <body>
         <button id="copyButton" type="button" title="Copy PSS name">
-            ⚡ Copy
+            ⚡
         </button>
         <div id="status"></div>
 
@@ -797,7 +797,7 @@ def render_pss_card(row, card_number):
             unsafe_allow_html=True,
         )
 
-        with st.expander("View details  ＋", expanded=False):
+        with st.expander("View details", expanded=False):
 
             detail_col1, detail_col2 = st.columns(2)
 
