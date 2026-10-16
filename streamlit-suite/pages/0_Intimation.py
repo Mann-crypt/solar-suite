@@ -24,55 +24,99 @@ ALL_USERS = "All Users"
 
 
 # =========================================================
-# STYLING
+# SVG ICONS
+# =========================================================
+
+BOLT_SVG = """
+<svg viewBox="0 0 48 48" width="30" height="30"
+     xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <defs>
+        <linearGradient id="boltGradient" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#FFF176"/>
+            <stop offset="48%" stop-color="#FFC107"/>
+            <stop offset="100%" stop-color="#FF8F00"/>
+        </linearGradient>
+    </defs>
+    <path d="M27 2 L9 27 H21 L17 46 L39 18 H26 Z"
+          fill="url(#boltGradient)"
+          stroke="#FFF8D6"
+          stroke-width="1.2"
+          stroke-linejoin="round"/>
+</svg>
+"""
+
+
+# =========================================================
+# CUSTOM CSS
 # =========================================================
 
 st.html("""
 <style>
 .block-container {
     max-width: 1500px;
-    padding: 1.5rem 2rem 2.5rem 2rem;
+    padding: 1.5rem 2rem 2.5rem;
 }
 
 .dash-header {
     display: flex;
     align-items: center;
-    gap: 15px;
-    margin-bottom: 26px;
+    gap: 16px;
+    margin-bottom: 28px;
 }
 
-.dash-logo {
+.brand-mark {
+    width: 58px;
+    height: 58px;
+    flex-shrink: 0;
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 50px;
-    height: 50px;
-    flex-shrink: 0;
-    border-radius: 15px;
-    background: linear-gradient(135deg, #2563eb, #7c3aed);
-    color: #ffffff;
-    font-size: 24px;
-    font-weight: 800;
-    box-shadow: 0 6px 18px rgba(79,70,229,0.2);
+    border-radius: 18px;
+    background:
+        radial-gradient(circle at 25% 15%, #93C5FD 0%, transparent 42%),
+        linear-gradient(140deg, #1D4ED8, #4F46E5 60%, #7C3AED);
+    box-shadow:
+        0 0 0 5px rgba(79,70,229,0.07),
+        0 9px 24px rgba(79,70,229,0.24);
+    position: relative;
+    overflow: hidden;
+}
+
+.brand-mark::after {
+    content: "";
+    position: absolute;
+    width: 65px;
+    height: 65px;
+    border: 1px solid rgba(255,255,255,0.25);
+    border-radius: 50%;
+    right: -36px;
+    bottom: -37px;
+}
+
+.brand-mark svg {
+    width: 35px;
+    height: 35px;
+    filter: drop-shadow(0 0 7px rgba(255,220,80,0.65));
+    z-index: 1;
 }
 
 .dash-title {
-    font-size: 28px;
+    font-size: 29px;
     font-weight: 850;
-    letter-spacing: -0.9px;
-    line-height: 1.25;
+    letter-spacing: -1px;
+    line-height: 1.2;
 }
 
 .dash-subtitle {
     font-size: 12px;
-    opacity: 0.65;
-    margin-top: 5px;
+    opacity: 0.67;
+    margin-top: 6px;
 }
 
 .section-heading {
-    font-size: 18px;
-    font-weight: 800;
-    letter-spacing: -0.4px;
+    font-size: 19px;
+    font-weight: 820;
+    letter-spacing: -0.45px;
     margin-bottom: 4px;
 }
 
@@ -82,37 +126,138 @@ st.html("""
     margin-bottom: 15px;
 }
 
-/* Horizontal overview metric cards */
-div[data-testid="stMetric"] {
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    min-height: 105px;
-    padding: 17px 21px;
-    border: 1px solid rgba(128,128,128,0.18);
-    border-radius: 16px;
+/* ---------------- OVERVIEW CARDS ---------------- */
+
+.overview-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+    margin: 10px 0 24px;
+}
+
+.overview-card {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    min-height: 153px;
+    padding: 22px 24px;
+    border: 1px solid rgba(128,128,128,0.17);
+    border-radius: 19px;
     background: var(--secondary-background-color);
-    box-shadow: 0 5px 18px rgba(0,0,0,0.035);
-    transition: border-color 0.2s ease, transform 0.2s ease;
+    box-shadow: 0 6px 22px rgba(0,0,0,0.04);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
-div[data-testid="stMetric"]:hover {
-    border-color: rgba(99,102,241,0.55);
+.overview-card:hover {
     transform: translateY(-2px);
+    box-shadow: 0 10px 27px rgba(0,0,0,0.07);
 }
 
-div[data-testid="stMetricLabel"] {
+.overview-card::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -2;
+    opacity: 0.8;
+}
+
+.overview-card.records::before {
+    background: linear-gradient(
+        120deg,
+        rgba(37,99,235,0.11),
+        transparent 75%
+    );
+}
+
+.overview-card.capacity::before {
+    background: linear-gradient(
+        120deg,
+        rgba(124,58,237,0.12),
+        transparent 75%
+    );
+}
+
+.overview-orb {
+    position: absolute;
+    width: 145px;
+    height: 145px;
+    border-radius: 50%;
+    right: -33px;
+    top: -47px;
+    z-index: -1;
+}
+
+.records .overview-orb {
+    background: radial-gradient(
+        circle,
+        rgba(59,130,246,0.20),
+        rgba(59,130,246,0)
+    );
+}
+
+.capacity .overview-orb {
+    background: radial-gradient(
+        circle,
+        rgba(139,92,246,0.22),
+        rgba(139,92,246,0)
+    );
+}
+
+.overview-content {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    position: relative;
+}
+
+.overview-icon {
+    width: 54px;
+    height: 54px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 16px;
+}
+
+.records .overview-icon {
+    background: linear-gradient(145deg, #2563EB, #60A5FA);
+    box-shadow: 0 6px 16px rgba(37,99,235,0.22);
+}
+
+.capacity .overview-icon {
+    background: linear-gradient(145deg, #6D28D9, #A78BFA);
+    box-shadow: 0 6px 16px rgba(109,40,217,0.22);
+}
+
+.overview-icon svg {
+    width: 31px;
+    height: 31px;
+}
+
+.overview-label {
     font-size: 12px;
-    font-weight: 650;
+    font-weight: 700;
+    opacity: 0.72;
+    margin-bottom: 6px;
 }
 
-div[data-testid="stMetricValue"] {
-    font-size: 26px;
+.overview-value {
+    font-size: 28px;
     font-weight: 850;
-    letter-spacing: -0.7px;
+    letter-spacing: -0.8px;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
 }
 
-/* Filter containers */
+.overview-footnote {
+    font-size: 11px;
+    opacity: 0.65;
+    margin-top: 15px;
+}
+
+/* ---------------- FILTERS ---------------- */
+
 div[data-testid="stTextInput"] input,
 div[data-testid="stSelectbox"] [data-baseweb="select"],
 div[data-testid="stMultiSelect"] [data-baseweb="select"] {
@@ -126,124 +271,148 @@ div[data-testid="stMultiSelect"] label {
     font-weight: 700;
 }
 
-/* Record cards */
-div[data-testid="stExpander"] {
-    border: 1px solid rgba(128,128,128,0.22) !important;
-    border-radius: 15px !important;
-    overflow: hidden;
+/* ---------------- RECORD CARDS ---------------- */
+
+div[data-testid="stVerticalBlockBorderWrapper"] {
+    border-color: rgba(128,128,128,0.21) !important;
+    border-radius: 16px !important;
     background: var(--secondary-background-color);
-    margin-bottom: 0 !important;
-    box-shadow: 0 4px 14px rgba(0,0,0,0.025);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.025);
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
-div[data-testid="stExpander"]:hover {
-    border-color: rgba(99,102,241,0.65) !important;
-    box-shadow: 0 7px 20px rgba(79,70,229,0.08);
+div[data-testid="stVerticalBlockBorderWrapper"]:hover {
+    border-color: rgba(99,102,241,0.62) !important;
+    box-shadow: 0 7px 22px rgba(79,70,229,0.075);
 }
 
-div[data-testid="stExpander"] details summary {
-    padding: 13px 15px !important;
-    min-height: 64px;
+.pss-card-head {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    margin-bottom: 15px;
+    min-width: 0;
 }
 
-div[data-testid="stExpander"] details summary p {
-    font-size: 12px;
-    font-weight: 750;
-    line-height: 1.6;
-    overflow-wrap: anywhere;
+.pss-bolt {
+    width: 43px;
+    height: 43px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 13px;
+    background:
+        radial-gradient(circle at 30% 20%, #60A5FA, transparent 70%),
+        linear-gradient(145deg, #1D4ED8, #6D28D9);
+    box-shadow: 0 4px 13px rgba(79,70,229,0.22);
 }
 
-div[data-testid="stExpander"] details div[data-testid="stExpanderDetails"] {
-    padding: 0 15px 15px 15px !important;
+.pss-bolt svg {
+    width: 27px;
+    height: 27px;
+    filter: drop-shadow(0 0 5px rgba(255,221,87,0.65));
 }
 
-.card-title {
-    font-size: 15px;
+.pss-name {
+    font-size: 14px;
     font-weight: 850;
-    line-height: 1.5;
+    line-height: 1.45;
     overflow-wrap: anywhere;
-    margin-bottom: 13px;
 }
 
-.card-grid {
+.pss-caption {
+    font-size: 10px;
+    opacity: 0.63;
+    margin-top: 4px;
+}
+
+.pss-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 9px;
 }
 
-.card-info {
+.pss-info {
     min-width: 0;
     padding: 11px;
+    border: 1px solid rgba(128,128,128,0.14);
     border-radius: 11px;
-    border: 1px solid rgba(128,128,128,0.15);
     background: rgba(128,128,128,0.035);
 }
 
-.card-label {
+.pss-info.capacity-info {
+    background: rgba(99,102,241,0.055);
+    border-color: rgba(99,102,241,0.17);
+}
+
+.pss-info.poc-info {
+    grid-column: 1 / -1;
+}
+
+.pss-label {
     font-size: 10px;
     font-weight: 750;
     text-transform: uppercase;
-    letter-spacing: 0.6px;
-    opacity: 0.65;
+    letter-spacing: 0.55px;
+    opacity: 0.63;
     margin-bottom: 5px;
 }
 
-.card-value {
+.pss-value {
     font-size: 12px;
-    font-weight: 700;
+    font-weight: 750;
     line-height: 1.5;
     overflow-wrap: anywhere;
 }
 
-.capacity-value {
-    font-size: 15px;
+.pss-capacity {
+    font-size: 14px;
     font-weight: 850;
 }
 
-.card-details-heading {
+.pss-details-heading {
     font-size: 11px;
     font-weight: 850;
     text-transform: uppercase;
-    letter-spacing: 0.8px;
-    opacity: 0.65;
-    margin-top: 19px;
-    margin-bottom: 7px;
+    letter-spacing: 0.7px;
+    opacity: 0.66;
+    margin: 16px 0 6px;
 }
 
-.detail-item {
+.pss-detail-row {
     padding: 9px 0;
-    border-bottom: 1px solid rgba(128,128,128,0.14);
+    border-bottom: 1px solid rgba(128,128,128,0.13);
 }
 
-.detail-label {
+.pss-detail-label {
     font-size: 10px;
-    opacity: 0.65;
+    opacity: 0.64;
     margin-bottom: 4px;
 }
 
-.detail-value {
+.pss-detail-value {
     font-size: 12px;
     font-weight: 650;
-    line-height: 1.5;
     overflow-wrap: anywhere;
+    line-height: 1.5;
 }
 
 .status-pill {
     display: inline-block;
-    border-radius: 20px;
     padding: 5px 9px;
+    border-radius: 20px;
     font-size: 10px;
     font-weight: 750;
-    margin-top: 11px;
-    border: 1px solid rgba(128,128,128,0.17);
+    margin-top: 12px;
     background: rgba(128,128,128,0.09);
+    border: 1px solid rgba(128,128,128,0.15);
 }
 
 .status-good {
     color: #15803d;
     background: rgba(34,197,94,0.10);
-    border-color: rgba(34,197,94,0.24);
+    border-color: rgba(34,197,94,0.23);
 }
 
 .status-pending {
@@ -255,14 +424,13 @@ div[data-testid="stExpander"] details div[data-testid="stExpanderDetails"] {
 .status-alert {
     color: #dc2626;
     background: rgba(239,68,68,0.10);
-    border-color: rgba(239,68,68,0.24);
+    border-color: rgba(239,68,68,0.22);
 }
 
 .result-caption {
     font-size: 12px;
     opacity: 0.68;
-    margin-top: 6px;
-    margin-bottom: 12px;
+    margin: 6px 0 12px;
 }
 
 .page-indicator {
@@ -273,47 +441,53 @@ div[data-testid="stExpander"] details div[data-testid="stExpanderDetails"] {
 }
 
 div.stButton > button {
-    min-height: 39px;
-    border-radius: 10px;
+    border-radius: 9px;
     font-weight: 700;
-    transition: all 0.2s ease;
+    min-height: 36px;
 }
 
-@media (max-width: 850px) {
+@media (max-width: 800px) {
     .block-container {
-        padding: 1.2rem 1rem 2rem 1rem;
+        padding: 1.2rem 1rem 2rem;
     }
 
     .dash-title {
         font-size: 24px;
     }
 
-    div[data-testid="stMetric"] {
-        min-height: 92px;
-        padding: 13px 15px;
+    .overview-card {
+        padding: 17px;
     }
 
-    div[data-testid="stMetricValue"] {
-        font-size: 22px;
+    .overview-value {
+        font-size: 24px;
     }
 }
 
-@media (max-width: 520px) {
+@media (max-width: 600px) {
+    .overview-grid {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+
+    .overview-card {
+        min-height: 125px;
+    }
+
     .dash-title {
-        font-size: 21px;
+        font-size: 22px;
     }
 
-    .dash-logo {
-        width: 43px;
-        height: 43px;
+    .brand-mark {
+        width: 49px;
+        height: 49px;
     }
 
-    .card-grid {
-        grid-template-columns: 1fr 1fr;
+    .pss-grid {
         gap: 7px;
     }
 
-    .card-info {
+    .pss-info {
         padding: 9px;
     }
 }
@@ -414,11 +588,12 @@ def status_style(value):
 
 
 # =========================================================
-# LOAD AND NORMALIZE EXCEL
+# LOAD EXCEL
 # =========================================================
 
 @st.cache_data(show_spinner="Loading intimation records...")
 def load_data(file_path, modified_time):
+    # modified_time changes when the Excel file is updated.
     del modified_time
 
     raw = pd.read_excel(file_path)
@@ -433,10 +608,7 @@ def load_data(file_path, modified_time):
     )
 
     if priority_source is None:
-        priority_source = find_column(
-            raw,
-            startswith="Priority",
-        )
+        priority_source = find_column(raw, startswith="Priority")
 
     aliases = {
         "Lat": ["Lat", "Latitude"],
@@ -467,9 +639,8 @@ def load_data(file_path, modified_time):
     )
 
     text_columns = [
-        "Lat", "Long", "PSS", "State",
-        "Priority", "POC1", "POC 2", "POC 3",
-        "Check Status",
+        "Lat", "Long", "PSS", "State", "Priority",
+        "POC1", "POC 2", "POC 3", "Check Status",
     ]
 
     for column in text_columns:
@@ -482,16 +653,9 @@ def load_data(file_path, modified_time):
 
     output = output[
         [
-            "Lat",
-            "Long",
-            "PSS",
-            "State",
-            "Capacity (MW)",
-            "Priority",
-            "POC1",
-            "POC 2",
-            "POC 3",
-            "Check Status",
+            "Lat", "Long", "PSS", "State",
+            "Capacity (MW)", "Priority",
+            "POC1", "POC 2", "POC 3", "Check Status",
         ]
     ]
 
@@ -508,9 +672,11 @@ def load_data(file_path, modified_time):
 # HEADER
 # =========================================================
 
-st.html("""
+st.html(f"""
 <div class="dash-header">
-    <div class="dash-logo">ID</div>
+    <div class="brand-mark">
+        {BOLT_SVG}
+    </div>
     <div>
         <div class="dash-title">Intimation Dashboard</div>
         <div class="dash-subtitle">
@@ -542,7 +708,7 @@ if df.empty:
 
 
 # =========================================================
-# INITIALIZE FILTER STATE
+# FILTER STATE
 # =========================================================
 
 if "intimation_poc1" not in st.session_state:
@@ -557,41 +723,18 @@ if "intimation_pss_search" not in st.session_state:
 if "intimation_page" not in st.session_state:
     st.session_state["intimation_page"] = 1
 
-
-# =========================================================
-# OVERVIEW
-# Two horizontal metric cards, no charts.
-# =========================================================
-
-st.html("""
-<div class="section-heading">Overview</div>
-<div class="section-caption">
-    Summary updates automatically with your filters
-</div>
-""")
-
-overview_left, overview_right = st.columns(
-    [1, 1],
-    gap="medium",
-)
-
-with overview_left:
-    records_metric = st.empty()
-
-with overview_right:
-    capacity_metric = st.empty()
+if "expanded_intimation_cards" not in st.session_state:
+    st.session_state["expanded_intimation_cards"] = set()
 
 
 # =========================================================
 # FILTERS
 # =========================================================
 
-st.divider()
-
 st.html("""
 <div class="section-heading">Filters</div>
 <div class="section-caption">
-    Select a POC1, search for a PSS, or choose one or more states
+    Search PSS records and narrow results by POC1 and State
 </div>
 """)
 
@@ -632,9 +775,7 @@ poc_option_mask = pss_mask.copy()
 if selected_states:
     poc_option_mask &= df["State"].isin(selected_states)
 
-poc_values = unique_sorted(
-    df.loc[poc_option_mask, "POC1"]
-)
+poc_values = unique_sorted(df.loc[poc_option_mask, "POC1"])
 
 poc_options = [ALL_USERS] + [
     value for value in poc_values
@@ -691,7 +832,7 @@ selected_states = st.session_state["intimation_states"]
 
 
 # =========================================================
-# APPLY ALL FILTERS
+# APPLY FILTERS
 # =========================================================
 
 filtered_df = df.copy()
@@ -720,7 +861,8 @@ filtered_df = filtered_df.reset_index(drop=True)
 
 
 # =========================================================
-# REFRESH OVERVIEW METRICS
+# OVERVIEW
+# Two horizontal decorative cards; no charts.
 # =========================================================
 
 total_capacity = filtered_df["Capacity (MW)"].sum(min_count=1)
@@ -728,35 +870,85 @@ total_capacity = filtered_df["Capacity (MW)"].sum(min_count=1)
 if pd.isna(total_capacity):
     total_capacity = 0.0
 
-with records_metric.container():
-    st.metric(
-        label="Matching Records",
-        value=f"{len(filtered_df):,}",
-    )
+records_svg = """
+<svg viewBox="0 0 40 40" width="31" height="31"
+     xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <rect x="8" y="6" width="24" height="29" rx="4"
+          fill="none" stroke="white" stroke-width="2.4"/>
+    <path d="M14 14 H26 M14 20 H26 M14 26 H23"
+          stroke="white" stroke-width="2.4" stroke-linecap="round"/>
+    <path d="M13 3 H27" stroke="white" stroke-width="2.4"
+          stroke-linecap="round"/>
+</svg>
+"""
 
-with capacity_metric.container():
-    st.metric(
-        label="Total Capacity",
-        value=f"{total_capacity:,.2f} MW",
-    )
+capacity_svg = """
+<svg viewBox="0 0 40 40" width="33" height="33"
+     xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <path d="M22 2 L8 23 H18 L15 38 L32 15 H22 Z"
+          fill="#FFF176" stroke="white" stroke-width="1.3"
+          stroke-linejoin="round"/>
+</svg>
+"""
+
+st.html(f"""
+<div class="section-heading">Overview</div>
+<div class="section-caption">
+    Live summary of your filtered records
+</div>
+
+<div class="overview-grid">
+    <div class="overview-card records">
+        <div class="overview-orb"></div>
+        <div class="overview-content">
+            <div class="overview-icon">
+                {records_svg}
+            </div>
+            <div>
+                <div class="overview-label">Matching Records</div>
+                <div class="overview-value">{len(filtered_df):,}</div>
+            </div>
+        </div>
+        <div class="overview-footnote">
+            Records matching your current selection
+        </div>
+    </div>
+
+    <div class="overview-card capacity">
+        <div class="overview-orb"></div>
+        <div class="overview-content">
+            <div class="overview-icon">
+                {capacity_svg}
+            </div>
+            <div>
+                <div class="overview-label">Total Capacity</div>
+                <div class="overview-value">{total_capacity:,.2f} MW</div>
+            </div>
+        </div>
+        <div class="overview-footnote">
+            Combined capacity of matching records
+        </div>
+    </div>
+</div>
+""")
 
 
 # =========================================================
-# RECORDS
+# RECORDS HEADER
 # =========================================================
 
 st.divider()
 
 st.html("""
-<div class="section-heading">Records</div>
+<div class="section-heading">PSS Records</div>
 <div class="section-caption">
-    Expand a card to see the full record
+    Every card shows the key information. Expand a card for more details.
 </div>
 """)
 
 if filtered_df.empty:
     st.info(
-        "No records match these filters. "
+        "No records match the selected filters. "
         "Try changing the PSS search, POC1 or State."
     )
     st.stop()
@@ -779,7 +971,7 @@ end = min(start + PAGE_SIZE, total_records)
 st.html(f"""
 <div class="result-caption">
     Showing <b>{start + 1:,}–{end:,}</b>
-    of <b>{total_records:,}</b> matching records
+    of <b>{total_records:,}</b> records
 </div>
 """)
 
@@ -787,9 +979,9 @@ page_df = filtered_df.iloc[start:end]
 
 
 # =========================================================
-# CARD LAYOUT
-# Collapsed: lightning + PSS + capacity in heading.
-# Expanded: capacity, state and POC1 plus other details.
+# CARD RENDERING
+# Collapsed: PSS, Capacity, State and POC1.
+# Expanded: additional details inside the same container.
 # =========================================================
 
 card_left, card_right = st.columns(2, gap="medium")
@@ -805,88 +997,107 @@ for index, (_, record) in enumerate(page_df.iterrows()):
     status = clean(record["Check Status"]) or "Not specified"
     priority = clean(record["Priority"]) or "Not specified"
 
-    status_class = status_style(status)
+    # Use a stable identifier based on the current result page.
+    card_id = f"intimation_card_{start + index}"
+    expanded_cards = st.session_state["expanded_intimation_cards"]
+    is_expanded = card_id in expanded_cards
 
     with card_column:
-        with st.expander(
-            f"⚡ {pss}  ·  {capacity}",
-            expanded=False,
-        ):
-            # Main card details
+        # Border wraps preview, expanded details and toggle button.
+        with st.container(border=True):
             st.html(f"""
-            <div class="card-title">
-                ⚡ {safe_html(pss)}
+            <div class="pss-card-head">
+                <div class="pss-bolt">
+                    {BOLT_SVG}
+                </div>
+                <div style="min-width:0;">
+                    <div class="pss-name">
+                        {safe_html(pss)}
+                    </div>
+                    <div class="pss-caption">
+                        Power Substation
+                    </div>
+                </div>
             </div>
 
-            <div class="card-grid">
-                <div class="card-info">
-                    <div class="card-label">Capacity</div>
-                    <div class="card-value capacity-value">
+            <div class="pss-grid">
+                <div class="pss-info capacity-info">
+                    <div class="pss-label">Capacity</div>
+                    <div class="pss-value pss-capacity">
                         {safe_html(capacity)}
                     </div>
                 </div>
 
-                <div class="card-info">
-                    <div class="card-label">State</div>
-                    <div class="card-value">
-                        📍 {safe_html(state)}
+                <div class="pss-info">
+                    <div class="pss-label">State</div>
+                    <div class="pss-value">
+                        {safe_html(state)}
                     </div>
                 </div>
 
-                <div class="card-info" style="grid-column: 1 / -1;">
-                    <div class="card-label">POC1</div>
-                    <div class="card-value">
+                <div class="pss-info poc-info">
+                    <div class="pss-label">POC1</div>
+                    <div class="pss-value">
                         {safe_html(poc1)}
                     </div>
                 </div>
             </div>
-
-            <div class="status-pill {status_class}">
-                {safe_html(status)}
-            </div>
-
-            <div class="card-details-heading">
-                Additional Details
-            </div>
             """)
 
-            details = [
-                ("Priority", record["Priority"]),
-                ("POC 2", record["POC 2"]),
-                ("POC 3", record["POC 3"]),
-                ("Latitude", record["Lat"]),
-                ("Longitude", record["Long"]),
-            ]
+            if is_expanded:
+                st.html(f"""
+                <div class="pss-details-heading">
+                    Additional Details
+                </div>
+                """)
 
-            detail_left, detail_right = st.columns(2, gap="small")
+                details = [
+                    ("Priority", priority),
+                    ("POC 2", record["POC 2"]),
+                    ("POC 3", record["POC 3"]),
+                    ("Latitude", record["Lat"]),
+                    ("Longitude", record["Long"]),
+                    ("Check Status", status),
+                ]
 
-            for detail_index, (label, value) in enumerate(details):
-                detail_column = (
-                    detail_left
-                    if detail_index % 2 == 0
-                    else detail_right
-                )
-
-                with detail_column:
+                for label, value in details:
                     st.html(f"""
-                    <div class="detail-item">
-                        <div class="detail-label">
+                    <div class="pss-detail-row">
+                        <div class="pss-detail-label">
                             {safe_html(label)}
                         </div>
-                        <div class="detail-value">
+                        <div class="pss-detail-value">
                             {safe_html(value) or "—"}
                         </div>
                     </div>
                     """)
 
-            st.html(f"""
-            <div class="detail-item">
-                <div class="detail-label">Check Status</div>
-                <div class="detail-value">
+                badge_class = status_style(status)
+
+                st.html(f"""
+                <span class="status-pill {badge_class}">
                     {safe_html(status)}
-                </div>
-            </div>
-            """)
+                </span>
+                """)
+
+            def toggle_card(key=card_id):
+                current = set(
+                    st.session_state["expanded_intimation_cards"]
+                )
+
+                if key in current:
+                    current.remove(key)
+                else:
+                    current.add(key)
+
+                st.session_state["expanded_intimation_cards"] = current
+
+            st.button(
+                "Hide details ↑" if is_expanded else "View details ↓",
+                key=f"toggle_{card_id}",
+                use_container_width=True,
+                on_click=toggle_card,
+            )
 
 
 # =========================================================
