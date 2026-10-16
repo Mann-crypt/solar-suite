@@ -7,197 +7,335 @@ import pandas as pd
 import streamlit as st
 
 
-# ============================================================
-# PAGE CONFIGURATION
-# ============================================================
+# =========================================================
+# PAGE CONFIG
+# =========================================================
 
 st.set_page_config(
-    page_title="Intimation Dashboard",
+    page_title="Intimation | Dashboard",
     page_icon="📊",
     layout="wide",
+    initial_sidebar_state="collapsed",
 )
 
 EXCEL_PATH = Path(__file__).resolve().parent.parent / "intimation.xlsx"
 PAGE_SIZE = 20
-ALL_POC_LABEL = "All Users"
+ALL_USERS = "All Users"
 
 
-# ============================================================
-# CUSTOM CSS
-# ============================================================
+# =========================================================
+# AESTHETIC UI / CSS
+# =========================================================
 
 st.html("""
 <style>
+/* ---------- GLOBAL ---------- */
+.block-container {
+    max-width: 1500px;
+    padding-top: 1.3rem;
+    padding-bottom: 2rem;
+}
+
+[data-testid="stAppViewContainer"] {
+    background: var(--background-color);
+}
+
+div[data-testid="stVerticalBlock"] {
+    gap: 0.65rem;
+}
+
+hr {
+    margin: 0.65rem 0;
+    opacity: 0.20;
+}
+
+/* ---------- HEADER ---------- */
+.dash-header {
+    display: flex;
+    align-items: center;
+    gap: 13px;
+    margin-bottom: 3px;
+}
+
+.dash-logo {
+    width: 43px;
+    height: 43px;
+    min-width: 43px;
+    border-radius: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #2563eb, #6366f1);
+    color: white;
+    font-size: 21px;
+    font-weight: 800;
+}
+
+.dash-title {
+    font-size: 25px;
+    font-weight: 800;
+    letter-spacing: -0.7px;
+    line-height: 1.25;
+}
+
+.dash-subtitle {
+    font-size: 12px;
+    opacity: 0.68;
+    margin-top: 4px;
+}
+
+.section-heading {
+    font-size: 16px;
+    font-weight: 750;
+    letter-spacing: -0.2px;
+    margin-bottom: 0;
+}
+
+.section-caption {
+    font-size: 11px;
+    opacity: 0.65;
+    margin-top: -5px;
+}
+
+/* ---------- METRIC CARDS ---------- */
+div[data-testid="stMetric"] {
+    background: var(--secondary-background-color);
+    border: 1px solid rgba(128,128,128,0.17);
+    border-radius: 13px;
+    padding: 14px 15px;
+    min-height: 94px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.025);
+    gap: 5px;
+}
+
+div[data-testid="stMetricLabel"] {
+    font-size: 12px;
+    font-weight: 600;
+}
+
+div[data-testid="stMetricValue"] {
+    font-size: 25px;
+    font-weight: 800;
+    letter-spacing: -0.6px;
+}
+
+/* ---------- FILTERS ---------- */
+div[data-testid="stSelectbox"],
+div[data-testid="stMultiSelect"],
+div[data-testid="stTextInput"] {
+    margin-bottom: 0;
+}
+
+div[data-testid="stSelectbox"] label,
+div[data-testid="stMultiSelect"] label,
+div[data-testid="stTextInput"] label {
+    font-size: 12px;
+    font-weight: 650;
+}
+
+/* ---------- RECORD CARDS ---------- */
+/* Native expander border is the card border.
+   Details remain connected to the same card. */
+
+div[data-testid="stExpander"] {
+    border: 1px solid rgba(128,128,128,0.22) !important;
+    border-radius: 12px !important;
+    overflow: hidden;
+    background: var(--secondary-background-color);
+    margin-bottom: 0 !important;
+    box-shadow: 0 2px 7px rgba(0,0,0,0.025);
+    transition: border-color 0.15s ease;
+}
+
+div[data-testid="stExpander"]:hover {
+    border-color: rgba(99,102,241,0.65) !important;
+}
+
+div[data-testid="stExpander"] details summary {
+    padding: 11px 12px !important;
+    min-height: 55px;
+}
+
+div[data-testid="stExpander"] details summary:hover {
+    background: rgba(128,128,128,0.035);
+}
+
+div[data-testid="stExpander"] details div[data-testid="stExpanderDetails"] {
+    padding: 0 12px 12px 12px !important;
+}
+
+div[data-testid="stExpander"] details summary p {
+    font-size: 12px;
+    line-height: 1.45;
+    font-weight: 650;
+}
+
+.card-heading {
+    font-size: 13px;
+    font-weight: 800;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+}
+
+.card-state {
+    font-size: 11px;
+    opacity: 0.70;
+    margin-top: 3px;
+    overflow-wrap: anywhere;
+}
+
+.card-main-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    margin-top: 11px;
+    padding-top: 9px;
+    border-top: 1px solid rgba(128,128,128,0.17);
+}
+
+.card-poc {
+    font-size: 11px;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+    min-width: 0;
+}
+
+.card-capacity {
+    font-size: 13px;
+    font-weight: 800;
+    white-space: nowrap;
+}
+
+.card-detail-heading {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    font-weight: 750;
+    opacity: 0.65;
+    margin-bottom: 8px;
+}
+
+.detail-item {
+    padding: 7px 0;
+    border-bottom: 1px solid rgba(128,128,128,0.12);
+}
+
+.detail-label {
+    font-size: 10px;
+    opacity: 0.65;
+    margin-bottom: 2px;
+}
+
+.detail-value {
+    font-size: 12px;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+    white-space: normal;
+}
+
+.detail-item:last-child {
+    border-bottom: none;
+}
+
+/* ---------- RESULTS / PAGINATION ---------- */
+.results-count {
+    font-size: 12px;
+    opacity: 0.72;
+    padding-top: 7px;
+}
+
+.page-indicator {
+    text-align: center;
+    font-size: 12px;
+    font-weight: 650;
+    padding-top: 9px;
+}
+
+div.stButton > button {
+    border-radius: 9px;
+    font-size: 12px;
+    font-weight: 650;
+    min-height: 36px;
+}
+
+.empty-state {
+    text-align: center;
+    border: 1px dashed rgba(128,128,128,0.35);
+    border-radius: 14px;
+    padding: 35px 15px;
+    font-size: 13px;
+    opacity: 0.8;
+}
+
+/* ---------- RESPONSIVE ---------- */
+@media (max-width: 700px) {
     .block-container {
-        padding-top: 1.2rem;
-        padding-bottom: 1rem;
+        padding-left: 0.8rem;
+        padding-right: 0.8rem;
     }
 
-    .dashboard-heading {
-        font-size: 25px;
-        font-weight: 750;
-        margin-bottom: 2px;
-    }
-
-    .dashboard-subtitle {
-        font-size: 12px;
-        opacity: 0.70;
-        margin-bottom: 12px;
-    }
-
-    .overview-heading {
-        font-size: 15px;
-        font-weight: 700;
-        margin-bottom: 5px;
-    }
-
-    .intimation-card {
-        border: 1px solid rgba(128, 128, 128, 0.28);
-        border-radius: 8px;
-        padding: 8px 10px;
-        margin-bottom: 3px;
-        min-height: 82px;
-        overflow-wrap: anywhere;
-    }
-
-    .intimation-card-title {
-        font-size: 13px;
-        font-weight: 750;
-        line-height: 1.3;
-        margin-bottom: 3px;
-    }
-
-    .intimation-card-state {
-        font-size: 11px;
-        opacity: 0.72;
-        line-height: 1.25;
-        margin-bottom: 6px;
-    }
-
-    .intimation-card-bottom {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 8px;
-    }
-
-    .intimation-card-poc {
-        font-size: 11px;
-        line-height: 1.25;
-        flex: 1;
-        min-width: 0;
-        overflow-wrap: anywhere;
-    }
-
-    .intimation-card-capacity {
-        font-size: 12px;
-        font-weight: 750;
-        white-space: nowrap;
-    }
-
-    div[data-testid="stExpander"] {
-        margin-top: 0;
-        margin-bottom: 7px;
-    }
-
-    div[data-testid="stExpander"] details summary {
-        font-size: 11px;
-        padding-top: 3px;
-        padding-bottom: 3px;
-    }
-
-    div[data-testid="stExpander"] details div[data-testid="stExpanderDetails"] {
-        padding-top: 3px;
-        padding-bottom: 5px;
-    }
-
-    .detail-line {
-        font-size: 11px;
-        line-height: 1.55;
-        overflow-wrap: anywhere;
-    }
-
-    .pagination-label {
-        font-size: 12px;
-        opacity: 0.75;
-        text-align: center;
-        padding-top: 7px;
+    .dash-title {
+        font-size: 21px;
     }
 
     div[data-testid="stMetric"] {
-        padding: 9px 11px;
-        border: 1px solid rgba(128, 128, 128, 0.20);
-        border-radius: 8px;
-        gap: 2px;
-    }
-
-    div[data-testid="stMetricLabel"] {
-        font-size: 11px;
+        padding: 10px;
+        min-height: 82px;
     }
 
     div[data-testid="stMetricValue"] {
-        font-size: 23px;
+        font-size: 19px;
     }
-
-    @media (max-width: 700px) {
-        .dashboard-heading {
-            font-size: 21px;
-        }
-
-        .intimation-card {
-            padding: 7px 8px;
-        }
-    }
+}
 </style>
 """)
 
 
-# ============================================================
-# HELPER FUNCTIONS
-# ============================================================
+# =========================================================
+# HELPERS
+# =========================================================
 
-def normalize_header(value):
-    """Normalize column headers for flexible matching."""
+def norm(value):
     return "".join(
         str(value).strip().casefold().split()
     ).replace("_", "")
 
 
-def find_column(df, candidates, startswith=None):
-    """Find a column using alternative header names."""
-    normalized = {
-        normalize_header(column): column
-        for column in df.columns
-    }
+def find_column(df, candidates=(), startswith=None):
+    lookup = {norm(c): c for c in df.columns}
 
     for candidate in candidates:
-        key = normalize_header(candidate)
-        if key in normalized:
-            return normalized[key]
+        key = norm(candidate)
+        if key in lookup:
+            return lookup[key]
 
     if startswith:
-        prefix = normalize_header(startswith)
-        for column in df.columns:
-            if normalize_header(column).startswith(prefix):
-                return column
+        prefix = norm(startswith)
+        for col in df.columns:
+            if norm(col).startswith(prefix):
+                return col
 
     return None
 
 
-def clean_text(value):
-    """Convert missing values to an empty string."""
-    if pd.isna(value):
+def clean(value):
+    if value is None:
         return ""
+    try:
+        if pd.isna(value):
+            return ""
+    except (TypeError, ValueError):
+        pass
     return str(value).strip()
 
 
+def html_text(value):
+    return escape(clean(value))
+
+
 def unique_sorted(series):
-    """Return unique, non-empty values in sorted order."""
-    values = {
-        clean_text(value)
-        for value in series
-        if clean_text(value)
-    }
+    values = {clean(v) for v in series if clean(v)}
     return sorted(values, key=str.casefold)
 
 
@@ -205,102 +343,85 @@ def reset_page():
     st.session_state["intimation_page"] = 1
 
 
-def safe_number(value):
-    """Format a numeric value without raising errors."""
+def format_capacity(value):
     number = pd.to_numeric(value, errors="coerce")
     if pd.isna(number):
         return "—"
-    return f"{number:,.2f}"
+    return f"{number:,.2f} MW"
 
 
-def safe_html(value):
-    """Escape all spreadsheet text before displaying HTML."""
-    return escape(clean_text(value))
-
-
-# ============================================================
-# LOAD AND PREPARE EXCEL DATA
-# ============================================================
+# =========================================================
+# LOAD EXCEL
+# =========================================================
 
 @st.cache_data(show_spinner="Loading intimation records...")
 def load_data(file_path, modified_time):
-    del modified_time  # Used to invalidate the cache when Excel changes.
+    # modified_time changes when the Excel file changes.
+    del modified_time
 
-    raw_df = pd.read_excel(file_path)
-    raw_df.columns = [
-        str(column).strip()
-        for column in raw_df.columns
-    ]
+    raw = pd.read_excel(file_path)
+    raw.columns = [str(c).strip() for c in raw.columns]
 
-    # Prefer the specified Priority column, with fallbacks.
-    priority_col = find_column(
-        raw_df,
+    # Priority preference:
+    # 1. Priority as per 003 sheet
+    # 2. Priority as per Amresh Sir 28.07.2023
+    # 3. First column starting with Priority
+    priority_source = find_column(
+        raw,
         [
             "Priority as per 003 sheet",
             "Priority as per Amresh Sir 28.07.2023",
         ],
     )
 
-    if priority_col is None:
-        priority_col = find_column(
-            raw_df,
-            [],
+    if priority_source is None:
+        priority_source = find_column(
+            raw,
             startswith="Priority",
         )
 
-    # Find alternative versions of expected headers.
-    column_candidates = {
+    aliases = {
         "Lat": ["Lat", "Latitude"],
         "Long": ["Long", "Longitude", "Lon"],
         "PSS": ["PSS", "PSS Name"],
         "State": ["State"],
-        "Capacity (MW)": ["Capacity (MW)", "Capacity MW", "Capacity"],
+        "Capacity (MW)": [
+            "Capacity (MW)",
+            "Capacity MW",
+            "Capacity",
+        ],
         "POC1": ["POC1", "POC 1"],
         "POC 2": ["POC 2", "POC2"],
         "POC 3": ["POC 3", "POC3"],
         "Check Status": ["Check Status", "Status"],
     }
 
-    data = pd.DataFrame(index=raw_df.index)
+    output = pd.DataFrame(index=raw.index)
 
-    for target, candidates in column_candidates.items():
-        source = find_column(raw_df, candidates)
+    for target, candidates in aliases.items():
+        source = find_column(raw, candidates)
+        output[target] = (
+            raw[source] if source is not None else ""
+        )
 
-        if source is not None:
-            data[target] = raw_df[source]
-        else:
-            data[target] = ""
+    output["Priority"] = (
+        raw[priority_source]
+        if priority_source is not None
+        else ""
+    )
 
-    if priority_col is not None:
-        data["Priority"] = raw_df[priority_col]
-    else:
-        data["Priority"] = ""
+    for column in [
+        "Lat", "Long", "PSS", "State", "Priority",
+        "POC1", "POC 2", "POC 3", "Check Status",
+    ]:
+        output[column] = output[column].map(clean)
 
-    # These fields are displayed as text.
-    text_columns = [
-        "PSS",
-        "State",
-        "POC1",
-        "POC 2",
-        "POC 3",
-        "Priority",
-        "Check Status",
-    ]
-
-    for column in text_columns:
-        data[column] = data[column].map(clean_text)
-
-    # Numeric capacity is used for accurate overview totals.
-    data["Capacity (MW)"] = pd.to_numeric(
-        data["Capacity (MW)"],
+    output["Capacity (MW)"] = pd.to_numeric(
+        output["Capacity (MW)"],
         errors="coerce",
     )
 
-    data["Lat"] = data["Lat"].map(clean_text)
-    data["Long"] = data["Long"].map(clean_text)
-
-    # Keep the expected output columns only.
-    data = data[
+    output = output[
         [
             "Lat",
             "Long",
@@ -315,31 +436,37 @@ def load_data(file_path, modified_time):
         ]
     ]
 
-    # Remove rows with no useful record identity.
-    data = data[
-        data["PSS"].ne("")
-        | data["State"].ne("")
-        | data["POC1"].ne("")
-    ].copy()
+    # Remove completely unidentifiable rows.
+    has_identity = (
+        output["PSS"].ne("")
+        | output["State"].ne("")
+        | output["POC1"].ne("")
+    )
 
-    return data.reset_index(drop=True)
+    return output.loc[has_identity].reset_index(drop=True)
 
 
-# ============================================================
-# DASHBOARD HEADER
-# ============================================================
+# =========================================================
+# HEADER
+# =========================================================
 
 st.html("""
-<div class="dashboard-heading">Intimation Dashboard</div>
-<div class="dashboard-subtitle">
-    Search, filter and review intimation records
+<div class="dash-header">
+    <div class="dash-logo">I</div>
+    <div>
+        <div class="dash-title">Intimation Dashboard</div>
+        <div class="dash-subtitle">
+            Record management · Capacity overview · PSS directory
+        </div>
+    </div>
 </div>
 """)
 
 if not EXCEL_PATH.exists():
     st.error(
-        f"Excel file not found: {EXCEL_PATH}. "
-        "Place intimation.xlsx in the repository root."
+        f"Could not find `{EXCEL_PATH.name}` at "
+        f"`{EXCEL_PATH.parent}`. Place intimation.xlsx in "
+        "your repository root."
     )
     st.stop()
 
@@ -348,36 +475,34 @@ try:
         str(EXCEL_PATH),
         EXCEL_PATH.stat().st_mtime,
     )
-except Exception as error:
-    st.error(f"Unable to load intimation.xlsx: {error}")
+except Exception as exc:
+    st.error(f"Could not read the Excel file: {exc}")
     st.stop()
 
 if df.empty:
-    st.warning("No records were found in the Excel file.")
+    st.warning("No usable records were found in the Excel file.")
     st.stop()
 
 
-# ============================================================
-# CREATE OVERVIEW SLOT ABOVE FILTERS
-# The slot is filled after the connected filters are evaluated.
-# ============================================================
+# =========================================================
+# OVERVIEW SLOT
+# It is populated later but remains above the filters.
+# =========================================================
 
 overview_slot = st.container()
 
 
-# ============================================================
-# FILTERS — INTERCONNECTED / CASCADING
-#
-# POC1 options depend on PSS search + selected states.
-# State options depend on PSS search + selected POC1.
-# PSS search affects the available options for both filters.
-# ============================================================
+# =========================================================
+# FILTERS
+# Each filter's options are based on the other active filters.
+# =========================================================
 
-st.markdown("### Filters")
+st.html("""
+<div class="section-heading">Filters</div>
+""")
 
-# Initialize persistent widget state.
 if "intimation_poc1" not in st.session_state:
-    st.session_state["intimation_poc1"] = ALL_POC_LABEL
+    st.session_state["intimation_poc1"] = ALL_USERS
 
 if "intimation_states" not in st.session_state:
     st.session_state["intimation_states"] = []
@@ -389,23 +514,22 @@ if "intimation_page" not in st.session_state:
     st.session_state["intimation_page"] = 1
 
 
-filter_col1, filter_col2, filter_col3 = st.columns(
+filter_poc_col, filter_pss_col, filter_state_col = st.columns(
     [1.0, 1.5, 1.2],
-    gap="small",
+    gap="medium",
 )
 
-# PSS search is the starting point for option discovery.
-with filter_col2:
+# PSS search first: it constrains all other available options.
+with filter_pss_col:
     st.text_input(
         "Search PSS",
-        placeholder="Type PSS name...",
+        placeholder="Search by PSS name...",
         key="intimation_pss_search",
         on_change=reset_page,
     )
 
 pss_query = st.session_state["intimation_pss_search"].strip()
 
-# Build a PSS mask.
 if pss_query:
     pss_mask = df["PSS"].str.contains(
         pss_query,
@@ -416,36 +540,34 @@ if pss_query:
 else:
     pss_mask = pd.Series(True, index=df.index)
 
-# Get currently selected states before rendering POC1.
+
+# ---------- POC OPTIONS ----------
+# POC options depend on PSS search and selected States.
+
 selected_states = st.session_state.get(
     "intimation_states", []
 )
 
-# POC1 options depend on search and selected states.
-poc_discovery_mask = pss_mask.copy()
+poc_mask = pss_mask.copy()
 
 if selected_states:
-    poc_discovery_mask &= df["State"].isin(selected_states)
+    poc_mask &= df["State"].isin(selected_states)
 
-poc_values = unique_sorted(
-    df.loc[poc_discovery_mask, "POC1"]
-)
+poc_values = unique_sorted(df.loc[poc_mask, "POC1"])
 
-poc_options = [ALL_POC_LABEL] + [
+poc_options = [ALL_USERS] + [
     value for value in poc_values
-    if value != ALL_POC_LABEL
+    if value != ALL_USERS
 ]
 
 current_poc = st.session_state.get(
-    "intimation_poc1", ALL_POC_LABEL
+    "intimation_poc1", ALL_USERS
 )
 
-# Keep the current selection valid.
 if current_poc not in poc_options:
-    current_poc = ALL_POC_LABEL
-    st.session_state["intimation_poc1"] = ALL_POC_LABEL
+    st.session_state["intimation_poc1"] = ALL_USERS
 
-with filter_col1:
+with filter_poc_col:
     st.selectbox(
         "POC1",
         options=poc_options,
@@ -455,30 +577,33 @@ with filter_col1:
 
 selected_poc = st.session_state["intimation_poc1"]
 
-# State options depend on PSS search and selected POC1.
-state_discovery_mask = pss_mask.copy()
 
-if selected_poc != ALL_POC_LABEL:
-    state_discovery_mask &= df["POC1"].eq(selected_poc)
+# ---------- STATE OPTIONS ----------
+# State options depend on PSS search and selected POC1.
+
+state_mask = pss_mask.copy()
+
+if selected_poc != ALL_USERS:
+    state_mask &= df["POC1"].eq(selected_poc)
 
 available_states = unique_sorted(
-    df.loc[state_discovery_mask, "State"]
+    df.loc[state_mask, "State"]
 )
 
-# Preserve only state selections still valid for this POC1 + PSS.
 selected_states = st.session_state.get(
     "intimation_states", []
 )
 
-valid_selected_states = [
+# Remove state selections that are no longer valid.
+valid_states = [
     state for state in selected_states
     if state in available_states
 ]
 
-if valid_selected_states != selected_states:
-    st.session_state["intimation_states"] = valid_selected_states
+if valid_states != selected_states:
+    st.session_state["intimation_states"] = valid_states
 
-with filter_col3:
+with filter_state_col:
     st.multiselect(
         "State",
         options=available_states,
@@ -490,13 +615,12 @@ with filter_col3:
 selected_states = st.session_state["intimation_states"]
 
 
-# ============================================================
-# APPLY ALL ACTIVE FILTERS TO THE DATA
-# ============================================================
+# =========================================================
+# APPLY FILTERS
+# =========================================================
 
 filtered_df = df.copy()
 
-# PSS search
 if pss_query:
     filtered_df = filtered_df[
         filtered_df["PSS"].str.contains(
@@ -507,13 +631,11 @@ if pss_query:
         )
     ]
 
-# POC1 selection
-if selected_poc != ALL_POC_LABEL:
+if selected_poc != ALL_USERS:
     filtered_df = filtered_df[
         filtered_df["POC1"].eq(selected_poc)
     ]
 
-# State selection
 if selected_states:
     filtered_df = filtered_df[
         filtered_df["State"].isin(selected_states)
@@ -522,17 +644,22 @@ if selected_states:
 filtered_df = filtered_df.reset_index(drop=True)
 
 
-# ============================================================
-# OVERVIEW — DISPLAYED ABOVE FILTERS AND RECORDS
-# ============================================================
+# =========================================================
+# OVERVIEW METRICS
+# =========================================================
 
 with overview_slot:
-    st.markdown(
-        '<div class="overview-heading">Overview</div>',
-        unsafe_allow_html=True,
-    )
+    st.html("""
+    <div class="section-heading">Overview</div>
+    <div class="section-caption">
+        Live summary based on your selected filters
+    </div>
+    """)
 
-    metric1, metric2, metric3 = st.columns(3, gap="small")
+    metric_records, metric_capacity, metric_pss = st.columns(
+        3,
+        gap="medium",
+    )
 
     total_capacity = filtered_df["Capacity (MW)"].sum(
         min_count=1
@@ -541,100 +668,141 @@ with overview_slot:
     if pd.isna(total_capacity):
         total_capacity = 0.0
 
-    unique_pss = filtered_df.loc[
+    unique_pss_count = filtered_df.loc[
         filtered_df["PSS"].ne(""), "PSS"
     ].nunique()
 
-    metric1.metric(
+    metric_records.metric(
         "Matching Records",
         f"{len(filtered_df):,}",
     )
 
-    metric2.metric(
+    metric_capacity.metric(
         "Total Capacity",
         f"{total_capacity:,.2f} MW",
     )
 
-    metric3.metric(
+    metric_pss.metric(
         "Unique PSS",
-        f"{unique_pss:,}",
+        f"{unique_pss_count:,}",
     )
 
     st.divider()
 
 
-# ============================================================
+# =========================================================
 # FIND RECORDS
-# ============================================================
+# =========================================================
 
-st.markdown("### Find Records")
+st.html("""
+<div class="section-heading">Find Records</div>
+""")
 
 if filtered_df.empty:
-    st.info(
-        "No records match the selected filters. "
-        "Try changing POC1, PSS search or State."
-    )
+    st.html("""
+    <div class="empty-state">
+        <div style="font-size:25px; margin-bottom:8px;">⌕</div>
+        <b>No matching records</b>
+        <div style="margin-top:5px;">
+            Try changing the POC1, PSS search or State filters.
+        </div>
+    </div>
+    """)
     st.stop()
+
+
+# =========================================================
+# PAGINATION STATE
+# =========================================================
 
 total_records = len(filtered_df)
 total_pages = max(1, math.ceil(total_records / PAGE_SIZE))
 
-# Clamp the page when filtering reduces the result count.
 current_page = st.session_state.get("intimation_page", 1)
 current_page = max(1, min(current_page, total_pages))
 st.session_state["intimation_page"] = current_page
 
-start_index = (current_page - 1) * PAGE_SIZE
-end_index = min(start_index + PAGE_SIZE, total_records)
+start = (current_page - 1) * PAGE_SIZE
+end = min(start + PAGE_SIZE, total_records)
 
-st.caption(
-    f"Showing {start_index + 1:,}–{end_index:,} "
-    f"of {total_records:,} records"
+st.html(
+    f"""
+    <div class="results-count">
+        Showing <b>{start + 1:,}–{end:,}</b>
+        of <b>{total_records:,}</b> matching records
+    </div>
+    """
 )
 
+page_df = filtered_df.iloc[start:end]
 
-# ============================================================
-# COMPACT RECORD CARDS — TWO COLUMNS
-# ============================================================
 
-page_df = filtered_df.iloc[start_index:end_index]
+# =========================================================
+# COMPACT, CONNECTED, EXPANDABLE CARDS
+# Two columns, 20 records per page.
+# =========================================================
 
-left_column, right_column = st.columns(2, gap="small")
+card_col_left, card_col_right = st.columns(
+    2,
+    gap="medium",
+)
 
-for position, (_, record) in enumerate(page_df.iterrows()):
-    target_column = (
-        left_column if position % 2 == 0 else right_column
+for index, (_, record) in enumerate(page_df.iterrows()):
+    column = (
+        card_col_left
+        if index % 2 == 0
+        else card_col_right
     )
 
-    with target_column:
-        pss = safe_html(record["PSS"]) or "Unnamed PSS"
-        state = safe_html(record["State"]) or "State unavailable"
-        poc1 = safe_html(record["POC1"]) or "Not specified"
+    pss_raw = clean(record["PSS"]) or "Unnamed PSS"
+    state_raw = clean(record["State"]) or "State unavailable"
+    poc1_raw = clean(record["POC1"]) or "Not specified"
 
-        capacity_value = record["Capacity (MW)"]
-        if pd.isna(capacity_value):
-            capacity_label = "—"
-        else:
-            capacity_label = f"{capacity_value:,.2f} MW"
+    capacity_raw = record["Capacity (MW)"]
+    capacity_label = format_capacity(capacity_raw)
 
-        card_html = f"""
-        <div class="intimation-card">
-            <div class="intimation-card-title">{pss}</div>
-            <div class="intimation-card-state">{state}</div>
-            <div class="intimation-card-bottom">
-                <div class="intimation-card-poc">
-                    <b>POC1:</b> {poc1}
+    # Compact summary shown on the clickable card header.
+    # Use plain text for the expander label; HTML is escaped.
+    summary_label = (
+        f"{pss_raw}  ·  {state_raw}  ·  {capacity_label}"
+    )
+
+    with column:
+        # One native expander = one card.
+        # Details are inside the same card border.
+        with st.expander(
+            summary_label,
+            expanded=False,
+        ):
+            st.html(f"""
+            <div class="card-heading">
+                {html_text(pss_raw)}
+            </div>
+
+            <div class="card-state">
+                {html_text(state_raw)}
+            </div>
+
+            <div class="card-main-row">
+                <div class="card-poc">
+                    <b>POC1</b><br>
+                    {html_text(poc1_raw)}
                 </div>
-                <div class="intimation-card-capacity">
-                    {safe_html(capacity_label)}
+                <div class="card-capacity">
+                    {html_text(capacity_label)}
                 </div>
             </div>
-        </div>
-        """
 
-        st.html(card_html)
+            <div style="height: 12px;"></div>
 
-        with st.expander("View details", expanded=False):
+            <div class="card-detail-heading">
+                Record details
+            </div>
+            """)
+
+            # Display remaining information in two compact columns.
+            detail_columns = st.columns(2, gap="small")
+
             details = [
                 ("Priority", record["Priority"]),
                 ("POC 2", record["POC 2"]),
@@ -644,32 +812,37 @@ for position, (_, record) in enumerate(page_df.iterrows()):
                 ("Check Status", record["Check Status"]),
             ]
 
-            for label, value in details:
-                value_text = safe_html(value) or "—"
+            for detail_index, (label, value) in enumerate(details):
+                target = detail_columns[detail_index % 2]
 
-                st.html(
-                    f"""
-                    <div class="detail-line">
-                        <b>{escape(label)}:</b> {value_text}
+                with target:
+                    st.html(f"""
+                    <div class="detail-item">
+                        <div class="detail-label">
+                            {html_text(label)}
+                        </div>
+                        <div class="detail-value">
+                            {html_text(value) or "—"}
+                        </div>
                     </div>
-                    """
-                )
+                    """)
 
 
-# ============================================================
-# PAGINATION
-# ============================================================
+# =========================================================
+# PAGINATION CONTROLS
+# =========================================================
 
 st.divider()
 
-page_col1, page_col2, page_col3 = st.columns(
-    [1, 2, 1],
+previous_col, page_col, next_col = st.columns(
+    [1, 1.2, 1],
     gap="small",
 )
 
-with page_col1:
+with previous_col:
     st.button(
         "← Previous",
+        key="intimation_previous",
         disabled=(current_page <= 1),
         use_container_width=True,
         on_click=lambda: st.session_state.update(
@@ -680,17 +853,18 @@ with page_col1:
         ),
     )
 
-with page_col2:
+with page_col:
     st.markdown(
-        f'<div class="pagination-label">'
+        f'<div class="page-indicator">'
         f'Page {current_page} of {total_pages}'
         f'</div>',
         unsafe_allow_html=True,
     )
 
-with page_col3:
+with next_col:
     st.button(
         "Next →",
+        key="intimation_next",
         disabled=(current_page >= total_pages),
         use_container_width=True,
         on_click=lambda: st.session_state.update(
