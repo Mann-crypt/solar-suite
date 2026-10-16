@@ -220,7 +220,10 @@ display_columns = [
 
 display_df = filtered_df[display_columns].copy()
 
-
+st.write("Total Excel records:", len(df))
+st.write("Records after filters:", len(filtered_df))
+st.write("Records for display:", len(display_df))
+st.write("Display columns:", list(display_df.columns))
 # --------------------------------------------------
 # COMPACT INTIMATION CARDS
 # --------------------------------------------------
