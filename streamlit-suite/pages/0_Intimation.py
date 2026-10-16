@@ -22,7 +22,7 @@ st.set_page_config(
 
 
 # =========================================================
-# CLEAN, SPACIOUS UI
+# CUSTOM UI
 # =========================================================
 
 st.html("""
@@ -33,37 +33,37 @@ st.html("""
 
     .block-container {
         max-width: 1450px;
-        padding-top: 1.15rem;
+        padding-top: 1rem;
         padding-bottom: 1.5rem;
     }
 
-    /* Header */
+    /* Dashboard header */
     .dashboard-header {
-        padding: 19px 22px;
-        margin-bottom: 18px;
+        padding: 17px 21px;
+        margin-bottom: 15px;
         border-radius: 15px;
-        background: linear-gradient(115deg, #172554, #1d4ed8 70%, #3b82f6);
+        background: linear-gradient(115deg, #172554, #1d4ed8 72%, #3b82f6);
         color: white;
-        box-shadow: 0 5px 16px rgba(37, 99, 235, .12);
+        box-shadow: 0 5px 15px rgba(37, 99, 235, .12);
     }
 
     .header-label {
         display: inline-block;
-        padding: 4px 9px;
-        margin-bottom: 8px;
+        padding: 3px 8px;
+        margin-bottom: 7px;
         border: 1px solid rgba(255,255,255,.25);
         border-radius: 20px;
         background: rgba(255,255,255,.10);
         color: #dbeafe;
-        font-size: 10px;
-        font-weight: 700;
+        font-size: 9px;
+        font-weight: 750;
         letter-spacing: 1px;
     }
 
     .dashboard-header h1 {
         margin: 0;
-        color: white;
-        font-size: 28px;
+        color: #fff;
+        font-size: 27px;
         font-weight: 800;
         letter-spacing: -.5px;
     }
@@ -71,17 +71,17 @@ st.html("""
     .dashboard-header p {
         margin: 5px 0 0;
         color: #dbeafe;
-        font-size: 12px;
+        font-size: 11px;
     }
 
-    /* Section heading */
+    /* Section headings */
     .section-heading {
         display: flex;
         align-items: center;
-        gap: 9px;
-        margin: 18px 0 10px;
+        gap: 8px;
+        margin: 16px 0 9px;
         color: #1e293b;
-        font-size: 15px;
+        font-size: 14px;
         font-weight: 800;
     }
 
@@ -89,8 +89,8 @@ st.html("""
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        width: 28px;
-        height: 28px;
+        width: 27px;
+        height: 27px;
         border-radius: 8px;
         background: #e8efff;
         color: #1d4ed8;
@@ -103,15 +103,15 @@ st.html("""
         font-size: 11px;
     }
 
-    /* Overview metrics */
+    /* Overview */
     .metric-card {
         position: relative;
         overflow: hidden;
-        min-height: 91px;
-        padding: 14px 17px;
-        border-radius: 13px;
+        min-height: 83px;
+        padding: 13px 16px;
+        border-radius: 12px;
         color: white;
-        box-shadow: 0 4px 12px rgba(15,23,42,.07);
+        box-shadow: 0 4px 12px rgba(15,23,42,.065);
     }
 
     .metric-records {
@@ -126,133 +126,148 @@ st.html("""
         color: rgba(255,255,255,.88);
         font-size: 10px;
         font-weight: 750;
-        letter-spacing: .8px;
+        letter-spacing: .7px;
         text-transform: uppercase;
     }
 
     .metric-value {
-        margin-top: 6px;
+        margin-top: 5px;
         color: white;
-        font-size: 27px;
-        line-height: 1.2;
+        font-size: 25px;
+        line-height: 1.25;
         font-weight: 800;
     }
 
     .metric-icon {
         position: absolute;
-        top: 13px;
-        right: 15px;
-        font-size: 23px;
+        top: 12px;
+        right: 14px;
+        font-size: 22px;
         opacity: .65;
     }
 
-    /* Card wrapper */
+    /* PSS card */
     div[data-testid="stVerticalBlockBorderWrapper"] {
-        border-color: #e1e8f2 !important;
-        border-radius: 13px !important;
-        background: #ffffff !important;
-        box-shadow: 0 2px 8px rgba(15,23,42,.035);
-        transition: border-color .15s ease, box-shadow .15s ease;
+        border-color: #e2e8f0 !important;
+        border-radius: 12px !important;
+        background: #fff !important;
+        box-shadow: 0 2px 7px rgba(15,23,42,.035);
+        transition: border-color .16s ease, box-shadow .16s ease;
     }
 
     div[data-testid="stVerticalBlockBorderWrapper"]:hover {
-        border-color: #b9cef8 !important;
-        box-shadow: 0 5px 13px rgba(37,99,235,.07);
+        border-color: #b9cdf6 !important;
+        box-shadow: 0 4px 12px rgba(37,99,235,.07);
     }
 
-    /* Card title */
+    /* Compact collapsed card title */
     .pss-title-row {
         display: flex;
         align-items: center;
-        gap: 9px;
+        gap: 8px;
         min-width: 0;
-        margin-bottom: 12px;
+        margin-bottom: 8px;
     }
 
     .pss-icon {
         display: flex;
-        flex: 0 0 34px;
+        flex: 0 0 31px;
         align-items: center;
         justify-content: center;
-        width: 34px;
-        height: 34px;
-        border-radius: 10px;
-        background: #eff6ff;
+        width: 31px;
+        height: 31px;
+        border-radius: 9px;
         border: 1px solid #dbeafe;
-        font-size: 16px;
+        background: linear-gradient(135deg, #dbeafe, #f0f7ff);
+        font-size: 15px;
     }
 
     .pss-heading {
         color: #172554;
-        font-size: 13px;
+        font-size: 12px;
         font-weight: 800;
-        line-height: 1.4;
+        line-height: 1.35;
         overflow-wrap: anywhere;
     }
 
     .pss-subheading {
         margin-top: 2px;
         color: #94a3b8;
-        font-size: 9px;
-        font-weight: 700;
-        letter-spacing: .65px;
+        font-size: 8px;
+        font-weight: 750;
+        letter-spacing: .7px;
         text-transform: uppercase;
     }
 
-    /* Compact information */
+    /* Compact information tiles */
     .pss-info-grid {
         display: grid;
         grid-template-columns: 1fr 1fr;
-        gap: 8px;
-        margin-bottom: 8px;
+        gap: 6px;
+        margin-bottom: 6px;
     }
 
     .pss-info {
         min-width: 0;
-        padding: 9px 10px;
+        padding: 7px 8px;
         border: 1px solid #edf1f7;
-        border-radius: 9px;
+        border-radius: 8px;
         background: #f8fafc;
     }
 
     .pss-info-label {
-        margin-bottom: 4px;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        margin-bottom: 3px;
         color: #94a3b8;
-        font-size: 9px;
+        font-size: 8px;
         font-weight: 800;
-        letter-spacing: .65px;
+        letter-spacing: .55px;
         text-transform: uppercase;
     }
 
     .pss-info-value {
         color: #334155;
-        font-size: 12px;
-        font-weight: 700;
-        line-height: 1.4;
+        font-size: 11px;
+        font-weight: 750;
+        line-height: 1.35;
         overflow-wrap: anywhere;
     }
 
     .capacity-tile {
-        background: #eff6ff;
         border-color: #dbeafe;
+        background: #eff6ff;
     }
 
     .capacity-tile .pss-info-value {
         color: #1d4ed8;
     }
 
-    .state-tile {
+    .location-tile {
+        border-color: #d1fae5;
         background: #f0fdf4;
-        border-color: #dcfce7;
     }
 
-    .state-tile .pss-info-value {
+    .location-tile .pss-info-value {
         color: #047857;
     }
 
-    /* Expandable details */
+    .poc-tile {
+        padding: 7px 8px;
+        border: 1px solid #edf1f7;
+        border-radius: 8px;
+        background: #fafbfe;
+    }
+
+    /* Keep copy button compact */
+    div[data-testid="stVerticalBlock"] iframe {
+        border: 0;
+    }
+
+    /* Expanded details remain comfortable */
     div[data-testid="stExpander"] {
-        margin-top: 8px;
+        margin-top: 7px;
         border: 1px solid #e7edf6 !important;
         border-radius: 9px !important;
         background: #fbfdff !important;
@@ -262,8 +277,9 @@ st.html("""
     div[data-testid="stExpander"] summary {
         padding-top: 7px !important;
         padding-bottom: 7px !important;
+        color: #334155 !important;
         font-size: 11px !important;
-        font-weight: 700 !important;
+        font-weight: 750 !important;
     }
 
     .detail-tile {
@@ -304,31 +320,14 @@ st.html("""
         overflow-wrap: anywhere;
     }
 
-    /* Buttons */
+    /* Inputs and buttons */
     .stButton > button {
-        border-radius: 9px;
+        border-radius: 8px;
         font-weight: 650;
     }
 
-    /* Empty state */
-    .empty-state {
-        padding: 24px 15px;
-        border: 1px dashed #cbd5e1;
-        border-radius: 12px;
-        background: white;
-        color: #64748b;
-        text-align: center;
-    }
-
-    .empty-state strong {
-        display: block;
-        margin-bottom: 5px;
-        color: #334155;
-        font-size: 15px;
-    }
-
     .results-caption {
-        margin: 2px 0 11px;
+        margin: 2px 0 9px;
         color: #64748b;
         font-size: 11px;
     }
@@ -341,23 +340,42 @@ st.html("""
         font-weight: 700;
     }
 
-    /* Moderate spacing, not overly compact */
+    .empty-state {
+        padding: 23px 14px;
+        border: 1px dashed #cbd5e1;
+        border-radius: 12px;
+        background: white;
+        color: #64748b;
+        text-align: center;
+    }
+
+    .empty-state strong {
+        display: block;
+        margin-bottom: 5px;
+        color: #334155;
+        font-size: 14px;
+    }
+
     @media (max-width: 700px) {
         .block-container {
-            padding-left: .7rem;
-            padding-right: .7rem;
+            padding-left: .65rem;
+            padding-right: .65rem;
         }
 
         .dashboard-header {
-            padding: 16px;
+            padding: 15px;
         }
 
         .dashboard-header h1 {
-            font-size: 23px;
+            font-size: 22px;
         }
 
         .metric-value {
-            font-size: 23px;
+            font-size: 22px;
+        }
+
+        .pss-heading {
+            font-size: 11px;
         }
     }
 </style>
@@ -422,7 +440,7 @@ def numeric_value(value):
 
         return float(match.group()) if match else 0.0
 
-    except (ValueError, TypeError):
+    except (TypeError, ValueError):
         return 0.0
 
 
@@ -465,7 +483,8 @@ def detail_item(label, value, status=False):
 
 
 def render_copy_button(pss_name, card_key):
-    # Separate iframe keeps copy interaction isolated from the expander.
+    """Copy button runs in an isolated iframe."""
+
     js_text = json.dumps(str(pss_name))
 
     components.html(
@@ -479,20 +498,20 @@ def render_copy_button(pss_name, card_key):
         ">
             <button id="copy_{card_key}" title="Copy PSS name"
                 style="
-                    height:32px;
-                    min-width:38px;
+                    height:29px;
+                    min-width:34px;
                     cursor:pointer;
                     border:1px solid #dbeafe;
-                    border-radius:9px;
+                    border-radius:8px;
                     background:#eff6ff;
                     color:#1d4ed8;
-                    font-size:16px;
+                    font-size:15px;
                 ">⚡</button>
             <span id="msg_{card_key}" style="
                 display:none;
-                margin:8px 0 0 5px;
+                margin:7px 0 0 4px;
                 color:#047857;
-                font-size:10px;
+                font-size:9px;
                 font-weight:700;
             ">Copied</span>
         </div>
@@ -533,7 +552,7 @@ def render_copy_button(pss_name, card_key):
         }});
         </script>
         """,
-        height=38,
+        height=34,
         scrolling=False,
     )
 
@@ -556,9 +575,11 @@ def render_pss_card(row, columns, card_key):
         if columns["poc1"] else "—"
     )
 
+    # Coordinates are displayed in the expanded details.
+    # The location pin indicates the location/state field.
     with st.container(border=True):
         title_col, copy_col = st.columns(
-            [5.5, 0.8],
+            [5.7, 0.8],
             vertical_alignment="center",
             gap="small",
         )
@@ -584,17 +605,18 @@ def render_pss_card(row, columns, card_key):
             f"""
             <div class="pss-info-grid">
                 <div class="pss-info capacity-tile">
-                    <div class="pss-info-label">Capacity</div>
+                    <div class="pss-info-label">⚡ Capacity</div>
                     <div class="pss-info-value">{safe_html(capacity)}</div>
                 </div>
-                <div class="pss-info state-tile">
-                    <div class="pss-info-label">State</div>
+
+                <div class="pss-info location-tile">
+                    <div class="pss-info-label">📍 Location</div>
                     <div class="pss-info-value">{safe_html(state)}</div>
                 </div>
             </div>
 
-            <div class="pss-info">
-                <div class="pss-info-label">POC 1</div>
+            <div class="poc-tile">
+                <div class="pss-info-label">👤 POC 1</div>
                 <div class="pss-info-value">{safe_html(poc1)}</div>
             </div>
             """,
@@ -616,7 +638,7 @@ def render_pss_card(row, columns, card_key):
                     if columns["poc2"] else "—",
                 )
                 detail_item(
-                    "Latitude",
+                    "📍 Latitude",
                     row[columns["lat"]]
                     if columns["lat"] else "—",
                 )
@@ -628,7 +650,7 @@ def render_pss_card(row, columns, card_key):
                     if columns["poc3"] else "—",
                 )
                 detail_item(
-                    "Longitude",
+                    "📍 Longitude",
                     row[columns["long"]]
                     if columns["long"] else "—",
                 )
@@ -641,7 +663,7 @@ def render_pss_card(row, columns, card_key):
 
 
 # =========================================================
-# LOAD EXCEL
+# LOAD EXCEL FILE
 # =========================================================
 
 @st.cache_data(show_spinner="Loading intimation data...")
@@ -746,7 +768,7 @@ if columns["pss"] is None:
 
 
 # =========================================================
-# DASHBOARD HEADER
+# HEADER
 # =========================================================
 
 st.markdown(
@@ -754,7 +776,7 @@ st.markdown(
     <div class="dashboard-header">
         <div class="header-label">SOLAR SUITE · OPERATIONS</div>
         <h1>⚡ Intimation Dashboard</h1>
-        <p>Search PSS sites, refine filters and view site details.</p>
+        <p>Search PSS sites, filter records and inspect site details.</p>
     </div>
     """,
     unsafe_allow_html=True,
@@ -762,7 +784,7 @@ st.markdown(
 
 
 # =========================================================
-# FILTERS
+# SEARCH AND DEPENDENT FILTERS
 # =========================================================
 
 st.markdown(
@@ -772,20 +794,21 @@ st.markdown(
         Search & Filters
     </div>
     <div class="filter-caption">
-        Start typing a PSS name to see suggestions. POC 1 and State
-        options update automatically based on your selections.
+        Type or select a PSS name. POC 1 and State options adjust
+        to the selected filters.
     </div>
     """,
     unsafe_allow_html=True,
 )
 
-# PSS suggestions are searchable directly inside the selectbox.
-# A blank selection means all PSS sites.
+filter1, filter2, filter3 = st.columns(
+    [2.0, 1.25, 1.25],
+    gap="medium",
+)
+
 pss_values = unique_values(df[columns["pss"]])
 
-f1, f2, f3 = st.columns([2.0, 1.25, 1.25], gap="medium")
-
-with f1:
+with filter1:
     selected_pss = st.selectbox(
         "Search PSS",
         options=pss_values,
@@ -794,7 +817,6 @@ with f1:
         key="intimation_pss_autocomplete",
     )
 
-# Filter by the selected PSS first.
 search_df = df.copy()
 
 if selected_pss:
@@ -806,8 +828,7 @@ if selected_pss:
         == selected_pss
     ]
 
-# POC1 suggestions depend on the selected PSS.
-with f2:
+with filter2:
     if columns["poc1"]:
         poc1_values = unique_values(search_df[columns["poc1"]])
 
@@ -828,7 +849,6 @@ with f2:
             key="intimation_poc1_unavailable",
         )
 
-# State suggestions depend on both PSS and POC1.
 state_source = search_df.copy()
 
 if selected_poc1 and columns["poc1"]:
@@ -840,7 +860,7 @@ if selected_poc1 and columns["poc1"]:
         == selected_poc1
     ]
 
-with f3:
+with filter3:
     if columns["state"]:
         state_values = unique_values(state_source[columns["state"]])
 
@@ -861,7 +881,6 @@ with f3:
             key="intimation_state_unavailable",
         )
 
-# Apply selections to the final result.
 filtered_df = search_df.copy()
 
 if selected_poc1 and columns["poc1"]:
@@ -886,7 +905,7 @@ filtered_df = filtered_df.reset_index(drop=True)
 
 
 # =========================================================
-# OVERVIEW
+# OVERVIEW METRICS
 # =========================================================
 
 record_count = len(filtered_df)
@@ -938,7 +957,10 @@ filter_signature = (
     selected_state or "",
 )
 
-if st.session_state.get("intimation_filter_signature") != filter_signature:
+if (
+    st.session_state.get("intimation_filter_signature")
+    != filter_signature
+):
     st.session_state["intimation_filter_signature"] = filter_signature
     st.session_state["intimation_page"] = 1
 
@@ -974,7 +996,7 @@ if record_count > 0:
         f"""
         <div class="results-caption">
             Showing <b>{start_index + 1}–{end_index}</b>
-            of <b>{record_count:,}</b> sites
+            of <b>{record_count:,}</b> matching sites
         </div>
         """,
         unsafe_allow_html=True,
@@ -1001,7 +1023,7 @@ if record_count > 0:
                 )
 
         st.markdown(
-            '<div style="height:5px"></div>',
+            '<div style="height:4px"></div>',
             unsafe_allow_html=True,
         )
 
@@ -1044,7 +1066,7 @@ else:
         """
         <div class="empty-state">
             <strong>🔎 No matching PSS sites</strong>
-            Try another PSS name or change the POC 1 or State selection.
+            Try another PSS name or change the POC 1 or State filter.
         </div>
         """,
         unsafe_allow_html=True,
@@ -1058,8 +1080,8 @@ else:
 st.markdown(
     """
     <div style="
-        margin-top:22px;
-        padding-top:12px;
+        margin-top:20px;
+        padding-top:11px;
         border-top:1px solid #e2e8f0;
         color:#94a3b8;
         text-align:center;
