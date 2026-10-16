@@ -19,8 +19,16 @@ st.caption("Filter intimation records by POC1, State and PSS.")
 # Keep app.py and intimation.xlsx
 # in the same project folder
 # -------------------------------
-EXCEL_PATH = Path(__file__).parent / "intimation.xlsx"
+EXCEL_PATH = (
+    Path(__file__).resolve().parent.parent
+    / "intimation.xlsx"
+)
 
+@st.cache_data
+def load_data():
+    return pd.read_excel(EXCEL_PATH)
+
+df = load_data()
 REQUIRED_COLUMNS = [
     "Lat",
     "Long",
