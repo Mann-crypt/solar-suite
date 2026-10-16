@@ -30,14 +30,14 @@ ALL_USERS = "All Users"
 
 
 # =========================================================
-# CUSTOM CSS
+# CSS
 # =========================================================
 
 st.html("""
 <style>
 .block-container {
-    max-width: 1500px;
-    padding-top: 1.15rem;
+    max-width: 1450px;
+    padding-top: 1.1rem;
     padding-bottom: 2rem;
 }
 
@@ -45,39 +45,37 @@ st.html("""
     display: flex;
     align-items: center;
     gap: 13px;
-    margin-bottom: 5px;
+    margin-bottom: 20px;
 }
 
 .dash-logo {
     display: flex;
     align-items: center;
     justify-content: center;
-    min-width: 47px;
-    height: 47px;
-    border-radius: 15px;
+    min-width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #2563eb, #6366f1);
     color: white;
-    font-size: 24px;
-    background: linear-gradient(135deg, #2563eb, #7c3aed);
-    box-shadow: 0 5px 16px rgba(79,70,229,0.20);
+    font-size: 22px;
 }
 
 .dash-title {
-    font-size: 27px;
-    font-weight: 850;
-    letter-spacing: -0.8px;
+    font-size: 25px;
+    font-weight: 800;
+    letter-spacing: -0.7px;
     line-height: 1.2;
 }
 
 .dash-subtitle {
-    font-size: 11px;
+    font-size: 12px;
     opacity: 0.65;
-    margin-top: 5px;
+    margin-top: 4px;
 }
 
 .section-heading {
     font-size: 17px;
-    font-weight: 800;
-    letter-spacing: -0.3px;
+    font-weight: 750;
     margin-bottom: 2px;
 }
 
@@ -90,48 +88,43 @@ st.html("""
 div[data-testid="stMetric"] {
     background: var(--secondary-background-color);
     border: 1px solid rgba(128,128,128,0.18);
-    border-radius: 13px;
-    padding: 10px 13px;
+    border-radius: 12px;
+    padding: 10px 14px;
     min-height: 78px;
-    box-shadow: 0 3px 12px rgba(0,0,0,0.025);
 }
 
 div[data-testid="stMetricLabel"] {
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 600;
 }
 
 div[data-testid="stMetricValue"] {
-    font-size: 21px;
+    font-size: 23px;
     font-weight: 800;
-    letter-spacing: -0.4px;
 }
 
 div[data-testid="stExpander"] {
     border: 1px solid rgba(128,128,128,0.22) !important;
-    border-radius: 13px !important;
+    border-radius: 12px !important;
     overflow: hidden;
     background: var(--secondary-background-color);
     margin-bottom: 0 !important;
-    box-shadow: 0 3px 10px rgba(0,0,0,0.025);
-    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.025);
 }
 
 div[data-testid="stExpander"]:hover {
-    border-color: rgba(99,102,241,0.7) !important;
-    box-shadow: 0 5px 15px rgba(79,70,229,0.07);
+    border-color: rgba(99,102,241,0.55) !important;
 }
 
 div[data-testid="stExpander"] details summary {
     padding: 10px 12px !important;
-    min-height: 68px;
+    min-height: 60px;
 }
 
 div[data-testid="stExpander"] details summary p {
     font-size: 12px;
-    font-weight: 700;
-    line-height: 1.65;
-    overflow-wrap: anywhere;
+    font-weight: 650;
+    line-height: 1.5;
 }
 
 div[data-testid="stExpander"] details div[data-testid="stExpanderDetails"] {
@@ -151,109 +144,94 @@ div[data-testid="stExpander"] details div[data-testid="stExpanderDetails"] {
     margin-top: 5px;
 }
 
-.record-row {
+.record-info {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: space-between;
-    gap: 8px;
-    border-top: 1px solid rgba(128,128,128,0.16);
+    gap: 10px;
     margin-top: 10px;
     padding-top: 9px;
+    border-top: 1px solid rgba(128,128,128,0.16);
 }
 
 .record-poc {
     font-size: 11px;
-    overflow-wrap: anywhere;
     line-height: 1.5;
+    overflow-wrap: anywhere;
 }
 
 .record-capacity {
-    font-size: 15px;
-    font-weight: 850;
+    font-size: 13px;
+    font-weight: 800;
     white-space: nowrap;
 }
 
-.status-pill {
-    display: inline-block;
+.record-label {
     font-size: 10px;
-    font-weight: 750;
-    border-radius: 20px;
-    padding: 4px 8px;
-    margin-top: 8px;
-    margin-right: 4px;
-    background: rgba(128,128,128,0.10);
-    border: 1px solid rgba(128,128,128,0.14);
+    opacity: 0.65;
+    margin-bottom: 2px;
 }
 
-.status-good {
-    color: #15803d;
-    background: rgba(34,197,94,0.10);
-    border-color: rgba(34,197,94,0.22);
-}
-
-.status-pending {
-    color: #b45309;
-    background: rgba(245,158,11,0.11);
-    border-color: rgba(245,158,11,0.22);
-}
-
-.status-alert {
-    color: #dc2626;
-    background: rgba(239,68,68,0.10);
-    border-color: rgba(239,68,68,0.22);
+.record-value {
+    font-size: 12px;
+    font-weight: 600;
+    overflow-wrap: anywhere;
 }
 
 .detail-heading {
     font-size: 10px;
     text-transform: uppercase;
-    letter-spacing: 0.8px;
+    letter-spacing: 0.7px;
     font-weight: 800;
     opacity: 0.65;
-    margin-bottom: 7px;
+    margin: 10px 0 5px 0;
 }
 
 .detail-item {
     padding: 7px 0;
     border-bottom: 1px solid rgba(128,128,128,0.13);
-    min-height: 44px;
-}
-
-.detail-label {
-    font-size: 10px;
-    opacity: 0.65;
-    margin-bottom: 3px;
-}
-
-.detail-value {
-    font-size: 12px;
-    font-weight: 650;
-    overflow-wrap: anywhere;
 }
 
 .result-caption {
     font-size: 11px;
-    opacity: 0.7;
+    opacity: 0.65;
     margin-top: 3px;
     margin-bottom: 8px;
+}
+
+.chart-heading {
+    font-size: 13px;
+    font-weight: 750;
+    margin-bottom: 0;
 }
 
 .page-indicator {
     text-align: center;
     font-size: 12px;
-    font-weight: 750;
+    font-weight: 700;
     padding-top: 9px;
 }
 
 div.stButton > button {
     border-radius: 9px;
     font-weight: 650;
-    min-height: 35px;
+    min-height: 34px;
+}
+
+div[data-testid="stPlotlyChart"] {
+    margin-top: -5px;
+    margin-bottom: -12px;
+}
+
+hr {
+    margin-top: 0.8rem;
+    margin-bottom: 0.8rem;
 }
 
 @media (max-width: 700px) {
     .block-container {
-        padding-left: 0.8rem;
-        padding-right: 0.8rem;
+        padding-left: 0.75rem;
+        padding-right: 0.75rem;
     }
 
     .dash-title {
@@ -262,11 +240,11 @@ div.stButton > button {
 
     div[data-testid="stMetric"] {
         padding: 8px;
-        min-height: 74px;
+        min-height: 72px;
     }
 
     div[data-testid="stMetricValue"] {
-        font-size: 17px;
+        font-size: 18px;
     }
 }
 </style>
@@ -296,6 +274,7 @@ def find_column(df, candidates=(), startswith=None):
 
     if startswith:
         prefix = normalize_header(startswith)
+
         for col in df.columns:
             if normalize_header(col).startswith(prefix):
                 return col
@@ -316,7 +295,7 @@ def clean(value):
     return str(value).strip()
 
 
-def html_text(value):
+def safe_html(value):
     return escape(clean(value))
 
 
@@ -327,6 +306,10 @@ def unique_sorted(series):
         if clean(value)
     }
     return sorted(values, key=str.casefold)
+
+
+def reset_page():
+    st.session_state["intimation_page"] = 1
 
 
 def format_capacity(value):
@@ -343,34 +326,29 @@ def status_style(value):
 
     if any(word in value for word in [
         "complete", "checked", "verified",
-        "approved", "done", "pass",
+        "approved", "done", "pass"
     ]):
-        return "status-good"
+        return "color:#15803d;"
 
     if any(word in value for word in [
-        "pending", "awaiting", "in progress", "hold",
+        "pending", "awaiting", "in progress", "hold"
     ]):
-        return "status-pending"
+        return "color:#b45309;"
 
     if any(word in value for word in [
-        "reject", "error", "fail", "issue", "not checked",
+        "reject", "error", "fail", "issue", "not checked"
     ]):
-        return "status-alert"
+        return "color:#dc2626;"
 
     return ""
-
-
-def reset_page():
-    st.session_state["intimation_page"] = 1
 
 
 # =========================================================
 # LOAD EXCEL
 # =========================================================
 
-@st.cache_data(show_spinner="Loading intimation records...")
+@st.cache_data(show_spinner="Loading records...")
 def load_data(file_path, modified_time):
-    # Modified time invalidates cache when the workbook changes.
     del modified_time
 
     raw = pd.read_excel(file_path)
@@ -410,23 +388,21 @@ def load_data(file_path, modified_time):
 
     for target, candidates in aliases.items():
         source = find_column(raw, candidates)
-
-        if source is None:
-            output[target] = ""
-        else:
-            output[target] = raw[source]
+        output[target] = raw[source] if source else ""
 
     output["Priority"] = (
         raw[priority_source]
-        if priority_source is not None
+        if priority_source
         else ""
     )
 
-    for column in [
+    text_columns = [
         "Lat", "Long", "PSS", "State",
         "Priority", "POC1", "POC 2", "POC 3",
         "Check Status",
-    ]:
+    ]
+
+    for column in text_columns:
         output[column] = output[column].map(clean)
 
     output["Capacity (MW)"] = pd.to_numeric(
@@ -437,22 +413,23 @@ def load_data(file_path, modified_time):
     output = output[
         [
             "Lat", "Long", "PSS", "State",
-            "Capacity (MW)", "Priority", "POC1",
-            "POC 2", "POC 3", "Check Status",
+            "Capacity (MW)", "Priority",
+            "POC1", "POC 2", "POC 3",
+            "Check Status",
         ]
     ]
 
-    has_identity = (
+    has_data = (
         output["PSS"].ne("")
         | output["State"].ne("")
         | output["POC1"].ne("")
     )
 
-    return output.loc[has_identity].reset_index(drop=True)
+    return output.loc[has_data].reset_index(drop=True)
 
 
 # =========================================================
-# PAGE HEADER
+# HEADER
 # =========================================================
 
 st.html("""
@@ -461,7 +438,7 @@ st.html("""
     <div>
         <div class="dash-title">Intimation Dashboard</div>
         <div class="dash-subtitle">
-            PSS records · Capacity overview · Status tracking
+            PSS records, capacity and status monitoring
         </div>
     </div>
 </div>
@@ -489,19 +466,20 @@ if df.empty:
 
 
 # =========================================================
-# SESSION STATE
+# FILTER STATE
 # =========================================================
 
-defaults = {
-    "intimation_poc1": ALL_USERS,
-    "intimation_states": [],
-    "intimation_pss_search": "",
-    "intimation_page": 1,
-}
+if "intimation_poc1" not in st.session_state:
+    st.session_state["intimation_poc1"] = ALL_USERS
 
-for key, value in defaults.items():
-    if key not in st.session_state:
-        st.session_state[key] = value
+if "intimation_states" not in st.session_state:
+    st.session_state["intimation_states"] = []
+
+if "intimation_pss_search" not in st.session_state:
+    st.session_state["intimation_pss_search"] = ""
+
+if "intimation_page" not in st.session_state:
+    st.session_state["intimation_page"] = 1
 
 
 # =========================================================
@@ -511,21 +489,21 @@ for key, value in defaults.items():
 overview_slot = st.container()
 
 st.html("""
-<div class="section-heading">🎛️ Filters</div>
+<div class="section-heading">Filters</div>
 <div class="section-caption">
-    All filters work together and update the overview and records
+    Filters are connected and update the overview and records
 </div>
 """)
 
 poc_col, pss_col, state_col = st.columns(
-    [1.0, 1.45, 1.2],
+    [1, 1.4, 1.2],
     gap="medium",
 )
 
 with pss_col:
     st.text_input(
-        "🔎 Search PSS",
-        placeholder="Type a PSS name...",
+        "Search PSS",
+        placeholder="Enter PSS name...",
         key="intimation_pss_search",
         on_change=reset_page,
     )
@@ -543,7 +521,7 @@ else:
     pss_mask = pd.Series(True, index=df.index)
 
 
-# POC options depend on the search and selected states.
+# POC1 options depend on PSS search and selected states.
 selected_states = st.session_state["intimation_states"]
 
 poc_mask = pss_mask.copy()
@@ -562,7 +540,7 @@ if st.session_state["intimation_poc1"] not in poc_options:
 
 with poc_col:
     st.selectbox(
-        "👤 POC1",
+        "POC1",
         options=poc_options,
         key="intimation_poc1",
         on_change=reset_page,
@@ -571,7 +549,7 @@ with poc_col:
 selected_poc = st.session_state["intimation_poc1"]
 
 
-# State options depend on the search and selected POC.
+# State options depend on PSS search and selected POC1.
 state_mask = pss_mask.copy()
 
 if selected_poc != ALL_USERS:
@@ -590,7 +568,7 @@ if current_states != valid_states:
 
 with state_col:
     st.multiselect(
-        "📍 State",
+        "State",
         options=available_states,
         key="intimation_states",
         placeholder="All states",
@@ -631,13 +609,14 @@ filtered_df = filtered_df.reset_index(drop=True)
 
 # =========================================================
 # COMPACT OVERVIEW
+# Only two metrics and compact charts.
 # =========================================================
 
 with overview_slot:
     st.html("""
-    <div class="section-heading">📊 Overview</div>
+    <div class="section-heading">Overview</div>
     <div class="section-caption">
-        Summary and charts based on the current filters
+        Summary and trends for the selected records
     </div>
     """)
 
@@ -648,50 +627,37 @@ with overview_slot:
     if pd.isna(total_capacity):
         total_capacity = 0.0
 
-    unique_pss = filtered_df.loc[
-        filtered_df["PSS"].ne(""), "PSS"
-    ].nunique()
+    metric_left, metric_right = st.columns(2, gap="medium")
 
-    metric1, metric2, metric3 = st.columns(3, gap="small")
-
-    metric1.metric(
-        "📁 Matching Records",
+    metric_left.metric(
+        "Matching Records",
         f"{len(filtered_df):,}",
     )
 
-    metric2.metric(
-        "⚡ Total Capacity",
+    metric_right.metric(
+        "Total Capacity",
         f"{total_capacity:,.2f} MW",
     )
 
-    metric3.metric(
-        "📍 Unique PSS",
-        f"{unique_pss:,}",
-    )
-
     if not filtered_df.empty:
-        chart_left, chart_right = st.columns(
-            2,
-            gap="medium",
-        )
+        graph_left, graph_right = st.columns(2, gap="medium")
 
-        # ---------------------------------------------
-        # CAPACITY BY STATE
-        # ---------------------------------------------
-        with chart_left:
-            st.markdown("##### ⚡ Capacity by State")
-
-            capacity_state = filtered_df[
-                filtered_df["State"].ne("")
-                & filtered_df["Capacity (MW)"].notna()
-            ]
+        # Capacity by state: compact horizontal bar chart.
+        with graph_left:
+            st.markdown(
+                '<div class="chart-heading">Capacity by State</div>',
+                unsafe_allow_html=True,
+            )
 
             capacity_state = (
-                capacity_state
+                filtered_df[
+                    filtered_df["State"].ne("")
+                    & filtered_df["Capacity (MW)"].notna()
+                ]
                 .groupby("State", as_index=False)["Capacity (MW)"]
                 .sum()
                 .sort_values("Capacity (MW)", ascending=False)
-                .head(8)
+                .head(7)
                 .sort_values("Capacity (MW)", ascending=True)
             )
 
@@ -702,33 +668,31 @@ with overview_slot:
                         x="Capacity (MW)",
                         y="State",
                         orientation="h",
-                        text="Capacity (MW)",
-                        color="Capacity (MW)",
-                        color_continuous_scale=[
-                            "#BFDBFE", "#4F46E5"
-                        ],
-                    )
-
-                    fig.update_traces(
-                        texttemplate="%{x:,.1f}",
-                        textposition="outside",
-                        cliponaxis=False,
+                        color_discrete_sequence=["#6366f1"],
                     )
 
                     fig.update_layout(
-                        height=235,
-                        margin=dict(l=5, r=35, t=5, b=5),
-                        coloraxis_showscale=False,
+                        height=210,
+                        margin=dict(l=0, r=8, t=5, b=0),
+                        showlegend=False,
                         paper_bgcolor="rgba(0,0,0,0)",
                         plot_bgcolor="rgba(0,0,0,0)",
-                        xaxis_title="Capacity (MW)",
-                        yaxis_title="",
-                        font=dict(size=10),
+                        font=dict(size=9),
+                        xaxis_title=None,
+                        yaxis_title=None,
+                    )
+
+                    fig.update_traces(
+                        marker_line_width=0,
+                        hovertemplate=(
+                            "%{y}<br>%{x:,.2f} MW<extra></extra>"
+                        ),
                     )
 
                     fig.update_xaxes(
                         showgrid=True,
-                        gridcolor="rgba(128,128,128,0.14)",
+                        gridcolor="rgba(128,128,128,0.13)",
+                        zeroline=False,
                     )
                     fig.update_yaxes(showgrid=False)
 
@@ -742,25 +706,25 @@ with overview_slot:
                         capacity_state.set_index("State")[
                             ["Capacity (MW)"]
                         ],
-                        height=235,
                         horizontal=True,
+                        height=210,
                     )
             else:
                 st.caption("No capacity data available.")
 
-        # ---------------------------------------------
-        # STATUS DISTRIBUTION
-        # ---------------------------------------------
-        with chart_right:
-            st.markdown("##### 🟢 Check Status")
+        # Check status: compact donut chart.
+        with graph_right:
+            st.markdown(
+                '<div class="chart-heading">Check Status</div>',
+                unsafe_allow_html=True,
+            )
 
             status_data = filtered_df["Check Status"].replace(
                 "", "Not specified"
             )
 
             status_summary = (
-                status_data
-                .value_counts()
+                status_data.value_counts()
                 .rename_axis("Status")
                 .reset_index(name="Records")
                 .head(6)
@@ -772,33 +736,32 @@ with overview_slot:
                         status_summary,
                         names="Status",
                         values="Records",
-                        hole=0.64,
-                        color_discrete_sequence=(
-                            px.colors.qualitative.Set2
-                        ),
+                        hole=0.66,
+                        color_discrete_sequence=px.colors.qualitative.Set2,
                     )
 
                     fig.update_traces(
                         textposition="inside",
                         textinfo="percent",
                         hovertemplate=(
-                            "%{label}<br>Records: %{value:,}"
-                            "<br>Share: %{percent}<extra></extra>"
+                            "%{label}<br>%{value:,} records"
+                            "<extra></extra>"
                         ),
                     )
 
                     fig.update_layout(
-                        height=235,
-                        margin=dict(l=5, r=5, t=5, b=12),
+                        height=210,
+                        margin=dict(l=0, r=0, t=5, b=0),
                         paper_bgcolor="rgba(0,0,0,0)",
-                        font=dict(size=10),
+                        font=dict(size=9),
+                        showlegend=True,
                         legend=dict(
                             orientation="h",
                             yanchor="bottom",
-                            y=-0.13,
+                            y=-0.10,
                             xanchor="center",
                             x=0.5,
-                            font=dict(size=9),
+                            font=dict(size=8),
                         ),
                     )
 
@@ -809,38 +772,96 @@ with overview_slot:
                     )
                 else:
                     st.bar_chart(
-                        status_summary.set_index("Status")[
-                            ["Records"]
-                        ],
-                        height=235,
+                        status_summary.set_index("Status")[["Records"]],
+                        height=210,
                     )
             else:
                 st.caption("No status data available.")
 
+        # Priority distribution: compact horizontal bar chart.
+        st.markdown(
+            '<div class="chart-heading">Priority Distribution</div>',
+            unsafe_allow_html=True,
+        )
+
+        priority_data = filtered_df["Priority"].replace(
+            "", "Not specified"
+        )
+
+        priority_summary = (
+            priority_data.value_counts()
+            .rename_axis("Priority")
+            .reset_index(name="Records")
+            .head(6)
+            .sort_values("Records", ascending=True)
+        )
+
+        if not priority_summary.empty:
+            if PLOTLY_AVAILABLE:
+                fig = px.bar(
+                    priority_summary,
+                    x="Records",
+                    y="Priority",
+                    orientation="h",
+                    color_discrete_sequence=["#0d9488"],
+                )
+
+                fig.update_layout(
+                    height=170,
+                    margin=dict(l=0, r=8, t=3, b=0),
+                    showlegend=False,
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    font=dict(size=9),
+                    xaxis_title=None,
+                    yaxis_title=None,
+                )
+
+                fig.update_traces(
+                    marker_line_width=0,
+                    hovertemplate=(
+                        "%{y}<br>%{x} records<extra></extra>"
+                    ),
+                )
+
+                fig.update_xaxes(
+                    showgrid=True,
+                    gridcolor="rgba(128,128,128,0.13)",
+                    zeroline=False,
+                )
+                fig.update_yaxes(showgrid=False)
+
+                st.plotly_chart(
+                    fig,
+                    use_container_width=True,
+                    config={"displayModeBar": False},
+                )
+            else:
+                st.bar_chart(
+                    priority_summary.set_index("Priority")[["Records"]],
+                    horizontal=True,
+                    height=170,
+                )
+
     else:
-        st.info("No records match the current filters.")
+        st.info("No records match the selected filters.")
 
     st.divider()
 
 
 # =========================================================
-# RECORDS SECTION
+# RECORDS
 # =========================================================
 
 st.html("""
-<div class="section-heading">🗂️ Find Records</div>
+<div class="section-heading">Records</div>
 <div class="section-caption">
-    Compact cards · Click a record to reveal all details
+    Each collapsed card shows only PSS, capacity, state and POC1
 </div>
 """)
 
 if filtered_df.empty:
     st.stop()
-
-
-# =========================================================
-# PAGINATION
-# =========================================================
 
 total_records = len(filtered_df)
 total_pages = max(1, math.ceil(total_records / PAGE_SIZE))
@@ -856,8 +877,7 @@ end = min(start + PAGE_SIZE, total_records)
 
 st.html(f"""
 <div class="result-caption">
-    Showing <b>{start + 1:,}–{end:,}</b> of
-    <b>{total_records:,}</b> matching records
+    Showing {start + 1:,}–{end:,} of {total_records:,} records
 </div>
 """)
 
@@ -865,9 +885,7 @@ page_df = filtered_df.iloc[start:end]
 
 
 # =========================================================
-# EXPANDABLE CARDS
-# COLLAPSED: PSS NAME + STATE + CAPACITY
-# EXPANDED: ALL OTHER DETAILS
+# CARDS
 # =========================================================
 
 left_cards, right_cards = st.columns(2, gap="medium")
@@ -876,87 +894,72 @@ for index, (_, record) in enumerate(page_df.iterrows()):
     target = left_cards if index % 2 == 0 else right_cards
 
     pss = clean(record["PSS"]) or "Unnamed PSS"
-    state = clean(record["State"]) or "State unavailable"
+    state = clean(record["State"]) or "Not specified"
+    poc1 = clean(record["POC1"]) or "Not specified"
     capacity = format_capacity(record["Capacity (MW)"])
 
     with target:
+        # The collapsed header shows the PSS and capacity only.
         with st.expander(
-            f"⚡ {pss}  ·  📍 {state}  ·  {capacity}",
+            f"{pss}  ·  {capacity}",
             expanded=False,
         ):
-            status = clean(record["Check Status"]) or "Not specified"
-            priority = clean(record["Priority"]) or "Not specified"
-            status_class = status_style(status)
-
+            # Visible when the card is expanded.
             st.html(f"""
-            <div class="record-title">
-                ⚡ {html_text(pss)}
-            </div>
+            <div class="record-title">{safe_html(pss)}</div>
 
-            <div class="record-state">
-                📍 State: {html_text(state)}
-            </div>
-
-            <div class="record-row">
-                <div class="record-poc">
-                    ⚡ <b>Installed Capacity</b>
+            <div class="record-info">
+                <div>
+                    <div class="record-label">State</div>
+                    <div class="record-value">{safe_html(state)}</div>
                 </div>
-                <div class="record-capacity">
-                    {html_text(capacity)}
+
+                <div style="text-align:right;">
+                    <div class="record-label">Capacity</div>
+                    <div class="record-capacity">{safe_html(capacity)}</div>
                 </div>
             </div>
 
-            <div style="height: 6px;"></div>
+            <div style="margin-top:10px;">
+                <div class="record-label">POC1</div>
+                <div class="record-value">{safe_html(poc1)}</div>
+            </div>
 
-            <span class="status-pill {status_class}">
-                {"✓" if status_class == "status-good" else
-                 "◷" if status_class == "status-pending" else
-                 "!" if status_class == "status-alert" else "●"}
-                {html_text(status)}
-            </span>
-
-            <span class="status-pill">
-                🎯 Priority: {html_text(priority)}
-            </span>
-
-            <div style="height: 13px;"></div>
-            <div class="detail-heading">📋 Additional Details</div>
+            <div class="detail-heading">Additional Details</div>
             """)
 
             details = [
-                ("👤 POC1", record["POC1"]),
-                ("👤 POC 2", record["POC 2"]),
-                ("👤 POC 3", record["POC 3"]),
-                ("🎯 Priority", record["Priority"]),
-                ("🌐 Latitude", record["Lat"]),
-                ("🌐 Longitude", record["Long"]),
-                ("✓ Check Status", record["Check Status"]),
+                ("Priority", record["Priority"]),
+                ("POC 2", record["POC 2"]),
+                ("POC 3", record["POC 3"]),
+                ("Latitude", record["Lat"]),
+                ("Longitude", record["Long"]),
+                ("Check Status", record["Check Status"]),
             ]
 
             detail_left, detail_right = st.columns(2, gap="small")
 
             for detail_index, (label, value) in enumerate(details):
-                detail_column = (
+                detail_col = (
                     detail_left
                     if detail_index % 2 == 0
                     else detail_right
                 )
 
-                with detail_column:
+                with detail_col:
                     st.html(f"""
                     <div class="detail-item">
-                        <div class="detail-label">
-                            {html_text(label)}
-                        </div>
-                        <div class="detail-value">
-                            {html_text(value) or "—"}
+                        <div class="record-label">{safe_html(label)}</div>
+                        <div class="record-value"
+                             style="{status_style(value) if label == 'Check Status' else ''}">
+                            {safe_html(value) or "—"}
                         </div>
                     </div>
                     """)
 
 
 # =========================================================
-# PAGINATION CONTROLS
+# PAGINATION
 # =========================================================
 
 st.divider()
