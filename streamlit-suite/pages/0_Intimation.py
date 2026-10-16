@@ -1,4 +1,3 @@
-```python
 from pathlib import Path
 
 import pandas as pd
@@ -307,4 +306,3 @@ else:
 st.caption(
     "Data source: intimation.xlsx · Filters apply to the displayed results."
 )
-```
