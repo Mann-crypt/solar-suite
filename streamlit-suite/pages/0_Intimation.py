@@ -1,6 +1,7 @@
 
 from pathlib import Path
 from html import escape
+from textwrap import dedent
 
 import pandas as pd
 import streamlit as st
@@ -546,7 +547,7 @@ def make_card(row):
     else:
         status_class = "status-neutral"
 
-    return f"""
+    return dedent(f"""
     <div class="record-card">
 
         <div class="record-top">
