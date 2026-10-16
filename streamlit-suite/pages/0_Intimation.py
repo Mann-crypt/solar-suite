@@ -1146,8 +1146,7 @@ def render_pss_card(record, card_key):
     components.html(
         html,
         height=155,
-        scrolling=False,
-        key=f"pss_card_{card_key}",
+        scrolling=False
     )
 
 
