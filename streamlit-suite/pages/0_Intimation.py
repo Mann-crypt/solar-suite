@@ -1,17 +1,17 @@
 
-import html
-import json
-import re
 from pathlib import Path
+import html
+import re
 
 import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
 
 
-# =========================================================
+# ============================================================
 # PAGE CONFIG
-# =========================================================
+# ============================================================
+
 st.set_page_config(
     page_title="Intimation Dashboard",
     page_icon="⚡",
@@ -20,648 +20,673 @@ st.set_page_config(
 )
 
 
-# =========================================================
-# CUSTOM STYLING
-# =========================================================
+# ============================================================
+# CUSTOM CSS
+# ============================================================
+
 st.html("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-
     :root {
         --primary: #2563eb;
-        --primary-dark: #1d4ed8;
+        --primary-dark: #1e40af;
         --text-main: #172033;
         --text-muted: #64748b;
-        --surface: #ffffff;
-        --border: #e7edf5;
-        --green: #059669;
+        --border-color: #e2e8f0;
+        --card-bg: #ffffff;
     }
 
     .stApp {
         background:
-            radial-gradient(ellipse at top left, rgba(219,234,254,0.35), transparent 38%),
+            radial-gradient(ellipse at 5% 0%, rgba(59,130,246,.055), transparent 35%),
             #f5f7fb;
-        font-family: 'Inter', sans-serif;
     }
 
     .block-container {
-        padding-top: 1.5rem !important;
-        padding-bottom: 2.5rem !important;
-        max-width: 1600px !important;
+        max-width: 1500px;
+        padding-top: 1.1rem;
+        padding-bottom: 1.5rem;
     }
 
-    /* Main header */
-    .dashboard-hero {
+    /* Main heading */
+    .dashboard-header {
         position: relative;
         overflow: hidden;
-        padding: 27px 30px;
-        border-radius: 22px;
+        padding: 18px 22px;
+        margin-bottom: 16px;
+        border-radius: 16px;
+        background: linear-gradient(120deg, #172554 0%, #1d4ed8 62%, #3b82f6 100%);
+        box-shadow: 0 8px 22px rgba(37, 99, 235, .17);
         color: white;
-        background: linear-gradient(120deg, #111c3b 0%, #1e40af 53%, #3b82f6 100%);
-        box-shadow: 0 12px 30px rgba(37, 99, 235, 0.18);
-        margin-bottom: 23px;
     }
 
-    .dashboard-hero::before {
+    .dashboard-header::after {
         content: "";
         position: absolute;
-        width: 250px;
-        height: 250px;
+        width: 190px;
+        height: 190px;
+        right: -40px;
+        top: -105px;
         border-radius: 50%;
-        right: -45px;
-        top: -135px;
-        background: rgba(255,255,255,0.10);
+        background: rgba(255,255,255,.09);
+        pointer-events: none;
     }
 
-    .dashboard-hero::after {
-        content: "";
-        position: absolute;
-        width: 170px;
-        height: 170px;
-        border-radius: 50%;
-        right: 100px;
-        bottom: -125px;
-        background: rgba(147,197,253,0.15);
-    }
-
-    .hero-content {
-        position: relative;
-        z-index: 1;
-    }
-
-    .hero-kicker {
-        display: inline-block;
-        padding: 5px 10px;
-        margin-bottom: 10px;
-        border: 1px solid rgba(255,255,255,0.24);
-        border-radius: 999px;
-        background: rgba(255,255,255,0.10);
-        color: #dbeafe;
-        font-size: 10px;
-        font-weight: 800;
-        letter-spacing: 1.5px;
-    }
-
-    .hero-title {
-        margin: 0;
+    .dashboard-header h1 {
         color: #ffffff;
-        font-size: clamp(25px, 3vw, 35px);
+        font-size: clamp(23px, 2.2vw, 31px);
+        font-weight: 800;
         line-height: 1.2;
-        font-weight: 800;
-        letter-spacing: -1px;
+        margin: 0;
+        letter-spacing: -.6px;
     }
 
-    .hero-subtitle {
-        margin-top: 9px;
+    .dashboard-header p {
         color: #dbeafe;
-        font-size: 13px;
-        line-height: 1.6;
-    }
-
-    /* Section headings */
-    .section-heading {
-        color: #172033;
-        font-size: 17px;
-        font-weight: 800;
-        letter-spacing: -0.35px;
-        margin: 10px 0 3px 0;
-    }
-
-    .section-caption {
-        color: #718096;
         font-size: 12px;
-        margin-bottom: 14px;
+        margin: 6px 0 0 1px;
+        letter-spacing: .25px;
     }
 
-    /* Metric cards */
-    .metric-card {
-        position: relative;
-        overflow: hidden;
-        min-height: 118px;
-        padding: 19px 21px;
-        border-radius: 17px;
-        border: 1px solid #e6ecf5;
-        background: linear-gradient(145deg, #ffffff 0%, #f8faff 100%);
-        box-shadow: 0 5px 15px rgba(15,23,42,0.035);
-    }
-
-    .metric-card::after {
-        content: "";
-        position: absolute;
-        right: -19px;
-        bottom: -37px;
-        width: 100px;
-        height: 100px;
-        border-radius: 50%;
-        background: rgba(59,130,246,0.055);
-    }
-
-    .metric-label {
-        color: #64748b;
-        font-size: 11px;
-        font-weight: 800;
-        text-transform: uppercase;
+    .header-chip {
+        display: inline-block;
+        margin-bottom: 7px;
+        padding: 4px 9px;
+        border: 1px solid rgba(255,255,255,.24);
+        border-radius: 20px;
+        background: rgba(255,255,255,.12);
+        color: #eff6ff;
+        font-size: 10px;
+        font-weight: 700;
         letter-spacing: 1px;
     }
 
-    .metric-value {
-        margin-top: 11px;
-        color: #172033;
-        font-size: 29px;
-        font-weight: 800;
-        line-height: 1.15;
-        letter-spacing: -0.8px;
+    /* Overview cards */
+    .overview-card {
+        position: relative;
+        overflow: hidden;
+        min-height: 94px;
+        padding: 15px 17px;
+        border: 1px solid rgba(255,255,255,.28);
+        border-radius: 13px;
+        color: #ffffff;
+        box-shadow: 0 5px 14px rgba(15,23,42,.08);
     }
 
-    .metric-foot {
-        margin-top: 5px;
-        color: #94a3b8;
+    .overview-card.records {
+        background: linear-gradient(125deg, #1d4ed8, #3b82f6);
+    }
+
+    .overview-card.capacity {
+        background: linear-gradient(125deg, #047857, #10b981);
+    }
+
+    .overview-card .metric-label {
+        color: rgba(255,255,255,.86);
         font-size: 11px;
-    }
-
-    /* Filter labels */
-    div[data-testid="stTextInput"] label,
-    div[data-testid="stSelectbox"] label {
-        color: #334155;
         font-weight: 700;
-        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: .8px;
     }
 
-    /* Native expander */
-    div[data-testid="stExpander"] {
-        border: 1px solid #e3eaf4 !important;
+    .overview-card .metric-value {
+        color: #ffffff;
+        font-size: clamp(23px, 2.4vw, 30px);
+        font-weight: 800;
+        line-height: 1.3;
+        margin-top: 5px;
+    }
+
+    .overview-card .metric-icon {
+        position: absolute;
+        right: 15px;
+        top: 15px;
+        font-size: 24px;
+        opacity: .72;
+    }
+
+    /* Section labels */
+    .section-heading {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        margin: 15px 0 9px;
+        color: #1e293b;
+        font-size: 15px;
+        font-weight: 800;
+    }
+
+    .section-heading .section-icon {
+        display: inline-flex;
+        width: 27px;
+        height: 27px;
+        align-items: center;
+        justify-content: center;
+        border-radius: 8px;
+        background: #dbeafe;
+        color: #1d4ed8;
+        font-size: 14px;
+    }
+
+    .results-caption {
+        color: #64748b;
+        font-size: 11px;
+        margin: 2px 0 10px;
+    }
+
+    /* PSS card container */
+    div[data-testid="stVerticalBlockBorderWrapper"] {
+        border-color: #dfe7f2 !important;
         border-radius: 13px !important;
-        background: #ffffff !important;
+        background: rgba(255,255,255,.97) !important;
+        box-shadow: 0 3px 10px rgba(15,23,42,.035);
+        transition: border-color .18s ease, box-shadow .18s ease;
+    }
+
+    div[data-testid="stVerticalBlockBorderWrapper"]:hover {
+        border-color: #a8c5f8 !important;
+        box-shadow: 0 6px 16px rgba(37,99,235,.075);
+    }
+
+    /* Compact PSS identity */
+    .pss-title-row {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        margin-bottom: 10px;
+    }
+
+    .pss-icon {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 33px;
+        width: 33px;
+        height: 33px;
+        border-radius: 10px;
+        background: linear-gradient(135deg, #dbeafe, #eff6ff);
+        border: 1px solid #dbeafe;
+        font-size: 16px;
+    }
+
+    .pss-heading {
+        color: #172554;
+        font-size: 14px;
+        font-weight: 800;
+        line-height: 1.35;
+        overflow-wrap: anywhere;
+        margin-top: 1px;
+    }
+
+    .pss-subheading {
+        margin-top: 3px;
+        color: #94a3b8;
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: .8px;
+        text-transform: uppercase;
+    }
+
+    /* Card information tiles */
+    .pss-info-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 7px;
+        margin-bottom: 7px;
+    }
+
+    .pss-info {
+        min-width: 0;
+        padding: 8px 9px;
+        border: 1px solid #edf1f7;
+        border-radius: 9px;
+        background: #f8fafc;
+    }
+
+    .pss-info-label {
+        color: #94a3b8;
+        font-size: 9px;
+        font-weight: 800;
+        letter-spacing: .65px;
+        text-transform: uppercase;
+        margin-bottom: 4px;
+    }
+
+    .pss-info-value {
+        color: #334155;
+        font-size: 12px;
+        font-weight: 700;
+        line-height: 1.35;
+        overflow-wrap: anywhere;
+    }
+
+    .pss-info.capacity-tile {
+        background: #eff6ff;
+        border-color: #dbeafe;
+    }
+
+    .pss-info.capacity-tile .pss-info-value {
+        color: #1d4ed8;
+    }
+
+    .pss-info.state-tile {
+        background: #f0fdf4;
+        border-color: #dcfce7;
+    }
+
+    .pss-info.state-tile .pss-info-value {
+        color: #047857;
+    }
+
+    /* Copy button */
+    div[data-testid="stVerticalBlock"] iframe {
+        border: 0;
+    }
+
+    /* Expand details */
+    div[data-testid="stExpander"] {
+        border: 1px solid #e7edf6 !important;
+        border-radius: 9px !important;
+        background: #fbfdff !important;
         overflow: hidden;
     }
 
     div[data-testid="stExpander"] summary {
-        padding: 10px 13px !important;
+        padding-top: 7px !important;
+        padding-bottom: 7px !important;
         color: #334155 !important;
-        font-size: 12px !important;
+        font-size: 11px !important;
         font-weight: 700 !important;
     }
 
-    div[data-testid="stExpander"] summary:hover {
-        background: #f5f8ff !important;
+    .detail-tile {
+        padding: 9px 10px;
+        margin: 0 0 7px;
+        border-radius: 8px;
+        background: #f1f5f9;
+        border: 1px solid #e7edf5;
+        min-height: 53px;
     }
 
-    /* Streamlit buttons */
-    div.stButton > button {
-        border-radius: 10px;
-        font-weight: 700;
-        transition: all 0.18s ease;
+    .detail-label {
+        color: #64748b;
+        font-size: 9px;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: .6px;
+        margin-bottom: 4px;
     }
 
-    div.stButton > button:hover {
-        border-color: #93b4ff;
+    .detail-value {
+        color: #1e293b;
+        font-size: 12px;
+        font-weight: 650;
+        overflow-wrap: anywhere;
+        line-height: 1.4;
+    }
+
+    .status-pill {
+        display: inline-block;
+        max-width: 100%;
+        padding: 4px 8px;
+        border-radius: 6px;
+        background: #dbeafe;
+        color: #1d4ed8;
+        font-size: 10px;
+        font-weight: 800;
+        overflow-wrap: anywhere;
+    }
+
+    /* Buttons */
+    .stButton > button {
+        border-radius: 8px;
+        font-weight: 650;
+        transition: all .15s ease;
+    }
+
+    .stButton > button[kind="secondary"] {
+        border-color: #dbe4f0;
+        background: #ffffff;
+    }
+
+    .stButton > button[kind="secondary"]:hover {
+        border-color: #93b4f5;
         color: #1d4ed8;
     }
 
+    /* Filters */
+    div[data-testid="stTextInput"] input,
+    div[data-testid="stSelectbox"] div[data-baseweb="select"] {
+        border-radius: 9px;
+    }
+
     /* Pagination */
-    .page-indicator {
-        text-align: center;
-        padding: 8px;
+    .page-label {
+        padding-top: 7px;
         color: #64748b;
+        text-align: center;
         font-size: 12px;
         font-weight: 700;
     }
 
-    /* Small status indicator */
-    .result-pill {
-        display: inline-block;
-        padding: 5px 10px;
-        border-radius: 999px;
-        background: #eaf2ff;
-        color: #1d4ed8;
-        font-size: 11px;
-        font-weight: 800;
-    }
-
-    .dashboard-footer {
+    .empty-state {
+        padding: 25px 15px;
         text-align: center;
-        color: #94a3b8;
-        font-size: 11px;
-        padding-top: 22px;
-        padding-bottom: 8px;
+        border: 1px dashed #cbd5e1;
+        border-radius: 13px;
+        background: #ffffff;
+        color: #64748b;
     }
 
-    /* Reduce excess vertical space */
-    div[data-testid="stVerticalBlock"] > div {
-        gap: 0.65rem;
+    .empty-state strong {
+        display: block;
+        color: #334155;
+        font-size: 15px;
+        margin-bottom: 5px;
     }
 
-    @media (max-width: 768px) {
-        .dashboard-hero {
-            padding: 22px 20px;
-            border-radius: 17px;
+    /* Reduce excess vertical gaps */
+    div[data-testid="stVerticalBlock"] {
+        gap: 0.55rem;
+    }
+
+    @media (max-width: 700px) {
+        .block-container {
+            padding-left: 0.7rem;
+            padding-right: 0.7rem;
+        }
+
+        .dashboard-header {
+            padding: 15px;
+        }
+
+        .overview-card {
+            padding: 12px;
+            min-height: 85px;
+        }
+
+        .pss-heading {
+            font-size: 12px;
         }
     }
 </style>
 """)
 
 
-# =========================================================
-# HEADER
-# =========================================================
-st.html("""
-<div class="dashboard-hero">
-    <div class="hero-content">
-        <div class="hero-kicker">⚡ SOLAR PROJECTS • CONTROL CENTER</div>
-        <h1 class="hero-title">Intimation Dashboard</h1>
-        <div class="hero-subtitle">
-            Manage PSS information, review site details and track intimation records
-            from one clean workspace.
-        </div>
-    </div>
-</div>
-""")
-
-
-# =========================================================
+# ============================================================
 # HELPER FUNCTIONS
-# =========================================================
-def normalize_column(name):
+# ============================================================
+
+def normalize_column(value):
     """Normalize column names for flexible matching."""
-    return re.sub(r"[^a-z0-9]+", "", str(name).lower())
+    return re.sub(r"[^a-z0-9]+", "", str(value).lower())
 
 
-def find_column(columns, candidates):
-    """Find a column by trying preferred names first."""
+def find_column(columns, candidates=None, startswith=None):
+    """Find a matching column using candidate names or prefix."""
     normalized = {
-        normalize_column(col): col
-        for col in columns
+        normalize_column(column): column
+        for column in columns
     }
 
-    for candidate in candidates:
-        key = normalize_column(candidate)
-        if key in normalized:
-            return normalized[key]
+    if candidates:
+        for candidate in candidates:
+            key = normalize_column(candidate)
+            if key in normalized:
+                return normalized[key]
 
-    # Fallback: allow a candidate to be contained in a column name.
-    for candidate in candidates:
-        key = normalize_column(candidate)
-        if not key:
-            continue
-
-        for col in columns:
-            if key in normalize_column(col):
-                return col
+    if startswith:
+        prefix = normalize_column(startswith)
+        for column in columns:
+            if normalize_column(column).startswith(prefix):
+                return column
 
     return None
 
 
-def find_priority_column(columns):
-    """Apply the requested priority-column preference."""
-    preferred = [
-        "Priority as per 003 sheet",
-        "Priority as per Amresh Sir 28.07.2023",
-    ]
-
-    normalized = {
-        normalize_column(col): col
-        for col in columns
-    }
-
-    for name in preferred:
-        key = normalize_column(name)
-        if key in normalized:
-            return normalized[key]
-
-    for col in columns:
-        if "priority" in str(col).lower():
-            return col
-
-    return None
-
-
-def clean_text(value):
+def clean_text(value, default="—"):
+    """Convert values to clean display text."""
     if pd.isna(value):
-        return "—"
+        return default
 
     text = str(value).strip()
 
     if not text or text.lower() in {"nan", "none", "nat"}:
-        return "—"
+        return default
 
     return text
 
 
 def numeric_value(value):
-    """Convert Excel numeric values safely."""
+    """Convert a number or formatted capacity string to float."""
     if pd.isna(value):
         return 0.0
 
-    if isinstance(value, (int, float)):
-        return float(value)
-
-    text = str(value).strip()
-    text = text.replace(",", "").replace("MW", "").strip()
-
-    match = re.search(r"-?\d+(?:\.\d+)?", text)
-
-    if not match:
-        return 0.0
-
     try:
-        return float(match.group())
-    except (ValueError, TypeError):
+        text = str(value).strip()
+        text = text.replace(",", "")
+        text = re.sub(r"(?i)\s*mw\s*$", "", text)
+        match = re.search(r"-?\d+(?:\.\d+)?", text)
+
+        return float(match.group()) if match else 0.0
+    except (TypeError, ValueError):
         return 0.0
 
 
 def display_capacity(value):
-    if pd.isna(value):
-        return "—"
-
+    """Format capacity without unnecessary decimal zeros."""
     number = numeric_value(value)
 
     if number.is_integer():
         return f"{int(number):,} MW"
 
-    return f"{number:,.2f} MW"
+    return f"{number:,.2f}".rstrip("0").rstrip(".") + " MW"
 
 
-def format_number(number):
-    return f"{number:,.2f}".rstrip("0").rstrip(".")
+def safe_html(value):
+    return html.escape(clean_text(value))
+
+
+def detail_item(label, value, status=False):
+    """Render a single detail tile."""
+    label_html = safe_html(label)
+    value_html = safe_html(value)
+
+    if status:
+        value_html = (
+            f'<span class="status-pill">{value_html}</span>'
+        )
+
+    st.markdown(
+        f"""
+        <div class="detail-tile">
+            <div class="detail-label">{label_html}</div>
+            <div class="detail-value">{value_html}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def render_copy_button(pss_name, card_key):
     """
-    Render a compact copy button.
-    The iframe is used only for clipboard interaction, not card layout.
+    Render an isolated copy button.
+    It runs in its own iframe, so clicking it does not expand the card.
     """
-    safe_value = json.dumps(str(pss_name))
+    text_to_copy = json_string = (
+        '"' + str(pss_name).replace("\\", "\\\\").replace('"', '\\"') + '"'
+    )
 
-    copy_html = f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <meta charset="utf-8">
-        <style>
-            * {{ box-sizing: border-box; }}
-            body {{
-                margin: 0;
-                padding: 2px 0;
-                font-family: Arial, sans-serif;
-            }}
-            button {{
-                width: 100%;
-                height: 38px;
-                border: 1px solid #dbeafe;
-                border-radius: 11px;
-                background: linear-gradient(135deg, #eff6ff, #dbeafe);
-                color: #1d4ed8;
-                font-size: 17px;
-                font-weight: 700;
-                cursor: pointer;
-                transition: all 0.15s ease;
-            }}
-            button:hover {{
-                background: #dbeafe;
-                border-color: #93c5fd;
-            }}
-        </style>
-    </head>
-    <body>
-        <button id="copyBtn" title="Copy PSS name">⚡</button>
+    # The JSON string above is used as a safe JavaScript string literal.
+    components.html(
+        f"""
+        <div style="
+            display:flex;
+            justify-content:flex-end;
+            align-items:center;
+            margin:0;
+            padding:0;
+            font-family:Arial,sans-serif;
+        ">
+            <button id="copy_{card_key}" title="Copy PSS name"
+                style="
+                    border:1px solid #dbeafe;
+                    background:linear-gradient(135deg,#eff6ff,#ffffff);
+                    color:#1d4ed8;
+                    border-radius:8px;
+                    height:30px;
+                    min-width:38px;
+                    cursor:pointer;
+                    font-size:16px;
+                    box-shadow:0 2px 5px rgba(37,99,235,.06);
+                ">
+                ⚡
+            </button>
+            <span id="msg_{card_key}" style="
+                display:none;
+                margin-left:5px;
+                font-size:10px;
+                color:#047857;
+                font-weight:700;
+            ">Copied!</span>
+        </div>
         <script>
-            const pssName = {safe_value};
-            const btn = document.getElementById("copyBtn");
+        const copyBtn = document.getElementById("copy_{card_key}");
+        const message = document.getElementById("msg_{card_key}");
+        const pssText = {json_string};
 
-            btn.addEventListener("click", async function() {{
-                try {{
-                    if (navigator.clipboard && navigator.clipboard.writeText) {{
-                        await navigator.clipboard.writeText(pssName);
-                    }} else {{
-                        const area = document.createElement("textarea");
-                        area.value = pssName;
-                        area.style.position = "fixed";
-                        area.style.opacity = "0";
-                        document.body.appendChild(area);
-                        area.focus();
-                        area.select();
-                        const copied = document.execCommand("copy");
-                        area.remove();
-                        if (!copied) throw new Error("Copy failed");
-                    }}
+        copyBtn.addEventListener("click", async function() {{
+            try {{
+                if (navigator.clipboard && window.isSecureContext) {{
+                    await navigator.clipboard.writeText(pssText);
+                }} else {{
+                    const area = document.createElement("textarea");
+                    area.value = pssText;
+                    area.style.position = "fixed";
+                    area.style.left = "-9999px";
+                    document.body.appendChild(area);
+                    area.select();
+                    const copied = document.execCommand("copy");
+                    area.remove();
 
-                    btn.textContent = "✓";
-                    btn.style.background = "#dcfce7";
-                    btn.style.color = "#15803d";
-                    btn.style.borderColor = "#86efac";
-
-                    setTimeout(() => {{
-                        btn.textContent = "⚡";
-                        btn.style.background = "";
-                        btn.style.color = "";
-                        btn.style.borderColor = "";
-                    }}, 1200);
-                }} catch (err) {{
-                    btn.textContent = "↗";
-                    btn.title = "Clipboard unavailable in this browser";
+                    if (!copied) throw new Error("Copy failed");
                 }}
-            }});
+
+                message.style.display = "inline";
+                copyBtn.innerHTML = "✓";
+                setTimeout(() => {{
+                    message.style.display = "none";
+                    copyBtn.innerHTML = "⚡";
+                }}, 1200);
+            }} catch (error) {{
+                message.textContent = "Copy unavailable";
+                message.style.display = "inline";
+                setTimeout(() => {{
+                    message.style.display = "none";
+                    message.textContent = "Copied!";
+                }}, 1500);
+            }}
+        }});
         </script>
-    </body>
-    </html>
-    """
-
-    components.html(copy_html, height=43, scrolling=False)
-
-
-def detail_item(label, value, icon="•"):
-    safe_label = html.escape(str(label))
-    safe_value = html.escape(clean_text(value))
-
-    st.html(f"""
-    <div style="
-        padding: 11px 12px;
-        border: 1px solid #e9eef6;
-        border-radius: 11px;
-        background: linear-gradient(145deg, #ffffff, #f8faff);
-        min-height: 65px;
-        overflow-wrap: anywhere;
-        height: 100%;
-    ">
-        <div style="
-            color: #94a3b8;
-            font-size: 10px;
-            text-transform: uppercase;
-            letter-spacing: 0.65px;
-            font-weight: 800;
-            margin-bottom: 7px;
-        ">{icon} {safe_label}</div>
-        <div style="
-            color: #26354d;
-            font-size: 12px;
-            line-height: 1.45;
-            font-weight: 700;
-        ">{safe_value}</div>
-    </div>
-    """)
+        """,
+        height=36,
+        scrolling=False,
+    )
 
 
-def render_pss_card(row, index):
-    pss_name = clean_text(row.get("PSS"))
-    capacity = display_capacity(row.get("Capacity (MW)"))
-    state = clean_text(row.get("State"))
-    poc1 = clean_text(row.get("POC1"))
+def render_pss_card(row, columns, card_key):
+    """Render one compact PSS card with a native expandable details section."""
 
-    # Main card wrapper uses native Streamlit layout.
+    pss_name = clean_text(row.get(columns["pss"]))
+    state = clean_text(row.get(columns["state"]))
+    capacity = display_capacity(row.get(columns["capacity"]))
+    poc1 = clean_text(row.get(columns["poc1"]))
+
     with st.container(border=True):
-        # Decorative top strip
-        st.html("""
-        <div style="
-            height: 4px;
-            margin: -1px -1px 13px -1px;
-            border-radius: 10px;
-            background: linear-gradient(90deg, #2563eb, #60a5fa, #a5b4fc);
-        "></div>
-        """)
+        # Header row
+        heading_col, copy_col = st.columns(
+            [5.6, 0.8],
+            vertical_alignment="center",
+            gap="small",
+        )
 
-        # Title and lightning button
-        title_col, copy_col = st.columns([5.3, 0.8], vertical_alignment="center")
-
-        with title_col:
-            st.html(f"""
-            <div style="padding: 1px 0 7px 0;">
-                <div style="
-                    color: #94a3b8;
-                    font-size: 9px;
-                    letter-spacing: 1.1px;
-                    font-weight: 800;
-                    text-transform: uppercase;
-                    margin-bottom: 5px;
-                ">POWER SUB-STATION</div>
-                <div style="
-                    color: #172033;
-                    font-size: 17px;
-                    line-height: 1.35;
-                    font-weight: 800;
-                    letter-spacing: -0.35px;
-                    overflow-wrap: anywhere;
-                ">{html.escape(pss_name)}</div>
-            </div>
-            """)
+        with heading_col:
+            st.markdown(
+                f"""
+                <div class="pss-title-row">
+                    <div class="pss-icon">⚡</div>
+                    <div>
+                        <div class="pss-heading">{safe_html(pss_name)}</div>
+                        <div class="pss-subheading">Power Substation</div>
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
 
         with copy_col:
-            render_copy_button(pss_name, index)
+            render_copy_button(pss_name, card_key)
 
-        # Capacity badge and card metadata
-        st.html(f"""
-        <div style="
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 8px;
-            flex-wrap: wrap;
-            margin: 2px 0 12px 0;
-        ">
-            <span style="
-                display: inline-flex;
-                align-items: center;
-                gap: 6px;
-                padding: 7px 10px;
-                background: #ecfdf5;
-                border: 1px solid #d1fae5;
-                border-radius: 9px;
-                color: #047857;
-                font-size: 12px;
-                font-weight: 800;
-            ">⚡ {html.escape(capacity)}</span>
+        # Two compact information tiles
+        st.markdown(
+            f"""
+            <div class="pss-info-grid">
+                <div class="pss-info capacity-tile">
+                    <div class="pss-info-label">Capacity</div>
+                    <div class="pss-info-value">{safe_html(capacity)}</div>
+                </div>
+                <div class="pss-info state-tile">
+                    <div class="pss-info-label">State</div>
+                    <div class="pss-info-value">{safe_html(state)}</div>
+                </div>
+            </div>
+            <div class="pss-info">
+                <div class="pss-info-label">POC 1</div>
+                <div class="pss-info-value">{safe_html(poc1)}</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
-            <span style="
-                display: inline-block;
-                padding: 6px 9px;
-                border-radius: 9px;
-                background: #f1f5f9;
-                color: #475569;
-                font-size: 10px;
-                font-weight: 700;
-                max-width: 100%;
-                overflow-wrap: anywhere;
-            ">📍 {html.escape(state)}</span>
-        </div>
-        """)
+        # Native Streamlit expander: layout grows when expanded
+        with st.expander("View site details", expanded=False):
+            left, right = st.columns(2, gap="small")
 
-        # Contact detail
-        st.html(f"""
-        <div style="
-            border: 1px solid #e8eef7;
-            border-radius: 11px;
-            padding: 10px 12px;
-            background: #fbfdff;
-            margin-bottom: 11px;
-        ">
-            <div style="
-                color: #94a3b8;
-                font-size: 10px;
-                font-weight: 800;
-                letter-spacing: 0.7px;
-                margin-bottom: 5px;
-            ">PRIMARY CONTACT · POC 1</div>
-            <div style="
-                color: #334155;
-                font-size: 12px;
-                font-weight: 700;
-                overflow-wrap: anywhere;
-            ">{html.escape(poc1)}</div>
-        </div>
-        """)
+            with left:
+                detail_item(
+                    "Priority",
+                    row.get(columns["priority"]) if columns["priority"] else "—",
+                )
+                detail_item(
+                    "POC 2",
+                    row.get(columns["poc2"]) if columns["poc2"] else "—",
+                )
+                detail_item(
+                    "Latitude",
+                    row.get(columns["lat"]) if columns["lat"] else "—",
+                )
 
-        # Actual Streamlit expander: details participate in page layout.
-        with st.expander("⌄  View complete site details", expanded=False):
-            st.html("""
-            <div style="
-                color: #1e40af;
-                font-size: 11px;
-                font-weight: 800;
-                letter-spacing: 0.8px;
-                margin: 2px 0 11px 0;
-            ">SITE INFORMATION</div>
-            """)
-
-            priority = clean_text(row.get("Priority"))
-            poc2 = clean_text(row.get("POC 2"))
-            poc3 = clean_text(row.get("POC 3"))
-            latitude = clean_text(row.get("Lat"))
-            longitude = clean_text(row.get("Long"))
-            check_status = clean_text(row.get("Check Status"))
-
-            detail_columns = st.columns(2, gap="small")
-
-            details = [
-                ("Priority", priority, "✦"),
-                ("POC 2", poc2, "☎"),
-                ("POC 3", poc3, "☎"),
-                ("Latitude", latitude, "◎"),
-                ("Longitude", longitude, "◎"),
-                ("Check Status", check_status, "✓"),
-            ]
-
-            for i, (label, value, icon) in enumerate(details):
-                with detail_columns[i % 2]:
-                    detail_item(label, value, icon)
-
-            st.html("""
-            <div style="
-                margin-top: 12px;
-                padding-top: 10px;
-                border-top: 1px solid #e9eef6;
-                color: #94a3b8;
-                font-size: 10px;
-            ">End of site details</div>
-            """)
+            with right:
+                detail_item(
+                    "POC 3",
+                    row.get(columns["poc3"]) if columns["poc3"] else "—",
+                )
+                detail_item(
+                    "Longitude",
+                    row.get(columns["long"]) if columns["long"] else "—",
+                )
+                detail_item(
+                    "Check Status",
+                    row.get(columns["status"]) if columns["status"] else "—",
+                    status=True,
+                )
 
 
-# =========================================================
-# LOAD EXCEL
-# =========================================================
-@st.cache_data(show_spinner="Loading intimation records...")
+# ============================================================
+# LOAD EXCEL FILE
+# ============================================================
+
+@st.cache_data(show_spinner="Loading intimation data...")
 def load_data(file_path, modified_time):
-    # modified_time is included so an updated Excel file refreshes the cache.
-    del modified_time
-
     return pd.read_excel(file_path)
 
 
@@ -669,107 +694,152 @@ file_path = Path(__file__).resolve().parent.parent / "intimation.xlsx"
 
 if not file_path.exists():
     st.error(
-        "Excel file 'intimation.xlsx' nahi mili. "
-        "Please check karein ki file project root folder mein hai."
+        f"Excel file not found: {file_path}. "
+        "Please check that intimation.xlsx is in the project root."
     )
     st.stop()
 
 try:
-    raw_df = load_data(str(file_path), file_path.stat().st_mtime)
+    df = load_data(str(file_path), file_path.stat().st_mtime)
 except Exception as exc:
-    st.error(f"Excel file load nahi ho paayi: {exc}")
+    st.error(f"Unable to read intimation.xlsx: {exc}")
     st.stop()
 
-if raw_df.empty:
-    st.warning("Excel file mein abhi koi record available nahi hai.")
+if df.empty:
+    st.warning("The Excel file is empty.")
     st.stop()
 
 
-# =========================================================
-# FLEXIBLE COLUMN MAPPING
-# =========================================================
-columns = list(raw_df.columns)
+# ============================================================
+# COLUMN MAPPING
+# ============================================================
 
-column_map = {
-    "PSS": find_column(
-        columns,
-        ["PSS", "PSS Name", "Substation", "Sub Station", "Name of PSS"],
+all_columns = list(df.columns)
+
+columns = {
+    "pss": find_column(
+        all_columns,
+        candidates=[
+            "PSS",
+            "PSS Name",
+            "Name of PSS",
+            "Substation",
+            "Substation Name",
+        ],
     ),
-    "State": find_column(
-        columns,
-        ["State", "State Name"],
+    "state": find_column(
+        all_columns,
+        candidates=["State", "PSS State", "State Name"],
     ),
-    "Capacity (MW)": find_column(
-        columns,
-        ["Capacity (MW)", "Capacity MW", "Capacity", "MW"],
+    "capacity": find_column(
+        all_columns,
+        candidates=[
+            "Capacity (MW)",
+            "Capacity MW",
+            "Capacity",
+            "PSS Capacity (MW)",
+        ],
     ),
-    "POC1": find_column(
-        columns,
-        ["POC1", "POC 1", "POC-1", "POC 1 Name", "Primary Contact"],
+    "poc1": find_column(
+        all_columns,
+        candidates=["POC1", "POC 1", "POC-1"],
     ),
-    "POC 2": find_column(
-        columns,
-        ["POC 2", "POC2", "POC-2", "POC 2 Name"],
+    "poc2": find_column(
+        all_columns,
+        candidates=["POC 2", "POC2", "POC-2"],
     ),
-    "POC 3": find_column(
-        columns,
-        ["POC 3", "POC3", "POC-3", "POC 3 Name"],
+    "poc3": find_column(
+        all_columns,
+        candidates=["POC 3", "POC3", "POC-3"],
     ),
-    "Lat": find_column(
-        columns,
-        ["Lat", "Latitude"],
+    "lat": find_column(
+        all_columns,
+        candidates=["Lat", "Latitude"],
     ),
-    "Long": find_column(
-        columns,
-        ["Long", "Longitude", "Lon", "Lng"],
+    "long": find_column(
+        all_columns,
+        candidates=["Long", "Longitude", "Lon"],
     ),
-    "Check Status": find_column(
-        columns,
-        ["Check Status", "Status", "Intimation Status"],
+    "status": find_column(
+        all_columns,
+        candidates=[
+            "Check Status",
+            "Status",
+            "Intimation Status",
+        ],
     ),
 }
 
-column_map["Priority"] = find_priority_column(columns)
+# Priority preference:
+# 1. Priority as per 003 sheet
+# 2. Priority as per Amresh Sir 28.07.2023
+# 3. First column beginning with Priority
 
-if column_map["PSS"] is None:
-    st.error(
-        "PSS column identify nahi ho paaya. "
-        "Excel mein PSS name wala column check karein."
+columns["priority"] = find_column(
+    all_columns,
+    candidates=[
+        "Priority as per 003 sheet",
+        "Priority as per Amresh Sir 28.07.2023",
+    ],
+)
+
+if columns["priority"] is None:
+    columns["priority"] = find_column(
+        all_columns,
+        startswith="Priority",
     )
-    st.caption("Available columns: " + ", ".join(map(str, columns)))
+
+if columns["pss"] is None:
+    st.error(
+        "PSS column could not be identified. "
+        "Please check the column name in intimation.xlsx."
+    )
+    st.write("Available columns:", all_columns)
     st.stop()
 
-
-# Create a clean display dataframe while preserving all source rows.
-df = pd.DataFrame(index=raw_df.index)
-
-for display_name, source_name in column_map.items():
-    if source_name is None:
-        df[display_name] = "—"
-    else:
-        df[display_name] = raw_df[source_name]
-
-df = df.reset_index(drop=True)
-df["_row_id"] = df.index
-
-# Normalize values used for searching and display.
-for col in ["PSS", "State", "POC1", "POC 2", "POC 3", "Priority", "Check Status"]:
-    df[col] = df[col].map(clean_text)
-
-df["Capacity (MW)"] = df["Capacity (MW)"].map(numeric_value)
+# Provide sensible defaults for optional fields if absent.
+for field in ["state", "capacity", "poc1"]:
+    if columns[field] is None:
+        st.warning(
+            f"Column for '{field}' was not found. "
+            "The corresponding filter or value may be unavailable."
+        )
 
 
-# =========================================================
+# ============================================================
+# DASHBOARD HEADER
+# ============================================================
+
+st.markdown(
+    """
+    <div class="dashboard-header">
+        <div class="header-chip">SOLAR SUITE · OPERATIONS</div>
+        <h1>⚡ Intimation Dashboard</h1>
+        <p>Power Substation Overview &nbsp;·&nbsp; Search, filter and inspect site details</p>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+
+# ============================================================
 # FILTERS
-# =========================================================
-st.html("""
-<div class="section-heading">Find your PSS</div>
-<div class="section-caption">
-Search and narrow down records using connected filters.
-</div>
-""")
+# ============================================================
 
-filter1, filter2, filter3 = st.columns([1.6, 1, 1], gap="medium")
+st.markdown(
+    """
+    <div class="section-heading">
+        <span class="section-icon">⌕</span>
+        Search & Filters
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+filter1, filter2, filter3 = st.columns(
+    [2.2, 1.4, 1.4],
+    gap="medium",
+)
 
 with filter1:
     pss_search = st.text_input(
@@ -778,246 +848,301 @@ with filter1:
         key="intimation_pss_search",
     )
 
-# PSS search filters the available POC1 choices.
+# Search first; POC1 choices are based on the PSS search.
+search_df = df.copy()
+
 if pss_search.strip():
-    pss_mask = df["PSS"].str.contains(
-        pss_search.strip(),
-        case=False,
-        na=False,
-        regex=False,
-    )
-    search_df = df[pss_mask].copy()
-else:
-    search_df = df.copy()
-
-poc1_options = sorted(
-    value for value in search_df["POC1"].unique()
-    if value != "—"
-)
-
-with filter2:
-    selected_poc1 = st.selectbox(
-        "POC 1",
-        options=["All POC 1"] + poc1_options,
-        key="intimation_poc1_filter",
-    )
-
-# State choices depend on PSS search and the selected POC1.
-if selected_poc1 != "All POC 1":
-    state_source_df = search_df[
-        search_df["POC1"] == selected_poc1
-    ].copy()
-else:
-    state_source_df = search_df.copy()
-
-state_options = sorted(
-    value for value in state_source_df["State"].unique()
-    if value != "—"
-)
-
-with filter3:
-    selected_state = st.selectbox(
-        "State",
-        options=["All States"] + state_options,
-        key="intimation_state_filter",
-    )
-
-
-# =========================================================
-# APPLY FILTERS
-# =========================================================
-filtered_df = search_df.copy()
-
-if selected_poc1 != "All POC 1":
-    filtered_df = filtered_df[
-        filtered_df["POC1"] == selected_poc1
+    search_df = search_df[
+        search_df[columns["pss"]]
+        .fillna("")
+        .astype(str)
+        .str.contains(
+            pss_search.strip(),
+            case=False,
+            na=False,
+            regex=False,
+        )
     ]
 
-if selected_state != "All States":
+# POC1 options depend on the PSS search.
+with filter2:
+    if columns["poc1"]:
+        poc1_options = sorted(
+            {
+                clean_text(value)
+                for value in search_df[columns["poc1"]].tolist()
+                if clean_text(value) != "—"
+            },
+            key=str.casefold,
+        )
+
+        poc1_choice = st.selectbox(
+            "POC 1",
+            options=["All"] + poc1_options,
+            key="intimation_poc1_filter",
+        )
+    else:
+        poc1_choice = "All"
+        st.selectbox(
+            "POC 1",
+            options=["All"],
+            key="intimation_poc1_unavailable",
+            disabled=True,
+        )
+
+# State choices depend on both the PSS search and selected POC1.
+state_source = search_df.copy()
+
+if columns["poc1"] and poc1_choice != "All":
+    state_source = state_source[
+        state_source[columns["poc1"]]
+        .fillna("")
+        .astype(str)
+        .str.strip()
+        == poc1_choice
+    ]
+
+with filter3:
+    if columns["state"]:
+        state_options = sorted(
+            {
+                clean_text(value)
+                for value in state_source[columns["state"]].tolist()
+                if clean_text(value) != "—"
+            },
+            key=str.casefold,
+        )
+
+        state_choice = st.selectbox(
+            "State",
+            options=["All"] + state_options,
+            key="intimation_state_filter",
+        )
+    else:
+        state_choice = "All"
+        st.selectbox(
+            "State",
+            options=["All"],
+            key="intimation_state_unavailable",
+            disabled=True,
+        )
+
+# Apply all filters.
+filtered_df = search_df.copy()
+
+if columns["poc1"] and poc1_choice != "All":
     filtered_df = filtered_df[
-        filtered_df["State"] == selected_state
+        filtered_df[columns["poc1"]]
+        .fillna("")
+        .astype(str)
+        .str.strip()
+        == poc1_choice
+    ]
+
+if columns["state"] and state_choice != "All":
+    filtered_df = filtered_df[
+        filtered_df[columns["state"]]
+        .fillna("")
+        .astype(str)
+        .str.strip()
+        == state_choice
     ]
 
 filtered_df = filtered_df.reset_index(drop=True)
 
 
-# =========================================================
-# OVERVIEW METRICS
-# =========================================================
-total_records = len(filtered_df)
-total_capacity = filtered_df["Capacity (MW)"].sum()
+# ============================================================
+# OVERVIEW CARDS
+# ============================================================
 
-metric_col1, metric_col2 = st.columns(2, gap="medium")
+record_count = len(filtered_df)
 
-with metric_col1:
-    st.html(f"""
-    <div class="metric-card">
-        <div class="metric-label">▦ &nbsp; Matching Records</div>
-        <div class="metric-value">{total_records:,}</div>
-        <div class="metric-foot">PSS records matching your filters</div>
-    </div>
-    """)
+if columns["capacity"]:
+    total_capacity = filtered_df[columns["capacity"]].apply(
+        numeric_value
+    ).sum()
+else:
+    total_capacity = 0.0
 
-with metric_col2:
-    st.html(f"""
-    <div class="metric-card">
-        <div class="metric-label">⚡ &nbsp; Total Capacity</div>
-        <div class="metric-value">{format_number(total_capacity)} <span style="font-size:15px;color:#64748b;">MW</span></div>
-        <div class="metric-foot">Combined capacity of matching records</div>
-    </div>
-    """)
+capacity_display = display_capacity(total_capacity)
 
+overview1, overview2 = st.columns(2, gap="medium")
 
-# =========================================================
-# RESULTS HEADING
-# =========================================================
-st.html("""
-<div style="
-    display:flex;
-    align-items:center;
-    justify-content:space-between;
-    flex-wrap:wrap;
-    gap:8px;
-    margin-top:25px;
-    margin-bottom:3px;
-">
-    <div class="section-heading" style="margin:0;">PSS Directory</div>
-</div>
-<div class="section-caption">
-Open any card to view full site information. Use ⚡ to copy a PSS name.
-</div>
-""")
-
-
-# =========================================================
-# PAGINATION
-# =========================================================
-PAGE_SIZE = 20
-total_pages = max(1, (total_records + PAGE_SIZE - 1) // PAGE_SIZE)
-
-if "intimation_page" not in st.session_state:
-    st.session_state["intimation_page"] = 1
-
-# Keep the current page within valid bounds after filtering.
-if st.session_state["intimation_page"] > total_pages:
-    st.session_state["intimation_page"] = total_pages
-
-if st.session_state["intimation_page"] < 1:
-    st.session_state["intimation_page"] = 1
-
-if total_records > 0:
-    page_start = (st.session_state["intimation_page"] - 1) * PAGE_SIZE
-    page_df = filtered_df.iloc[page_start:page_start + PAGE_SIZE]
-
-    page_number_col, page_info_col = st.columns([1, 2], vertical_alignment="center")
-
-    with page_number_col:
-        st.selectbox(
-            "Page",
-            options=list(range(1, total_pages + 1)),
-            key="intimation_page_selector",
-            index=st.session_state["intimation_page"] - 1,
-            on_change=lambda: st.session_state.update(
-                intimation_page=st.session_state["intimation_page_selector"]
-            ),
-        )
-
-    with page_info_col:
-        first_record = page_start + 1
-        last_record = min(page_start + PAGE_SIZE, total_records)
-
-        st.html(f"""
-        <div style="
-            text-align:right;
-            color:#64748b;
-            font-size:12px;
-            padding-top:20px;
-        ">
-            Showing <b style="color:#1e293b;">{first_record}–{last_record}</b>
-            of <b style="color:#1e293b;">{total_records}</b> records
+with overview1:
+    st.markdown(
+        f"""
+        <div class="overview-card records">
+            <div class="metric-icon">▦</div>
+            <div class="metric-label">Matching Records</div>
+            <div class="metric-value">{record_count:,}</div>
         </div>
-        """)
+        """,
+        unsafe_allow_html=True,
+    )
 
-    # =====================================================
-    # CARD GRID: TWO COLUMNS
-    # =====================================================
-    card_columns = st.columns(2, gap="medium")
+with overview2:
+    st.markdown(
+        f"""
+        <div class="overview-card capacity">
+            <div class="metric-icon">⚡</div>
+            <div class="metric-label">Total Capacity</div>
+            <div class="metric-value">{safe_html(capacity_display)}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
-    for position, (_, row) in enumerate(page_df.iterrows()):
-        with card_columns[position % 2]:
-            render_pss_card(
-                row,
-                index=f"{int(row['_row_id'])}",
-            )
 
-    # =====================================================
-    # BOTTOM PAGINATION
-    # =====================================================
-    st.divider()
+# ============================================================
+# PAGINATION
+# ============================================================
 
-    previous_col, page_label_col, next_col = st.columns([1, 2, 1])
+PAGE_SIZE = 20
 
-    with previous_col:
-        st.button(
-            "← Previous",
-            key="intimation_previous",
-            disabled=st.session_state["intimation_page"] <= 1,
-            use_container_width=True,
-            on_click=lambda: st.session_state.update(
-                intimation_page=max(
-                    1,
-                    st.session_state["intimation_page"] - 1,
+# Reset the current page when the filters change.
+filter_signature = (
+    pss_search.strip().lower(),
+    poc1_choice,
+    state_choice,
+)
+
+if st.session_state.get("intimation_filter_signature") != filter_signature:
+    st.session_state["intimation_filter_signature"] = filter_signature
+    st.session_state["intimation_page"] = 1
+
+total_pages = max(1, (record_count + PAGE_SIZE - 1) // PAGE_SIZE)
+
+current_page = st.session_state.get("intimation_page", 1)
+current_page = min(max(1, current_page), total_pages)
+st.session_state["intimation_page"] = current_page
+
+start_index = (current_page - 1) * PAGE_SIZE
+end_index = min(start_index + PAGE_SIZE, record_count)
+
+page_df = filtered_df.iloc[start_index:end_index]
+
+
+# ============================================================
+# PSS CARDS SECTION
+# ============================================================
+
+st.markdown(
+    """
+    <div class="section-heading">
+        <span class="section-icon">▤</span>
+        PSS Sites
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+if record_count:
+    st.markdown(
+        f"""
+        <div class="results-caption">
+            Showing <b>{start_index + 1}–{end_index}</b>
+            of <b>{record_count:,}</b> matching sites
+            &nbsp; · &nbsp; {PAGE_SIZE} records per page
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    records = list(page_df.iterrows())
+
+    # Two cards per row; each expander participates in native Streamlit
+    # layout, so cards below move down when a card is expanded.
+    for pair_start in range(0, len(records), 2):
+        card_cols = st.columns(2, gap="medium")
+
+        for offset in range(2):
+            record_index = pair_start + offset
+
+            if record_index >= len(records):
+                continue
+
+            original_index, row = records[record_index]
+
+            with card_cols[offset]:
+                render_pss_card(
+                    row=row,
+                    columns=columns,
+                    card_key=f"pss_{current_page}_{original_index}",
                 )
-            ),
-        )
 
-    with page_label_col:
+        # A little separation between each card row.
         st.markdown(
-            f'<div class="page-indicator">Page '
-            f'{st.session_state["intimation_page"]} of {total_pages}</div>',
+            '<div style="height:4px"></div>',
             unsafe_allow_html=True,
         )
 
-    with next_col:
-        st.button(
-            "Next →",
-            key="intimation_next",
-            disabled=st.session_state["intimation_page"] >= total_pages,
-            use_container_width=True,
-            on_click=lambda: st.session_state.update(
-                intimation_page=min(
-                    total_pages,
-                    st.session_state["intimation_page"] + 1,
-                )
-            ),
+    # Pagination controls
+    if total_pages > 1:
+        st.markdown("---")
+
+        prev_col, page_col, next_col = st.columns(
+            [1, 2, 1],
+            vertical_alignment="center",
         )
 
+        with prev_col:
+            if st.button(
+                "← Previous",
+                use_container_width=True,
+                disabled=current_page <= 1,
+                key="intimation_prev_page",
+            ):
+                st.session_state["intimation_page"] = current_page - 1
+                st.rerun()
+
+        with page_col:
+            st.markdown(
+                f"""
+                <div class="page-label">
+                    Page {current_page} of {total_pages}
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+        with next_col:
+            if st.button(
+                "Next →",
+                use_container_width=True,
+                disabled=current_page >= total_pages,
+                key="intimation_next_page",
+            ):
+                st.session_state["intimation_page"] = current_page + 1
+                st.rerun()
+
 else:
-    st.html("""
-    <div style="
-        margin-top:10px;
-        padding:35px 20px;
-        border:1px dashed #cbd5e1;
-        border-radius:17px;
-        text-align:center;
-        background:#ffffff;
-    ">
-        <div style="font-size:28px;margin-bottom:9px;">🔎</div>
-        <div style="color:#1e293b;font-weight:800;font-size:16px;">
-            No matching PSS records
+    st.markdown(
+        """
+        <div class="empty-state">
+            <strong>🔎 No matching PSS sites</strong>
+            Try another PSS name or change the selected POC 1 / State filters.
         </div>
-        <div style="color:#64748b;font-size:12px;margin-top:6px;">
-            Try changing your search or selecting different filters.
-        </div>
-    </div>
-    """)
+        """,
+        unsafe_allow_html=True,
+    )
 
 
-# =========================================================
+# ============================================================
 # FOOTER
-# =========================================================
-st.html("""
-<div class="dashboard-footer">
-    INTIMATION DASHBOARD &nbsp; • &nbsp; PSS MANAGEMENT WORKSPACE
-</div>
-""")
+# ============================================================
+
+st.markdown(
+    """
+    <div style="
+        margin-top:22px;
+        padding-top:10px;
+        border-top:1px solid #e2e8f0;
+        text-align:center;
+        color:#94a3b8;
+        font-size:10px;
+    ">
+        SOLAR SUITE &nbsp;·&nbsp; INTIMATION DASHBOARD
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
