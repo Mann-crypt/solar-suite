@@ -27,51 +27,67 @@ st.html("""
 <style>
 .block-container {
     max-width: 1550px;
-    padding-top: 1.4rem;
-    padding-bottom: 2.5rem;
+    padding-top: 1.2rem;
+    padding-bottom: 2rem;
 }
 
 .dashboard-header {
     background: linear-gradient(120deg, #102A43, #176B87 60%, #218CA5);
-    padding: 25px 28px;
-    border-radius: 16px;
-    margin-bottom: 22px;
-    box-shadow: 0 5px 18px rgba(15, 50, 75, 0.12);
+    padding: 22px 26px;
+    border-radius: 15px;
+    margin-bottom: 18px;
+    box-shadow: 0 4px 15px rgba(15, 50, 75, 0.10);
 }
 
 .dashboard-header h1 {
     color: white !important;
-    font-size: 1.9rem;
+    font-size: 1.8rem;
     font-weight: 800;
     margin: 0;
 }
 
 .dashboard-header p {
     color: #D9EEF5 !important;
-    margin: 7px 0 0;
-    font-size: 0.92rem;
+    margin: 6px 0 0;
+    font-size: 0.9rem;
 }
 
 .section-heading {
-    font-size: 1.15rem;
+    font-size: 1.08rem;
     font-weight: 750;
-    margin: 12px 0 5px;
+    margin: 8px 0 4px;
 }
 
 .section-description {
-    font-size: 0.84rem;
+    font-size: 0.82rem;
     opacity: 0.72;
-    margin-bottom: 14px;
+    margin-bottom: 12px;
 }
 
-/* Compact record card */
-.record-card {
-    border: 1px solid rgba(128, 128, 128, 0.24);
-    border-radius: 12px;
+/* Overview metrics */
+div[data-testid="stMetric"] {
     padding: 12px;
-    margin-bottom: 8px;
+    border: 1px solid rgba(128, 128, 128, 0.20);
+    border-radius: 11px;
     background: var(--secondary-background-color);
-    box-shadow: 0 2px 7px rgba(0, 0, 0, 0.035);
+}
+
+div[data-testid="stMetricLabel"] {
+    font-weight: 650;
+    font-size: 0.78rem;
+}
+
+div[data-testid="stMetricValue"] {
+    font-size: 1.45rem;
+}
+
+/* Ultra-compact card */
+.record-card {
+    border: 1px solid rgba(128, 128, 128, 0.20);
+    border-radius: 10px;
+    padding: 9px 10px;
+    margin-bottom: 4px;
+    background: var(--secondary-background-color);
     overflow-wrap: anywhere;
     transition: border-color 0.2s ease;
 }
@@ -83,126 +99,101 @@ st.html("""
 .record-top {
     display: flex;
     align-items: center;
-    gap: 10px;
-    margin-bottom: 10px;
+    gap: 8px;
+    margin-bottom: 7px;
 }
 
 .record-icon {
     flex-shrink: 0;
-    width: 35px;
-    height: 35px;
-    border-radius: 9px;
+    width: 29px;
+    height: 29px;
+    border-radius: 7px;
     display: flex;
     align-items: center;
     justify-content: center;
     background: rgba(38, 147, 173, 0.13);
-    font-size: 18px;
+    font-size: 16px;
 }
 
 .record-title {
-    font-size: 0.98rem;
+    font-size: 0.90rem;
     font-weight: 800;
-    line-height: 1.35;
+    line-height: 1.3;
     margin: 0;
     overflow-wrap: anywhere;
 }
 
 .record-state {
-    font-size: 0.78rem;
+    font-size: 0.73rem;
     opacity: 0.72;
-    margin-top: 3px;
+    margin-top: 2px;
 }
 
 .record-primary {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 8px;
+    gap: 6px;
 }
 
 .record-primary-item {
     min-width: 0;
-    padding: 9px;
-    border-radius: 8px;
+    padding: 6px 7px;
+    border-radius: 6px;
     background: rgba(128, 128, 128, 0.07);
 }
 
 .record-label {
-    font-size: 0.65rem;
+    font-size: 0.61rem;
     font-weight: 700;
-    letter-spacing: 0.45px;
     text-transform: uppercase;
+    letter-spacing: 0.35px;
     opacity: 0.65;
-    margin-bottom: 4px;
+    margin-bottom: 2px;
 }
 
 .record-value {
-    font-size: 0.84rem;
+    font-size: 0.78rem;
     font-weight: 700;
-    line-height: 1.4;
+    line-height: 1.3;
     overflow-wrap: anywhere;
     word-break: break-word;
 }
 
-.record-status-row {
-    margin-top: 9px;
+/* Compact details dropdown */
+div[data-testid="stExpander"] {
+    border: none;
+    margin-top: -3px;
+    margin-bottom: 7px;
 }
 
-.record-status {
-    display: inline-block;
-    border-radius: 6px;
-    padding: 4px 7px;
-    font-size: 0.70rem;
-    font-weight: 700;
-    line-height: 1.35;
-    overflow-wrap: anywhere;
+div[data-testid="stExpander"] details {
+    border: none;
 }
 
-.status-ok {
-    color: #16794B;
-    background: rgba(34, 197, 94, 0.13);
-}
-
-.status-pending {
-    color: #A16207;
-    background: rgba(234, 179, 8, 0.16);
-}
-
-.status-issue {
-    color: #B42318;
-    background: rgba(239, 68, 68, 0.12);
-}
-
-.status-neutral {
-    color: var(--text-color);
-    background: rgba(128, 128, 128, 0.13);
-}
-
-/* Details */
-.details-heading {
-    font-size: 0.82rem;
-    font-weight: 750;
-    margin: 10px 0 3px;
-}
-
-.details-value {
-    font-size: 0.88rem;
-    overflow-wrap: anywhere;
-    word-break: break-word;
-}
-
-div[data-testid="stMetric"] {
-    padding: 15px;
-    border: 1px solid rgba(128, 128, 128, 0.2);
-    border-radius: 12px;
-    background: var(--secondary-background-color);
-}
-
-div[data-testid="stMetricLabel"] {
+div[data-testid="stExpander"] summary {
+    font-size: 0.76rem;
     font-weight: 650;
+    padding: 5px 8px;
+    border-radius: 6px;
+    background: rgba(128, 128, 128, 0.07);
 }
 
-div[data-testid="stMetricValue"] {
-    font-size: 1.6rem;
+div[data-testid="stExpander"] summary:hover {
+    color: #2693AD;
+}
+
+.detail-label {
+    font-size: 0.74rem;
+    font-weight: 700;
+    opacity: 0.7;
+    margin-top: 8px;
+    margin-bottom: 2px;
+}
+
+.detail-value {
+    font-size: 0.85rem;
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
 div[data-testid="stTextInput"] input {
@@ -216,7 +207,7 @@ div[data-testid="stMultiSelect"] > div > div {
 
 @media (max-width: 600px) {
     .dashboard-header {
-        padding: 19px;
+        padding: 17px;
     }
 
     .dashboard-header h1 {
@@ -224,11 +215,11 @@ div[data-testid="stMultiSelect"] > div > div {
     }
 
     .record-card {
-        padding: 10px;
+        padding: 8px;
     }
 
     .record-primary-item {
-        padding: 8px;
+        padding: 5px;
     }
 }
 </style>
@@ -266,19 +257,23 @@ def load_data(file_path, modified_time):
         "Check Status",
     ]
 
-    missing = [
+    missing_columns = [
         col for col in required_columns
         if col not in data.columns
     ]
 
-    if missing:
+    if missing_columns:
         raise ValueError(
-            "Missing Excel columns: " + ", ".join(missing)
+            "Missing Excel columns: " + ", ".join(missing_columns)
         )
 
     text_columns = [
-        "PSS", "State", "POC1",
-        "POC 2", "POC 3", "Check Status",
+        "PSS",
+        "State",
+        "POC1",
+        "POC 2",
+        "POC 3",
+        "Check Status",
     ]
 
     for col in text_columns:
@@ -334,10 +329,83 @@ try:
 except Exception as exc:
     st.error(f"Unable to load Excel data: {exc}")
     st.info(
-        "Verify that intimation.xlsx is a valid Excel workbook "
+        "Check that intimation.xlsx is a valid Excel workbook "
         "and contains the required columns."
     )
     st.stop()
+
+
+# =========================================================
+# HELPER FUNCTIONS
+# =========================================================
+def safe_text(value):
+    if pd.isna(value):
+        return "—"
+
+    value = str(value).strip()
+    return value if value else "—"
+
+
+def safe_number(value, decimals=2):
+    number = pd.to_numeric(
+        pd.Series([value]),
+        errors="coerce",
+    ).iloc[0]
+
+    if pd.isna(number):
+        return safe_text(value)
+
+    return f"{number:,.{decimals}f}"
+
+
+def show_detail(label, value):
+    st.markdown(
+        f'<div class="detail-label">{escape(label)}</div>'
+        f'<div class="detail-value">{escape(safe_text(value))}</div>',
+        unsafe_allow_html=True,
+    )
+
+
+def make_card(row):
+    def val(column):
+        value = row.get(column, "")
+
+        if pd.isna(value) or str(value).strip() == "":
+            return "—"
+
+        return escape(str(value).strip())
+
+    pss = val("PSS")
+    state = val("State")
+    poc1 = val("POC1")
+
+    capacity = escape(
+        safe_number(row.get("Capacity (MW)", ""), 2)
+    )
+
+    return dedent(f"""
+    <div class="record-card">
+        <div class="record-top">
+            <div class="record-icon">⚡</div>
+            <div>
+                <div class="record-title">{pss}</div>
+                <div class="record-state">📍 {state}</div>
+            </div>
+        </div>
+
+        <div class="record-primary">
+            <div class="record-primary-item">
+                <div class="record-label">POC1</div>
+                <div class="record-value">{poc1}</div>
+            </div>
+
+            <div class="record-primary-item">
+                <div class="record-label">Capacity</div>
+                <div class="record-value">{capacity} MW</div>
+            </div>
+        </div>
+    </div>
+    """).strip()
 
 
 # =========================================================
@@ -370,13 +438,13 @@ if st.session_state.get("intimation_user") not in user_options:
 st.html("""
 <div class="section-heading">🔎 Find Records</div>
 <div class="section-description">
-Select a POC1 user, search for a PSS and filter by state.
+Choose a POC1 user, search for a PSS and filter by state.
 </div>
 """)
 
 filter_col1, filter_col2, filter_col3 = st.columns(
     [1, 1.1, 1.5],
-    gap="medium",
+    gap="small",
 )
 
 with filter_col1:
@@ -390,13 +458,13 @@ with filter_col1:
 with filter_col3:
     pss_search = st.text_input(
         "🔍 Search PSS",
-        placeholder="Enter PSS name or identifier...",
+        placeholder="Enter PSS name...",
         key="intimation_pss",
         on_change=reset_dependent_filters,
     )
 
 
-# Filter by user and PSS first.
+# Filter by user and PSS before calculating state options.
 base_df = df.copy()
 
 if selected_user != "All Users":
@@ -419,6 +487,14 @@ available_states = sorted(
     if value
 )
 
+# Keep only state selections that remain valid.
+if "intimation_states" in st.session_state:
+    st.session_state["intimation_states"] = [
+        state
+        for state in st.session_state["intimation_states"]
+        if state in available_states
+    ]
+
 with filter_col2:
     selected_states = st.multiselect(
         "📍 State",
@@ -433,119 +509,43 @@ filtered_df = base_df[
     base_df["State"].isin(selected_states)
 ].copy()
 
-display_columns = [
-    "Lat", "Long", "PSS", "State", "Capacity (MW)",
-    "Priority", "POC1", "POC 2", "POC 3", "Check Status",
-]
-
-display_df = filtered_df[display_columns].copy()
-
 
 # =========================================================
-# DISPLAY HELPERS
+# OVERVIEW — AT THE TOP, UPDATES WITH FILTERS
 # =========================================================
-def safe_text(value):
-    if pd.isna(value):
-        return "—"
+capacity_values = pd.to_numeric(
+    filtered_df["Capacity (MW)"]
+    .astype(str)
+    .str.replace(",", "", regex=False),
+    errors="coerce",
+)
 
-    value = str(value).strip()
-    return value if value else "—"
+total_capacity = capacity_values.sum()
+unique_pss = filtered_df["PSS"].replace("", pd.NA).nunique()
 
+st.html("""
+<div class="section-heading">📈 Overview</div>
+<div class="section-description">
+Live summary of the currently filtered records.
+</div>
+""")
 
-def safe_number(value, decimals=2):
-    number = pd.to_numeric(
-        pd.Series([value]),
-        errors="coerce",
-    ).iloc[0]
+metric1, metric2, metric3 = st.columns(3, gap="small")
 
-    if pd.isna(number):
-        return safe_text(value)
+metric1.metric(
+    "Matching Records",
+    f"{len(filtered_df):,}",
+)
 
-    return f"{number:,.{decimals}f}"
+metric2.metric(
+    "Total Capacity",
+    f"{total_capacity:,.2f} MW",
+)
 
-
-def status_class_for(value):
-    status = safe_text(value).lower()
-
-    if any(word in status for word in [
-        "pass", "checked", "complete",
-        "completed", "verified", "ok",
-    ]):
-        return "status-ok"
-
-    if any(word in status for word in [
-        "pending", "progress", "waiting",
-    ]):
-        return "status-pending"
-
-    if any(word in status for word in [
-        "fail", "error", "issue",
-        "mismatch", "reject",
-    ]):
-        return "status-issue"
-
-    return "status-neutral"
-
-
-def make_card(row):
-    def val(column):
-        value = row.get(column, "")
-
-        if pd.isna(value) or str(value).strip() == "":
-            return "—"
-
-        return escape(str(value).strip())
-
-    pss = val("PSS")
-    state = val("State")
-    poc1 = val("POC1")
-    status = val("Check Status")
-
-    capacity = escape(
-        safe_number(row.get("Capacity (MW)", ""), 2)
-    )
-
-    status_class = status_class_for(
-        row.get("Check Status", "")
-    )
-
-    return dedent(f"""
-    <div class="record-card">
-        <div class="record-top">
-            <div class="record-icon">⚡</div>
-            <div>
-                <div class="record-title">{pss}</div>
-                <div class="record-state">📍 {state}</div>
-            </div>
-        </div>
-
-        <div class="record-primary">
-            <div class="record-primary-item">
-                <div class="record-label">POC1 / User</div>
-                <div class="record-value">{poc1}</div>
-            </div>
-
-            <div class="record-primary-item">
-                <div class="record-label">Capacity</div>
-                <div class="record-value">{capacity} MW</div>
-            </div>
-        </div>
-
-        <div class="record-status-row">
-            <span class="record-status {status_class}">
-                {status}
-            </span>
-        </div>
-    </div>
-    """).strip()
-
-
-def show_detail(label, value):
-    st.markdown(
-        f'<div class="details-heading">{escape(label)}</div>'
-        f'<div class="details-value">{escape(safe_text(value))}</div>',
-        unsafe_allow_html=True,
-    )
+metric3.metric(
+    "Unique PSS",
+    f"{unique_pss:,}",
+)
 
 
 # =========================================================
@@ -558,9 +558,24 @@ st.html("""
 """)
 
 st.caption(
-    f"Showing {len(display_df):,} matching records "
+    f"Showing {len(filtered_df):,} matching records "
     f"out of {len(df):,} total records."
 )
+
+display_columns = [
+    "Lat",
+    "Long",
+    "PSS",
+    "State",
+    "Capacity (MW)",
+    "Priority",
+    "POC1",
+    "POC 2",
+    "POC 3",
+    "Check Status",
+]
+
+display_df = filtered_df[display_columns].copy()
 
 if display_df.empty:
     st.info(
@@ -578,7 +593,10 @@ else:
     current_page = st.session_state.get(
         "intimation_card_page", 0
     )
-    current_page = max(0, min(current_page, total_pages - 1))
+    current_page = max(
+        0,
+        min(current_page, total_pages - 1),
+    )
     st.session_state["intimation_card_page"] = current_page
 
     page_col1, page_col2 = st.columns([3, 1])
@@ -605,11 +623,10 @@ else:
 
     start = current_page * cards_per_page
     page_df = display_df.iloc[start:start + cards_per_page]
-
     records = list(page_df.iterrows())
 
     for index in range(0, len(records), 2):
-        left_col, right_col = st.columns(2, gap="medium")
+        left_col, right_col = st.columns(2, gap="small")
 
         for offset, col in enumerate([left_col, right_col]):
             record_index = index + offset
@@ -617,72 +634,43 @@ else:
             if record_index >= len(records):
                 continue
 
-            row_index, row = records[record_index]
+            _, row = records[record_index]
 
             with col:
                 # Compact summary card
                 st.html(make_card(row))
 
-                # Click to reveal additional information
-                with st.expander("＋ View details", expanded=False):
-                    detail_col1, detail_col2 = st.columns(2)
+                # Additional information stays hidden until clicked.
+                with st.expander("▼ View details", expanded=False):
+                    detail_col1, detail_col2 = st.columns(
+                        2,
+                        gap="small",
+                    )
 
                     with detail_col1:
                         show_detail("Priority", row["Priority"])
                         show_detail("POC 2", row["POC 2"])
-                        show_detail("Latitude", safe_number(row["Lat"], 6))
+                        show_detail(
+                            "Latitude",
+                            safe_number(row["Lat"], 6),
+                        )
 
                     with detail_col2:
                         show_detail("POC 3", row["POC 3"])
-                        show_detail("Longitude", safe_number(row["Long"], 6))
-                        show_detail("Check Status", row["Check Status"])
+                        show_detail(
+                            "Longitude",
+                            safe_number(row["Long"], 6),
+                        )
+                        show_detail(
+                            "Check Status",
+                            row["Check Status"],
+                        )
 
 
 # =========================================================
-# OVERVIEW
+# FOOTER
 # =========================================================
-st.divider()
-
-st.html("""
-<div class="section-heading">📈 Overview</div>
-<div class="section-description">
-Summary based on your current filters.
-</div>
-""")
-
-capacity_values = pd.to_numeric(
-    filtered_df["Capacity (MW)"]
-    .astype(str)
-    .str.replace(",", "", regex=False),
-    errors="coerce",
-)
-
-total_capacity = capacity_values.sum()
-
-unique_pss = (
-    filtered_df["PSS"]
-    .replace("", pd.NA)
-    .nunique()
-)
-
-metric1, metric2, metric3 = st.columns(3, gap="medium")
-
-metric1.metric(
-    "Matching Records",
-    f"{len(filtered_df):,}",
-)
-
-metric2.metric(
-    "Total Capacity",
-    f"{total_capacity:,.2f} MW",
-)
-
-metric3.metric(
-    "Unique PSS",
-    f"{unique_pss:,}",
-)
-
 st.caption(
-    "Source: intimation.xlsx · Overview updates automatically "
-    "when filters change."
+    "Source: intimation.xlsx · Overview and records update "
+    "automatically when filters change."
 )
