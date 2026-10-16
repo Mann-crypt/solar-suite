@@ -1,109 +1,108 @@
-import streamlit as st
-import pandas as pd
+
 from pathlib import Path
 
-# -------------------------------
-# Page configuration
-# -------------------------------
+import pandas as pd
+import streamlit as st
+
+
+# -----------------------------------------
+# PAGE CONFIGURATION
+# -----------------------------------------
 st.set_page_config(
     page_title="Intimation Dashboard",
     page_icon="📊",
-    layout="wide"
+    layout="wide",
 )
 
 st.title("Intimation Dashboard")
-st.caption("Filter intimation records by POC1, State and PSS.")
+st.caption(
+    "Filter intimation records by POC1, State and PSS."
+)
 
-# -------------------------------
-# Backend Excel file
-# Keep app.py and intimation.xlsx
-# in the same project folder
-# -------------------------------
+
+# -----------------------------------------
+# BACKEND EXCEL FILE
+# Excel is stored in the repository root
+# -----------------------------------------
 EXCEL_PATH = (
     Path(__file__).resolve().parent.parent
     / "intimation.xlsx"
 )
 
-@st.cache_data
-def load_data():
-    return pd.read_excel(EXCEL_PATH)
 
-df = load_data()
-REQUIRED_COLUMNS = [
-    "Lat",
-    "Long",
-    "S.No",
-    "PSS",
-    "State",
-    "Capacity (MW)",
-    "Priority as per Amresh Sir   28.07.2023",
-    "Priority as per   003 sheet",
-    "POC1",
-    "POC 2",
-    "Check Status",
-]
-
-@st.cache_data
+# -----------------------------------------
+# LOAD DATA
+# -----------------------------------------
+@st.cache_data(ttl=300)
 def load_data(file_path, modified_time):
-    df = pd.read_excel(file_path)
+    df = pd.read_excel(file_path, engine="openpyxl")
 
-    # Remove accidental spaces in column headers
+    # Clean header spacing
     df.columns = df.columns.astype(str).str.strip()
 
-    # Validate required columns
-    missing = [
-        col for col in REQUIRED_COLUMNS
-        if col not in df.columns
-    ]
-
-    if missing:
-        raise ValueError(
-            f"Missing Excel columns: {missing}"
-        )
-
-    # Normalize filter/search fields
+    # Remove accidental spaces from filter fields
     for col in ["POC1", "State", "PSS"]:
-        df[col] = df[col].fillna("").astype(str).str.strip()
+        if col not in df.columns:
+            raise ValueError(
+                f"Required column not found: {col}"
+            )
+
+        df[col] = (
+            df[col]
+            .fillna("")
+            .astype(str)
+            .str.strip()
+        )
 
     return df
 
 
 if not EXCEL_PATH.exists():
     st.error(
-        f"Excel file not found: {EXCEL_PATH.name}. "
-        "Place it in the same folder as app.py."
+        "intimation.xlsx was not found in the "
+        "repository root."
     )
     st.stop()
 
 try:
     df = load_data(
         str(EXCEL_PATH),
-        EXCEL_PATH.stat().st_mtime
+        EXCEL_PATH.stat().st_mtime,
     )
-except Exception as e:
-    st.error(f"Could not read Excel file: {e}")
+except Exception as exc:
+    st.error(f"Unable to load Excel file: {exc}")
     st.stop()
 
-# -------------------------------
-# Filters
-# -------------------------------
+
+# -----------------------------------------
+# FILTER OPTIONS
+# -----------------------------------------
+poc_options = sorted(
+    value
+    for value in df["POC1"].unique()
+    if value
+)
+
+state_options = sorted(
+    value
+    for value in df["State"].unique()
+    if value
+)
+
+
+# -----------------------------------------
+# FILTER UI
+# -----------------------------------------
 st.subheader("Filters")
 
 col1, col2 = st.columns(2)
-
-poc_options = sorted(
-    x for x in df["POC1"].unique() if x
-)
-state_options = sorted(
-    x for x in df["State"].unique() if x
-)
 
 with col1:
     selected_pocs = st.multiselect(
         "POC1 / User",
         options=["All"] + poc_options,
         default=["All"],
-        help="Select All or one or more users."
+        key="intimation_poc_filter",
     )
 
 with col2:
@@ -111,84 +110,97 @@ with col2:
         "State",
         options=["All"] + state_options,
         default=["All"],
-        help="Select All or one or more states."
+        key="intimation_state_filter",
     )
 
-# -------------------------------
-# PSS search
-# -------------------------------
+
 search_pss = st.text_input(
     "Search PSS",
-    placeholder="Type PSS name or identifier..."
+    placeholder="Enter PSS name or identifier...",
+    key="intimation_pss_search",
 )
 
-# -------------------------------
-# Apply filters
-# -------------------------------
+
+# -----------------------------------------
+# APPLY FILTERS
+# -----------------------------------------
 filtered_df = df.copy()
 
-if selected_pocs and "All" not in selected_pocs:
-    filtered_df = filtered_df[
-        filtered_df["POC1"].isin(selected_pocs)
-    ]
-elif not selected_pocs:
-    filtered_df = filtered_df.iloc[0:0]
+if "All" not in selected_pocs:
+    if selected_pocs:
+        filtered_df = filtered_df[
+            filtered_df["POC1"].isin(selected_pocs)
+        ]
+    else:
+        filtered_df = filtered_df.iloc[0:0]
 
-if selected_states and "All" not in selected_states:
-    filtered_df = filtered_df[
-        filtered_df["State"].isin(selected_states)
-    ]
-elif not selected_states:
-    filtered_df = filtered_df.iloc[0:0]
+if "All" not in selected_states:
+    if selected_states:
+        filtered_df = filtered_df[
+            filtered_df["State"].isin(selected_states)
+        ]
+    else:
+        filtered_df = filtered_df.iloc[0:0]
 
 if search_pss.strip():
     filtered_df = filtered_df[
         filtered_df["PSS"].str.contains(
             search_pss.strip(),
             case=False,
+            regex=False,
             na=False,
-            regex=False
         )
     ]
 
-# -------------------------------
-# Results
-# -------------------------------
+
+# -----------------------------------------
+# RESULTS SUMMARY
+# -----------------------------------------
 st.divider()
 
-m1, m2 = st.columns(2)
+metric1, metric2 = st.columns(2)
 
-m1.metric("Matching Records", len(filtered_df))
-m2.metric(
-    "Total Capacity (MW)",
-    round(
-        pd.to_numeric(
-            filtered_df["Capacity (MW)"],
-            errors="coerce"
-        ).sum(),
-        2
-    )
+metric1.metric(
+    "Matching Records",
+    f"{len(filtered_df):,}",
 )
 
+capacity = pd.to_numeric(
+    filtered_df.get(
+        "Capacity (MW)",
+        pd.Series(dtype=float),
+    ),
+    errors="coerce",
+).sum()
+
+metric2.metric(
+    "Total Capacity (MW)",
+    f"{capacity:,.2f}",
+)
+
+
+# -----------------------------------------
+# DISPLAY RESULTS
+# -----------------------------------------
 st.subheader("Intimation Records")
 
 st.dataframe(
     filtered_df,
     use_container_width=True,
     hide_index=True,
-    height=550
+    height=550,
 )
 
-# -------------------------------
-# Export filtered results
-# -------------------------------
-output = filtered_df.to_csv(
+# -----------------------------------------
+# DOWNLOAD FILTERED DATA
+# -----------------------------------------
+csv_data = filtered_df.to_csv(
     index=False
 ).encode("utf-8-sig")
 
 st.download_button(
-    label="Download Filtered Results (CSV)",
-    data=output,
+    label="Download Filtered Results",
+    data=csv_data,
     file_name="filtered_intimation.csv",
-    mime="text/csv"
+    mime="text/csv",
 )
