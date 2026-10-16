@@ -13,7 +13,7 @@ import streamlit as st
 
 st.set_page_config(
     page_title="Intimation Dashboard",
-    page_icon="📊",
+    page_icon="⚡",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
@@ -24,47 +24,42 @@ ALL_USERS = "All Users"
 
 
 # =========================================================
-# CUSTOM CSS
+# STYLING
 # =========================================================
 
 st.html("""
 <style>
 .block-container {
     max-width: 1500px;
-    padding-top: 1.5rem;
-    padding-bottom: 2.5rem;
-}
-
-header[data-testid="stHeader"] {
-    background: transparent;
+    padding: 1.5rem 2rem 2.5rem 2rem;
 }
 
 .dash-header {
     display: flex;
     align-items: center;
     gap: 15px;
-    margin-bottom: 24px;
+    margin-bottom: 26px;
 }
 
 .dash-logo {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 49px;
-    height: 49px;
+    width: 50px;
+    height: 50px;
     flex-shrink: 0;
-    border-radius: 14px;
-    background: linear-gradient(135deg, #2563eb, #6366f1);
+    border-radius: 15px;
+    background: linear-gradient(135deg, #2563eb, #7c3aed);
     color: #ffffff;
     font-size: 24px;
     font-weight: 800;
-    box-shadow: 0 5px 18px rgba(79,70,229,0.18);
+    box-shadow: 0 6px 18px rgba(79,70,229,0.2);
 }
 
 .dash-title {
-    font-size: 27px;
-    font-weight: 800;
-    letter-spacing: -0.8px;
+    font-size: 28px;
+    font-weight: 850;
+    letter-spacing: -0.9px;
     line-height: 1.25;
 }
 
@@ -77,8 +72,8 @@ header[data-testid="stHeader"] {
 .section-heading {
     font-size: 18px;
     font-weight: 800;
-    letter-spacing: -0.35px;
-    margin-bottom: 3px;
+    letter-spacing: -0.4px;
+    margin-bottom: 4px;
 }
 
 .section-caption {
@@ -87,106 +82,132 @@ header[data-testid="stHeader"] {
     margin-bottom: 15px;
 }
 
+/* Horizontal overview metric cards */
 div[data-testid="stMetric"] {
-    background: var(--secondary-background-color);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: 105px;
+    padding: 17px 21px;
     border: 1px solid rgba(128,128,128,0.18);
-    border-radius: 15px;
-    padding: 17px 19px;
-    min-height: 102px;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.025);
+    border-radius: 16px;
+    background: var(--secondary-background-color);
+    box-shadow: 0 5px 18px rgba(0,0,0,0.035);
+    transition: border-color 0.2s ease, transform 0.2s ease;
+}
+
+div[data-testid="stMetric"]:hover {
+    border-color: rgba(99,102,241,0.55);
+    transform: translateY(-2px);
 }
 
 div[data-testid="stMetricLabel"] {
     font-size: 12px;
-    font-weight: 600;
+    font-weight: 650;
 }
 
 div[data-testid="stMetricValue"] {
-    font-size: 25px;
-    font-weight: 800;
-    letter-spacing: -0.5px;
+    font-size: 26px;
+    font-weight: 850;
+    letter-spacing: -0.7px;
 }
 
+/* Filter containers */
+div[data-testid="stTextInput"] input,
+div[data-testid="stSelectbox"] [data-baseweb="select"],
+div[data-testid="stMultiSelect"] [data-baseweb="select"] {
+    border-radius: 10px;
+}
+
+div[data-testid="stTextInput"] label,
+div[data-testid="stSelectbox"] label,
+div[data-testid="stMultiSelect"] label {
+    font-size: 12px;
+    font-weight: 700;
+}
+
+/* Record cards */
 div[data-testid="stExpander"] {
     border: 1px solid rgba(128,128,128,0.22) !important;
-    border-radius: 14px !important;
+    border-radius: 15px !important;
     overflow: hidden;
     background: var(--secondary-background-color);
     margin-bottom: 0 !important;
-    box-shadow: 0 3px 12px rgba(0,0,0,0.025);
+    box-shadow: 0 4px 14px rgba(0,0,0,0.025);
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 div[data-testid="stExpander"]:hover {
     border-color: rgba(99,102,241,0.65) !important;
-    box-shadow: 0 5px 17px rgba(79,70,229,0.07);
+    box-shadow: 0 7px 20px rgba(79,70,229,0.08);
 }
 
 div[data-testid="stExpander"] details summary {
-    padding: 12px 14px !important;
-    min-height: 62px;
+    padding: 13px 15px !important;
+    min-height: 64px;
 }
 
 div[data-testid="stExpander"] details summary p {
     font-size: 12px;
-    font-weight: 700;
-    line-height: 1.55;
+    font-weight: 750;
+    line-height: 1.6;
+    overflow-wrap: anywhere;
 }
 
 div[data-testid="stExpander"] details div[data-testid="stExpanderDetails"] {
-    padding: 0 14px 14px 14px !important;
+    padding: 0 15px 15px 15px !important;
 }
 
-.card-heading {
+.card-title {
     font-size: 15px;
-    font-weight: 800;
-    line-height: 1.45;
+    font-weight: 850;
+    line-height: 1.5;
     overflow-wrap: anywhere;
-    margin-bottom: 12px;
+    margin-bottom: 13px;
 }
 
-.card-info-grid {
+.card-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 10px;
+    gap: 9px;
 }
 
 .card-info {
-    padding: 10px 11px;
-    border: 1px solid rgba(128,128,128,0.15);
-    border-radius: 10px;
-    background: rgba(128,128,128,0.035);
     min-width: 0;
+    padding: 11px;
+    border-radius: 11px;
+    border: 1px solid rgba(128,128,128,0.15);
+    background: rgba(128,128,128,0.035);
 }
 
 .card-label {
     font-size: 10px;
-    font-weight: 650;
+    font-weight: 750;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
     opacity: 0.65;
     margin-bottom: 5px;
-    text-transform: uppercase;
-    letter-spacing: 0.55px;
 }
 
 .card-value {
     font-size: 12px;
     font-weight: 700;
-    overflow-wrap: anywhere;
     line-height: 1.5;
+    overflow-wrap: anywhere;
 }
 
-.card-capacity {
-    font-size: 14px;
-    font-weight: 800;
+.capacity-value {
+    font-size: 15px;
+    font-weight: 850;
 }
 
 .card-details-heading {
     font-size: 11px;
-    font-weight: 800;
+    font-weight: 850;
     text-transform: uppercase;
     letter-spacing: 0.8px;
-    opacity: 0.68;
-    margin-top: 18px;
+    opacity: 0.65;
+    margin-top: 19px;
     margin-bottom: 7px;
 }
 
@@ -198,14 +219,14 @@ div[data-testid="stExpander"] details div[data-testid="stExpanderDetails"] {
 .detail-label {
     font-size: 10px;
     opacity: 0.65;
-    margin-bottom: 3px;
+    margin-bottom: 4px;
 }
 
 .detail-value {
     font-size: 12px;
-    font-weight: 600;
-    overflow-wrap: anywhere;
+    font-weight: 650;
     line-height: 1.5;
+    overflow-wrap: anywhere;
 }
 
 .status-pill {
@@ -214,32 +235,32 @@ div[data-testid="stExpander"] details div[data-testid="stExpanderDetails"] {
     padding: 5px 9px;
     font-size: 10px;
     font-weight: 750;
-    margin-top: 10px;
-    border: 1px solid rgba(128,128,128,0.15);
+    margin-top: 11px;
+    border: 1px solid rgba(128,128,128,0.17);
     background: rgba(128,128,128,0.09);
 }
 
 .status-good {
     color: #15803d;
     background: rgba(34,197,94,0.10);
-    border-color: rgba(34,197,94,0.22);
+    border-color: rgba(34,197,94,0.24);
 }
 
 .status-pending {
     color: #b45309;
     background: rgba(245,158,11,0.11);
-    border-color: rgba(245,158,11,0.23);
+    border-color: rgba(245,158,11,0.24);
 }
 
 .status-alert {
     color: #dc2626;
     background: rgba(239,68,68,0.10);
-    border-color: rgba(239,68,68,0.22);
+    border-color: rgba(239,68,68,0.24);
 }
 
 .result-caption {
     font-size: 12px;
-    opacity: 0.7;
+    opacity: 0.68;
     margin-top: 6px;
     margin-bottom: 12px;
 }
@@ -247,44 +268,53 @@ div[data-testid="stExpander"] details div[data-testid="stExpanderDetails"] {
 .page-indicator {
     text-align: center;
     font-size: 12px;
-    font-weight: 700;
+    font-weight: 750;
     padding-top: 10px;
 }
 
 div.stButton > button {
-    border-radius: 9px;
-    font-weight: 650;
-    min-height: 38px;
+    min-height: 39px;
+    border-radius: 10px;
+    font-weight: 700;
     transition: all 0.2s ease;
 }
 
-div[data-testid="stDivider"] {
-    margin-top: 1.2rem;
-    margin-bottom: 1.2rem;
-}
-
-@media (max-width: 700px) {
+@media (max-width: 850px) {
     .block-container {
-        padding-left: 0.8rem;
-        padding-right: 0.8rem;
+        padding: 1.2rem 1rem 2rem 1rem;
     }
 
     .dash-title {
-        font-size: 22px;
+        font-size: 24px;
     }
 
     div[data-testid="stMetric"] {
-        padding: 12px;
-        min-height: 88px;
+        min-height: 92px;
+        padding: 13px 15px;
     }
 
     div[data-testid="stMetricValue"] {
-        font-size: 20px;
+        font-size: 22px;
+    }
+}
+
+@media (max-width: 520px) {
+    .dash-title {
+        font-size: 21px;
     }
 
-    .card-info-grid {
+    .dash-logo {
+        width: 43px;
+        height: 43px;
+    }
+
+    .card-grid {
         grid-template-columns: 1fr 1fr;
         gap: 7px;
+    }
+
+    .card-info {
+        padding: 9px;
     }
 }
 </style>
@@ -335,7 +365,7 @@ def clean(value):
     return str(value).strip()
 
 
-def html_text(value):
+def safe_html(value):
     return escape(clean(value))
 
 
@@ -365,7 +395,8 @@ def status_style(value):
     value = clean(value).casefold()
 
     if any(word in value for word in [
-        "complete", "checked", "verified", "approved", "done", "pass"
+        "complete", "checked", "verified",
+        "approved", "done", "pass"
     ]):
         return "status-good"
 
@@ -383,18 +414,16 @@ def status_style(value):
 
 
 # =========================================================
-# LOAD EXCEL
+# LOAD AND NORMALIZE EXCEL
 # =========================================================
 
 @st.cache_data(show_spinner="Loading intimation records...")
 def load_data(file_path, modified_time):
-    # The modified time changes whenever the Excel file changes.
     del modified_time
 
     raw = pd.read_excel(file_path)
     raw.columns = [str(col).strip() for col in raw.columns]
 
-    # Preferred priority source, with fallback.
     priority_source = find_column(
         raw,
         [
@@ -429,11 +458,7 @@ def load_data(file_path, modified_time):
 
     for target, candidates in aliases.items():
         source = find_column(raw, candidates)
-
-        if source is None:
-            output[target] = ""
-        else:
-            output[target] = raw[source]
+        output[target] = raw[source] if source else ""
 
     output["Priority"] = (
         raw[priority_source]
@@ -489,7 +514,7 @@ st.html("""
     <div>
         <div class="dash-title">Intimation Dashboard</div>
         <div class="dash-subtitle">
-            Manage and review PSS records, capacity and assignments
+            PSS records, capacity and assignment overview
         </div>
     </div>
 </div>
@@ -517,7 +542,7 @@ if df.empty:
 
 
 # =========================================================
-# FILTER STATE
+# INITIALIZE FILTER STATE
 # =========================================================
 
 if "intimation_poc1" not in st.session_state:
@@ -535,18 +560,26 @@ if "intimation_page" not in st.session_state:
 
 # =========================================================
 # OVERVIEW
-# Only two metrics. No charts and no unique PSS card.
+# Two horizontal metric cards, no charts.
 # =========================================================
 
 st.html("""
 <div class="section-heading">Overview</div>
 <div class="section-caption">
-    Summary of records matching your selected filters
+    Summary updates automatically with your filters
 </div>
 """)
 
-overview_records = st.empty()
-overview_capacity = st.empty()
+overview_left, overview_right = st.columns(
+    [1, 1],
+    gap="medium",
+)
+
+with overview_left:
+    records_metric = st.empty()
+
+with overview_right:
+    capacity_metric = st.empty()
 
 
 # =========================================================
@@ -558,19 +591,19 @@ st.divider()
 st.html("""
 <div class="section-heading">Filters</div>
 <div class="section-caption">
-    Filters are connected and update available options automatically
+    Select a POC1, search for a PSS, or choose one or more states
 </div>
 """)
 
-poc_col, pss_col, state_col = st.columns(
+filter_poc, filter_pss, filter_state = st.columns(
     [1, 1.5, 1.2],
     gap="medium",
 )
 
-with pss_col:
+with filter_pss:
     st.text_input(
         "Search PSS",
-        placeholder="Enter PSS name...",
+        placeholder="Type a PSS name...",
         key="intimation_pss_search",
         on_change=reset_page,
     )
@@ -589,7 +622,7 @@ else:
 
 
 # ---------------------------------------------------------
-# POC1 options depend on search and selected states
+# POC1 OPTIONS DEPEND ON SEARCH + SELECTED STATES
 # ---------------------------------------------------------
 
 selected_states = st.session_state["intimation_states"]
@@ -599,7 +632,9 @@ poc_option_mask = pss_mask.copy()
 if selected_states:
     poc_option_mask &= df["State"].isin(selected_states)
 
-poc_values = unique_sorted(df.loc[poc_option_mask, "POC1"])
+poc_values = unique_sorted(
+    df.loc[poc_option_mask, "POC1"]
+)
 
 poc_options = [ALL_USERS] + [
     value for value in poc_values
@@ -609,7 +644,7 @@ poc_options = [ALL_USERS] + [
 if st.session_state["intimation_poc1"] not in poc_options:
     st.session_state["intimation_poc1"] = ALL_USERS
 
-with poc_col:
+with filter_poc:
     st.selectbox(
         "POC1",
         options=poc_options,
@@ -621,7 +656,7 @@ selected_poc = st.session_state["intimation_poc1"]
 
 
 # ---------------------------------------------------------
-# State options depend on search and selected POC1
+# STATE OPTIONS DEPEND ON SEARCH + SELECTED POC1
 # ---------------------------------------------------------
 
 state_option_mask = pss_mask.copy()
@@ -636,14 +671,14 @@ available_states = unique_sorted(
 current_states = st.session_state["intimation_states"]
 
 valid_states = [
-    value for value in current_states
-    if value in available_states
+    state for state in current_states
+    if state in available_states
 ]
 
 if valid_states != current_states:
     st.session_state["intimation_states"] = valid_states
 
-with state_col:
+with filter_state:
     st.multiselect(
         "State",
         options=available_states,
@@ -656,7 +691,7 @@ selected_states = st.session_state["intimation_states"]
 
 
 # =========================================================
-# APPLY FILTERS
+# APPLY ALL FILTERS
 # =========================================================
 
 filtered_df = df.copy()
@@ -685,7 +720,7 @@ filtered_df = filtered_df.reset_index(drop=True)
 
 
 # =========================================================
-# UPDATE OVERVIEW METRICS
+# REFRESH OVERVIEW METRICS
 # =========================================================
 
 total_capacity = filtered_df["Capacity (MW)"].sum(min_count=1)
@@ -693,23 +728,21 @@ total_capacity = filtered_df["Capacity (MW)"].sum(min_count=1)
 if pd.isna(total_capacity):
     total_capacity = 0.0
 
-with overview_records.container():
+with records_metric.container():
     st.metric(
         label="Matching Records",
         value=f"{len(filtered_df):,}",
-        help="Number of records matching the current filters.",
     )
 
-with overview_capacity.container():
+with capacity_metric.container():
     st.metric(
         label="Total Capacity",
         value=f"{total_capacity:,.2f} MW",
-        help="Sum of capacity for the currently filtered records.",
     )
 
 
 # =========================================================
-# RECORDS SECTION
+# RECORDS
 # =========================================================
 
 st.divider()
@@ -717,14 +750,14 @@ st.divider()
 st.html("""
 <div class="section-heading">Records</div>
 <div class="section-caption">
-    Select a card to view the remaining record details
+    Expand a card to see the full record
 </div>
 """)
 
 if filtered_df.empty:
     st.info(
-        "No records match the selected filters. "
-        "Try another PSS search, POC1 or State."
+        "No records match these filters. "
+        "Try changing the PSS search, POC1 or State."
     )
     st.stop()
 
@@ -746,7 +779,7 @@ end = min(start + PAGE_SIZE, total_records)
 st.html(f"""
 <div class="result-caption">
     Showing <b>{start + 1:,}–{end:,}</b>
-    of <b>{total_records:,}</b> records
+    of <b>{total_records:,}</b> matching records
 </div>
 """)
 
@@ -754,15 +787,15 @@ page_df = filtered_df.iloc[start:end]
 
 
 # =========================================================
-# CARD RENDERING
-# Collapsed: PSS name, capacity, state and POC1 only.
-# Expanded: remaining details within the same card.
+# CARD LAYOUT
+# Collapsed: lightning + PSS + capacity in heading.
+# Expanded: capacity, state and POC1 plus other details.
 # =========================================================
 
-left_cards, right_cards = st.columns(2, gap="medium")
+card_left, card_right = st.columns(2, gap="medium")
 
 for index, (_, record) in enumerate(page_df.iterrows()):
-    target = left_cards if index % 2 == 0 else right_cards
+    card_column = card_left if index % 2 == 0 else card_right
 
     pss = clean(record["PSS"]) or "Unnamed PSS"
     state = clean(record["State"]) or "Not specified"
@@ -774,45 +807,44 @@ for index, (_, record) in enumerate(page_df.iterrows()):
 
     status_class = status_style(status)
 
-    with target:
-        # Summary remains compact when the card is collapsed.
-        # PSS and capacity appear in the expander heading.
+    with card_column:
         with st.expander(
-            f"{pss}  ·  {capacity}",
+            f"⚡ {pss}  ·  {capacity}",
             expanded=False,
         ):
-            # These four fields are the main card information.
+            # Main card details
             st.html(f"""
-            <div class="card-heading">
-                {html_text(pss)}
+            <div class="card-title">
+                ⚡ {safe_html(pss)}
             </div>
 
-            <div class="card-info-grid">
+            <div class="card-grid">
                 <div class="card-info">
                     <div class="card-label">Capacity</div>
-                    <div class="card-value card-capacity">
-                        {html_text(capacity)}
+                    <div class="card-value capacity-value">
+                        {safe_html(capacity)}
                     </div>
                 </div>
 
                 <div class="card-info">
                     <div class="card-label">State</div>
                     <div class="card-value">
-                        📍 {html_text(state)}
+                        📍 {safe_html(state)}
                     </div>
                 </div>
 
                 <div class="card-info" style="grid-column: 1 / -1;">
                     <div class="card-label">POC1</div>
                     <div class="card-value">
-                        👤 {html_text(poc1)}
+                        {safe_html(poc1)}
                     </div>
                 </div>
             </div>
-            """)
 
-            # Remaining information appears only after expansion.
-            st.html(f"""
+            <div class="status-pill {status_class}">
+                {safe_html(status)}
+            </div>
+
             <div class="card-details-heading">
                 Additional Details
             </div>
@@ -839,10 +871,10 @@ for index, (_, record) in enumerate(page_df.iterrows()):
                     st.html(f"""
                     <div class="detail-item">
                         <div class="detail-label">
-                            {html_text(label)}
+                            {safe_html(label)}
                         </div>
                         <div class="detail-value">
-                            {html_text(value) or "—"}
+                            {safe_html(value) or "—"}
                         </div>
                     </div>
                     """)
@@ -851,11 +883,8 @@ for index, (_, record) in enumerate(page_df.iterrows()):
             <div class="detail-item">
                 <div class="detail-label">Check Status</div>
                 <div class="detail-value">
-                    {html_text(status)}
+                    {safe_html(status)}
                 </div>
-                <span class="status-pill {status_class}">
-                    {html_text(status)}
-                </span>
             </div>
             """)
 
@@ -866,12 +895,12 @@ for index, (_, record) in enumerate(page_df.iterrows()):
 
 st.divider()
 
-prev_col, page_col, next_col = st.columns(
+previous_col, page_col, next_col = st.columns(
     [1, 1.2, 1],
     gap="small",
 )
 
-with prev_col:
+with previous_col:
     st.button(
         "← Previous",
         key="intimation_prev_btn",
