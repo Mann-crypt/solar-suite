@@ -24,10 +24,26 @@ st.caption(
 # BACKEND EXCEL FILE
 # Excel is stored in the repository root
 # -----------------------------------------
+from pathlib import Path
+import zipfile
+import streamlit as st
+
 EXCEL_PATH = (
     Path(__file__).resolve().parent.parent
     / "intimation.xlsx"
 )
+
+if not EXCEL_PATH.exists():
+    st.error(f"File not found: {EXCEL_PATH}")
+    st.stop()
+
+with open(EXCEL_PATH, "rb") as f:
+    header = f.read(32)
+
+st.write("File size:", EXCEL_PATH.stat().st_size, "bytes")
+st.write("File signature:", repr(header[:16]))
+st.write("Valid XLSX ZIP container:", zipfile.is_zipfile(EXCEL_PATH))
+
 
 
 # -----------------------------------------
