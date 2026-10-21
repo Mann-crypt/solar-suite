@@ -212,6 +212,59 @@ def cached_best_shift(
 
 
 # ==========================================================
+# DOWNLOAD PROFILE TEMPLATE
+# ==========================================================
+
+def build_profile_template(station_name, curve_name, curve_values):
+    output = io.BytesIO()
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Profile Template"
+
+    # First row: Pooling Station Name
+    ws.cell(row=1, column=1, value="Pooling Station Name")
+    ws.cell(row=1, column=2, value=station_name)
+
+    # Second row: Time Block and selected curve
+    ws.cell(row=2, column=1, value="Time Block")
+    ws.cell(row=2, column=2, value="Power(MW)")
+
+    # Time blocks and calculated values
+    for i, value in enumerate(curve_values, start=1):
+        ws.cell(row=i + 2, column=1, value=i)
+        ws.cell(row=i + 2, column=2, value=float(value))
+
+    # Formatting
+    header_fill = PatternFill(
+        fill_type="solid",
+        fgColor="0072FF"
+    )
+    header_font = Font(color="FFFFFF", bold=True)
+
+    for row in (1, 2):
+        for cell in ws[row]:
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = Alignment(
+                horizontal="center",
+                vertical="center"
+            )
+
+    ws.column_dimensions["A"].width = 25
+    ws.column_dimensions["B"].width = 22
+    ws.freeze_panes = "A3"
+
+    # Numeric formatting
+    for row in range(3, 99):
+        ws.cell(row=row, column=2).number_format = "0.000000"
+
+    wb.save(output)
+    output.seek(0)
+
+    return output.getvalue()
+
+# ==========================================================
 # NO CURTAILMENT
 # ==========================================================
 
@@ -1756,3 +1809,97 @@ except Exception as e:
     st.error(
         f"Report generate nahi ho payi: {e}"
     )
+
+
+# ==========================================================
+# DOWNLOAD TEMPLATE
+# ==========================================================
+
+st.divider()
+st.subheader("📥 Download Template")
+
+st.caption(
+    "Select a station, curve, and optional one-time-block shift."
+)
+
+station_suffixes = (
+    "_EN1",
+    "_AM1",
+    "_ALL12.5_F1",
+    "_MICO_F1",
+    "_T1",
+)
+
+station_options = [
+    str(column).strip()
+    for column in source_df.columns
+    if str(column).strip().upper().endswith(
+        tuple(s.upper() for s in station_suffixes)
+    )
+]
+
+if not station_options:
+    station_options = [selected_column]
+
+col1, col2 = st.columns(2)
+
+with col1:
+    selected_station = st.selectbox(
+        "Pooling Station Name",
+        options=station_options,
+        key="template_station",
+    )
+
+with col2:
+    selected_curve = st.selectbox(
+        "Select Curve",
+        options=["Profile", "Percentile", "Sym Profile"],
+        key="template_curve",
+    )
+
+apply_one_block_shift = st.checkbox(
+    "Apply one-time-block shift",
+    value=False,
+    key="template_one_block_shift",
+    help=(
+        "Moves values forward by one block. "
+        "The last value wraps around to the first block."
+    ),
+)
+
+curve_values = np.asarray(
+    {
+        "Profile": profile,
+        "Percentile": percentile,
+        "Sym Profile": symmetric,
+    }[selected_curve],
+    dtype=float,
+)
+
+# Apply exactly one circular block shift
+if apply_one_block_shift:
+    curve_values = np.roll(curve_values, 1)
+
+template_bytes = build_profile_template(
+    station_name=selected_station,
+    curve_name=selected_curve,
+    curve_values=curve_values,
+)
+
+shift_suffix = "_Shifted" if apply_one_block_shift else ""
+
+st.download_button(
+    label="📥 Download Template",
+    data=template_bytes,
+    file_name=(
+        f"{selected_station.replace(' ', '_')}_"
+        f"{selected_curve.replace(' ', '_')}"
+        f"{shift_suffix}_Template.xlsx"
+    ),
+    mime=(
+        "application/vnd.openxmlformats-officedocument."
+        "spreadsheetml.sheet"
+    ),
+    key="download_profile_template",
+    use_container_width=True,
+)
