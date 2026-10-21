@@ -1,4 +1,5 @@
 import io
+import csv
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
@@ -210,59 +211,6 @@ def cached_best_shift(
 
     return int(best_shift)
 
-
-# ==========================================================
-# DOWNLOAD PROFILE TEMPLATE
-# ==========================================================
-
-def build_profile_template(station_name, curve_name, curve_values):
-    output = io.BytesIO()
-
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = "Profile Template"
-
-    # First row: Pooling Station Name
-    ws.cell(row=1, column=1, value="Pooling Station Name")
-    ws.cell(row=1, column=2, value=station_name)
-
-    # Second row: Time Block and selected curve
-    ws.cell(row=2, column=1, value="Time Block")
-    ws.cell(row=2, column=2, value="Power(MW)")
-
-    # Time blocks and calculated values
-    for i, value in enumerate(curve_values, start=1):
-        ws.cell(row=i + 2, column=1, value=i)
-        ws.cell(row=i + 2, column=2, value=float(value))
-
-    # Formatting
-    header_fill = PatternFill(
-        fill_type="solid",
-        fgColor="0072FF"
-    )
-    header_font = Font(color="FFFFFF", bold=True)
-
-    for row in (1, 2):
-        for cell in ws[row]:
-            cell.fill = header_fill
-            cell.font = header_font
-            cell.alignment = Alignment(
-                horizontal="center",
-                vertical="center"
-            )
-
-    ws.column_dimensions["A"].width = 25
-    ws.column_dimensions["B"].width = 22
-    ws.freeze_panes = "A3"
-
-    # Numeric formatting
-    for row in range(3, 99):
-        ws.cell(row=row, column=2).number_format = "0.000000"
-
-    wb.save(output)
-    output.seek(0)
-
-    return output.getvalue()
 
 # ==========================================================
 # NO CURTAILMENT
@@ -1197,6 +1145,61 @@ def make_chart(
 
 
 # ==========================================================
+# CSV TEMPLATE HELPERS
+# ==========================================================
+
+POOLING_STATION_SUFFIXES = (
+    "_ALL12.5_F1",
+    "_MICO_F1",
+    "_EN1",
+    "_AM1",
+    "_T1",
+)
+
+
+def extract_pooling_station_name(source_column):
+    """Convert a source column name into its pooling station name."""
+    column_name = str(source_column).strip()
+
+    for suffix in POOLING_STATION_SUFFIXES:
+        if column_name.endswith(suffix):
+            return column_name[:-len(suffix)].strip()
+
+    return column_name
+
+
+def build_profile_template_csv(station_column, curve_values):
+    """Build a two-column CSV template containing 96 time blocks."""
+    values = np.asarray(curve_values, dtype=float).flatten()
+
+    if len(values) != 96:
+        raise ValueError(
+            f"Expected 96 curve values, but received {len(values)}."
+        )
+
+    output = io.StringIO(newline="")
+    writer = csv.writer(output, lineterminator="\n")
+
+    # Row 1: pooling station name
+    writer.writerow([
+        "Pooling Station Name",
+        extract_pooling_station_name(station_column),
+    ])
+
+    # Row 2: column headers
+    writer.writerow([
+        "Time Block",
+        "Power(MW)",
+    ])
+
+    # Rows 3-98: time blocks 1 through 96
+    for block_number, value in enumerate(values, start=1):
+        writer.writerow([block_number, value])
+
+    return output.getvalue().encode("utf-8-sig")
+
+
+# ==========================================================
 # PAGE
 # ==========================================================
 
@@ -1755,6 +1758,114 @@ else:
 
 
 # ==========================================================
+# DOWNLOAD TEMPLATE CSV
+# ==========================================================
+
+st.divider()
+
+st.subheader("📄 Download Template CSV")
+st.caption(
+    "Choose a curve and pooling station to download a CSV with "
+    "the station name, Time Block, and Power(MW) for blocks 1-96."
+)
+
+# Find source columns that look like pooling-station columns.
+station_columns = [
+    str(column)
+    for column in source_df.columns
+    if any(str(column).strip().endswith(suffix)
+           for suffix in POOLING_STATION_SUFFIXES)
+]
+
+# If the uploaded file does not contain those suffixes, allow the user
+# to select from its available columns rather than failing.
+if not station_columns:
+    station_columns = [str(column) for column in source_df.columns]
+
+# Keep the current selected calculation column available as a fallback.
+if selected_column not in station_columns and not any(
+    any(str(column).strip().endswith(suffix) for suffix in POOLING_STATION_SUFFIXES)
+    for column in source_df.columns
+):
+    station_columns = list(dict.fromkeys(station_columns + [selected_column]))
+
+template_col1, template_col2 = st.columns(2)
+
+with template_col1:
+    selected_station = st.selectbox(
+        "Select Pooling Station",
+        options=station_columns,
+        key="template_pooling_station",
+    )
+
+with template_col2:
+    selected_curve = st.selectbox(
+        "Select Curve",
+        options=["Profile", "Percentile", "Sym Profile"],
+        key="template_curve",
+    )
+
+apply_one_block_shift = st.checkbox(
+    "Apply one-time-block shift",
+    value=False,
+    key="template_one_block_shift",
+    help=(
+        "Shifts all values forward by one block. This is a circular shift, "
+        "so the last value moves to block 1."
+    ),
+)
+
+try:
+    curve_map = {
+        "Profile": profile,
+        "Percentile": percentile,
+        "Sym Profile": symmetric,
+    }
+
+    curve_values = np.asarray(
+        curve_map[selected_curve],
+        dtype=float,
+    ).flatten()
+
+    if len(curve_values) != 96:
+        st.error(
+            f"Selected curve must contain 96 values. Found {len(curve_values)}."
+        )
+    else:
+        if apply_one_block_shift:
+            curve_values = np.roll(curve_values, 1)
+
+        template_bytes = build_profile_template_csv(
+            station_column=selected_station,
+            curve_values=curve_values,
+        )
+
+        safe_station_name = (
+            extract_pooling_station_name(selected_station)
+            .replace(" ", "_")
+            .replace("/", "_")
+            .replace("\\", "_")
+        )
+        safe_curve_name = selected_curve.replace(" ", "_")
+        shift_suffix = "_Shifted" if apply_one_block_shift else ""
+        template_file_name = (
+            f"{safe_station_name}_{safe_curve_name}"
+            f"{shift_suffix}_Template.csv"
+        )
+
+        st.download_button(
+            label="⬇️ Download Template CSV",
+            data=template_bytes,
+            file_name=template_file_name,
+            mime="text/csv",
+            key="download_profile_template_csv",
+            use_container_width=True,
+        )
+
+except Exception as e:
+    st.error(f"Template CSV could not be generated: {e}")
+
+# ==========================================================
 # FINAL REPORT
 # ==========================================================
 
@@ -1809,97 +1920,3 @@ except Exception as e:
     st.error(
         f"Report generate nahi ho payi: {e}"
     )
-
-
-# ==========================================================
-# DOWNLOAD TEMPLATE
-# ==========================================================
-
-st.divider()
-st.subheader("📥 Download Template")
-
-st.caption(
-    "Select a station, curve, and optional one-time-block shift."
-)
-
-station_suffixes = (
-    "_EN1",
-    "_AM1",
-    "_ALL12.5_F1",
-    "_MICO_F1",
-    "_T1",
-)
-
-station_options = [
-    str(column).strip()
-    for column in source_df.columns
-    if str(column).strip().upper().endswith(
-        tuple(s.upper() for s in station_suffixes)
-    )
-]
-
-if not station_options:
-    station_options = [selected_column]
-
-col1, col2 = st.columns(2)
-
-with col1:
-    selected_station = st.selectbox(
-        "Pooling Station Name",
-        options=station_options,
-        key="template_station",
-    )
-
-with col2:
-    selected_curve = st.selectbox(
-        "Select Curve",
-        options=["Profile", "Percentile", "Sym Profile"],
-        key="template_curve",
-    )
-
-apply_one_block_shift = st.checkbox(
-    "Apply one-time-block shift",
-    value=False,
-    key="template_one_block_shift",
-    help=(
-        "Moves values forward by one block. "
-        "The last value wraps around to the first block."
-    ),
-)
-
-curve_values = np.asarray(
-    {
-        "Profile": profile,
-        "Percentile": percentile,
-        "Sym Profile": symmetric,
-    }[selected_curve],
-    dtype=float,
-)
-
-# Apply exactly one circular block shift
-if apply_one_block_shift:
-    curve_values = np.roll(curve_values, 1)
-
-template_bytes = build_profile_template(
-    station_name=selected_station,
-    curve_name=selected_curve,
-    curve_values=curve_values,
-)
-
-shift_suffix = "_Shifted" if apply_one_block_shift else ""
-
-st.download_button(
-    label="📥 Download Template",
-    data=template_bytes,
-    file_name=(
-        f"{selected_station.replace(' ', '_')}_"
-        f"{selected_curve.replace(' ', '_')}"
-        f"{shift_suffix}_Template.xlsx"
-    ),
-    mime=(
-        "application/vnd.openxmlformats-officedocument."
-        "spreadsheetml.sheet"
-    ),
-    key="download_profile_template",
-    use_container_width=True,
-)
