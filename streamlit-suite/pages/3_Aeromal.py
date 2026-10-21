@@ -1177,8 +1177,15 @@ def build_profile_template_csv(station_column, curve_values):
             f"Expected 96 curve values, but received {len(values)}."
         )
 
+    # Use standard CSV quoting, Windows-compatible line endings, and a UTF-8 BOM
+    # so Excel is more likely to detect the encoding and columns correctly.
     output = io.StringIO(newline="")
-    writer = csv.writer(output, lineterminator="\n")
+    writer = csv.writer(
+        output,
+        delimiter=",",
+        quoting=csv.QUOTE_ALL,
+        lineterminator="\r\n",
+    )
 
     # Row 1: pooling station name
     writer.writerow([
@@ -1192,9 +1199,12 @@ def build_profile_template_csv(station_column, curve_values):
         "Power(MW)",
     ])
 
-    # Rows 3-98: time blocks 1 through 96
+    # Rows 3-98: blocks 1-96. 17 significant digits round-trip Python floats
+    # without intentionally rounding the curve's values.
     for block_number, value in enumerate(values, start=1):
-        writer.writerow([block_number, value])
+        if not np.isfinite(value):
+            raise ValueError(f"Curve contains a non-finite value at block {block_number}.")
+        writer.writerow([block_number, format(float(value), ".17g")])
 
     return output.getvalue().encode("utf-8-sig")
 
@@ -1767,6 +1777,14 @@ st.subheader("📄 Download Template CSV")
 st.caption(
     "Choose a curve and pooling station to download a CSV with "
     "the station name, Time Block, and Power(MW) for blocks 1-96."
+)
+st.info(
+    "CSV compatibility tip: CSV cannot store Excel cell formatting. To avoid "
+    "Excel changing separators, block numbers, or numeric values, import the file "
+    "through Data → From Text/CSV (delimiter: comma) instead of double-clicking it. "
+    "Keep Time Block as a whole number and Power(MW) as a decimal number. "
+    "When finished, use Save As → CSV UTF-8. Excel may display 12.50 as 12.5; "
+    "that is display formatting, not a different numeric value."
 )
 
 # Find source columns that look like pooling-station columns.
