@@ -261,8 +261,8 @@ def edge_match_rmse(sym_profile, percentile_profile, edge_blocks=4):
 def smooth_sym_parabolic_region(
     sym_profile,
     percentile_profile,
-    window_length=7,
-    edge_blocks=35,
+    window_length=5,
+    edge_blocks=4,
 ):
     """Smooth only the detected rising and falling parabolic sections.
 
@@ -448,6 +448,457 @@ def cached_no_curtailment(
     symmetric = savgol_filter(
         symmetric,
         window_length=window,
+    
+        # --------------------------------------------------
+        # Right side
+        # --------------------------------------------------
+
+        for i in range(n - 1, -1, -1):
+
+            value = (
+                m2 * i + c2
+            )
+
+            if result[i] == 0:
+                result[i] = value
+
+            if value >= peak_cap:
+
+                right_idx = i
+                break
+
+        result = np.clip(
+            result,
+            0,
+            None,
+        )
+
+        # --------------------------------------------------
+        # Flat top
+        # --------------------------------------------------
+
+        left_idx = int(
+            np.clip(
+                left_idx,
+                0,
+                n - 1,
+            )
+        )
+
+        right_idx = int(
+            np.clip(
+                right_idx,
+                left_idx + 1,
+                n,
+            )
+        )
+
+        result[
+            left_idx:right_idx
+        ] = peak_cap
+
+        # --------------------------------------------------
+        # Smooth
+        # --------------------------------------------------
+
+        result = savgol_filter(
+            result,
+            window,
+            3,
+        )
+
+        result = np.clip(
+            result,
+            0,
+            None,
+        )
+
+        # --------------------------------------------------
+        # Restore outer sections
+        # --------------------------------------------------
+
+        result[
+            :left_start
+        ] = smooth[
+            :left_start
+        ]
+
+        result[
+            right_end:
+        ] = smooth[
+            right_end:
+        ]
+
+        result = savgol_filter(
+            result,
+            7,
+            3,
+        )
+
+        # --------------------------------------------------
+        # Availability scaling
+        # --------------------------------------------------
+
+        result *= (
+            power_availability / 100
+        )
+
+        result = np.clip(
+            result,
+            0,
+            None,
+        )
+
+        result[
+            result < 0.2
+        ] = 0
+
+    # ------------------------------------------------------
+    # Return values
+    # ------------------------------------------------------
+
+    return (
+        tuple(percentile.tolist()),
+        tuple(result.tolist()),
+        int(left_idx),
+    )
+
+
+# ==========================================================
+# CURTAILMENT SYMMETRY SHIFT
+# ==========================================================
+
+@st.cache_data(show_spinner=False)
+def cached_sym_shift_c(
+    profile_tuple,
+    shift,
+):
+
+    profile = np.asarray(
+        profile_tuple,
+        dtype=float,
+    )
+
+    shifted = np.roll(
+        profile,
+        -int(shift),
+    )
+
+    symmetric = (
+        0.50 * profile
+        + 0.50 * shifted[::-1]
+    )
+
+    return tuple(
+        np.clip(
+            symmetric,
+            0,
+            None,
+        ).tolist()
+    )
+
+
+# ==========================================================
+# POOLING STATION HELPERS
+# ==========================================================
+
+POOLING_STATION_SUFFIXES = (
+    "_ALL",
+    "_F1",
+    "_F2",
+    "_F3",
+    "_F4",
+    "_F5",
+    "_F6",
+    "_F7",
+    "_F8",
+    "_F9",
+    "_F10",
+    "_F11",
+    "_F12",
+    "_F13",
+    "_F14",
+    "_F15",
+    "_F16",
+    "_F17",
+    "_F18",
+    "_F19",
+    "_F20",
+)
+
+
+def extract_pooling_station_name(column_name):
+    """
+    Extract a pooling-station name from a column header.
+
+    Examples:
+        ABC_ALL12.5_F1 -> ABC_ALL12.5
+        ABC_F1         -> ABC
+    """
+    name = str(column_name).strip()
+
+    for suffix in POOLING_STATION_SUFFIXES:
+        if name.endswith(suffix):
+            return name[:-len(suffix)]
+
+    return name
+
+
+# ==========================================================
+# CSV TEMPLATE GENERATOR
+# ==========================================================
+
+def build_profile_template_csv(
+    station_column,
+    curve_values,
+):
+    """
+    Build a template CSV containing:
+    station name, Time Block, Power(MW).
+    """
+    station_name = extract_pooling_station_name(
+        station_column
+    )
+
+    values = np.asarray(
+        curve_values,
+        dtype=float,
+    ).flatten()
+
+    if len(values) != 96:
+        raise ValueError(
+            f"Expected 96 curve values, received {len(values)}."
+        )
+
+    output = io.StringIO(
+        newline=""
+    )
+
+    writer = csv.writer(
+        output,
+        lineterminator="\n",
+    )
+
+    writer.writerow([
+        station_name,
+        "Time Block",
+        "Power(MW)",
+    ])
+
+    for block, value in enumerate(
+        values,
+        start=1,
+    ):
+        writer.writerow([
+            station_name,
+            block,
+            f"{value:.6f}",
+        ])
+
+    return output.getvalue().encode("utf-8-sig")
+
+
+# ==========================================================
+# EXCEL REPORT BUILDER
+# ==========================================================
+
+def build_excel_report(
+    original_bytes,
+    file_type,
+    source_df,
+    result_df,
+):
+    """
+    Build the final Excel report while preserving the original workbook
+    layout where possible, and place the generated result table in a report
+    worksheet.
+    """
+    if file_type == "csv":
+
+        workbook = load_workbook(
+            io.BytesIO(
+                pd.DataFrame(source_df).to_excel
+                if False else create_excel_from_df(source_df)
+            )
+        )
+
+    else:
+
+        workbook = load_workbook(
+            io.BytesIO(original_bytes)
+        )
+
+    report_sheet_name = "Aeromal Report"
+
+    if report_sheet_name in workbook.sheetnames:
+        del workbook[report_sheet_name]
+
+    ws = workbook.create_sheet(
+        report_sheet_name
+    )
+
+    headers = [
+        "Block",
+        "Percentile",
+        "Profile",
+        "Sym Profile",
+    ]
+
+    for col_index, header in enumerate(
+        headers,
+        start=1,
+    ):
+
+        cell = ws.cell(
+            row=1,
+            column=col_index,
+            value=header,
+        )
+
+        cell.font = Font(
+            bold=True,
+            color="FFFFFF",
+        )
+
+        cell.fill = PatternFill(
+            fill_type="solid",
+            fgColor="1F4E78",
+        )
+
+        cell.alignment = Alignment(
+            horizontal="center",
+            vertical="center",
+        )
+
+    for row_index, row in enumerate(
+        result_df[headers].itertuples(
+            index=False,
+            name=None,
+        ),
+        start=2,
+    ):
+
+        for col_index, value in enumerate(
+            row,
+            start=1,
+        ):
+
+            ws.cell(
+                row=row_index,
+                column=col_index,
+                value=value,
+            )
+
+    for col_index, header in enumerate(
+        headers,
+        start=1,
+    ):
+
+        max_length = max(
+            len(str(header)),
+            *[
+                len(str(ws.cell(row=r, column=col_index).value or ""))
+                for r in range(2, ws.max_row + 1)
+            ],
+        )
+
+        ws.column_dimensions[
+            get_column_letter(col_index)
+        ].width = min(
+            max_length + 2,
+            24,
+        )
+
+    ws.freeze_panes = "A2"
+    ws.auto_filter.ref = ws.dimensions
+
+    output = io.BytesIO()
+
+    workbook.save(
+        output
+    )
+
+    output.seek(0)
+
+    return output.getvalue()
+
+
+def create_excel_from_df(df):
+    """Convert a dataframe to an in-memory Excel workbook."""
+    output = io.BytesIO()
+
+    with pd.ExcelWriter(
+        output,
+        engine="openpyxl",
+    ) as writer:
+
+        df.to_excel(
+            writer,
+            index=False,
+            sheet_name="Source",
+        )
+
+    output.seek(0)
+
+    return output.getvalue()
+
+
+# ==========================================================
+# CHART HELPER
+# ==========================================================
+
+def make_chart(
+    x,
+    traces,
+    title,
+):
+
+    fig = go.Figure()
+
+    for name, values, color in traces:
+
+        fig.add_trace(
+            go.Scatter(
+                x=x,
+                y=values,
+                mode="lines+markers",
+                name=name,
+                line=dict(
+                    color=color,
+                    width=3,
+                ),
+                marker=dict(
+                    size=4,
+                ),
+            )
+        )
+
+    fig.update_layout(
+        title=title,
+        xaxis_title="Time Block",
+        yaxis_title="Power (MW)",
+        template="plotly_white",
+        hovermode="x unified",
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="left",
+            x=0,
+        ),
+    )
+
+    fig.update_xaxes(
+        dtick=4,
+        showgrid=True,
+    )
+
+    fig.update_yaxes(
+        rangemode="tozero",
+        showgrid=True,
+    )
+
+    return fig
         polyorder=3,
     )
 
@@ -879,6 +1330,436 @@ def cached_curtailment(
         result[
             result < 0.2
         ] = 0
+                polyorder=3,
+    )
+
+    smooth = np.clip(
+        smooth,
+        0,
+        None,
+    )
+
+    symmetric = np.clip(
+        symmetric,
+        0,
+        None,
+    )
+
+    smooth[
+        smooth < 0.1
+    ] = 0
+
+    symmetric[
+        symmetric < 0.1
+    ] = 0
+
+    # ------------------------------------------------------
+    # Power availability
+    # ------------------------------------------------------
+
+    factor = (
+        power_availability / 100
+    )
+
+    smooth *= factor
+    symmetric *= factor
+
+    return (
+        tuple(percentile.tolist()),
+        tuple(smooth.tolist()),
+        tuple(symmetric.tolist()),
+        best_shift,
+    )
+
+
+# ==========================================================
+# MANUAL SYMMETRY SHIFT
+# ==========================================================
+
+@st.cache_data(show_spinner=False)
+def cached_sym_shift_nc(
+    smooth_tuple,
+    shift,
+    window,
+):
+
+    smooth = np.asarray(
+        smooth_tuple,
+        dtype=float,
+    )
+
+    shifted = np.roll(
+        smooth,
+        -int(shift),
+    )
+
+    symmetric = (
+        0.50 * smooth
+        + 0.50 * shifted[::-1]
+    )
+
+    symmetric = savgol_filter(
+        symmetric,
+        window_length=window,
+        polyorder=3,
+    )
+
+    symmetric = np.clip(
+        symmetric,
+        0,
+        None,
+    )
+
+    symmetric[
+        symmetric < 0.1
+    ] = 0
+
+    return tuple(
+        symmetric.tolist()
+    )
+
+
+# ==========================================================
+# CURTAILMENT
+# ==========================================================
+
+@st.cache_data(show_spinner=False)
+def cached_curtailment(
+    power_tuple,
+    days,
+    peak_cap,
+    target_width,
+    window,
+    power_availability,
+):
+
+    percentile = (
+        np.asarray(
+            cached_percentile(
+                power_tuple,
+                days,
+            )
+        )
+        * 1.03
+    )
+
+    y = percentile.copy()
+    n = len(y)
+
+    result = np.zeros(n)
+
+    # ------------------------------------------------------
+    # Smooth and gradient
+    # ------------------------------------------------------
+
+    smooth = savgol_filter(
+        y,
+        7,
+        2,
+    )
+
+    gradient = np.gradient(
+        smooth
+    )
+
+    # ------------------------------------------------------
+    # LEFT SIDE
+    # ------------------------------------------------------
+
+    left_peak = np.argmax(
+        smooth[: n // 2]
+    )
+
+    left_peak = max(
+        left_peak,
+        2,
+    )
+
+    left_start = np.argmax(
+        gradient[:left_peak]
+    )
+
+    if left_start >= left_peak:
+        left_start = 0
+
+    x_left = np.arange(
+        left_start,
+        left_peak,
+    )
+
+    y_left = smooth[
+        left_start:left_peak
+    ]
+
+    if len(x_left) >= 2:
+
+        m1, c1 = np.polyfit(
+            x_left,
+            y_left,
+            1,
+        )
+
+    else:
+
+        m1 = 1
+        c1 = 0
+
+    # ------------------------------------------------------
+    # RIGHT SIDE
+    # ------------------------------------------------------
+
+    right_peak = (
+        np.argmax(
+            smooth[n // 2:]
+        )
+        + n // 2
+    )
+
+    threshold = (
+        0.02 * np.max(smooth)
+    )
+
+    active = np.where(
+        smooth > threshold
+    )[0]
+
+    if len(active) > 0:
+        right_end = active[-1]
+    else:
+        right_end = n - 1
+
+    if right_end <= right_peak:
+
+        right_end = min(
+            n - 1,
+            right_peak + 2,
+        )
+
+    x_right = np.arange(
+        right_peak,
+        right_end,
+    )
+
+    y_right = smooth[
+        right_peak:right_end
+    ]
+
+    if len(x_right) >= 2:
+
+        m2, c2 = np.polyfit(
+            x_right,
+            y_right,
+            1,
+        )
+
+    else:
+
+        m2 = -1
+        c2 = smooth[right_peak]
+
+    # ------------------------------------------------------
+    # Avoid division by zero
+    # ------------------------------------------------------
+
+    if abs(m1) < 1e-9:
+        m1 = 1e-9
+
+    if abs(m2) < 1e-9:
+        m2 = -1e-9
+
+    # ------------------------------------------------------
+    # Trip point
+    # ------------------------------------------------------
+
+    A = (
+        1 / m2
+        - 1 / m1
+    )
+
+    B = (
+        c1 / m1
+        - c2 / m2
+    )
+    if abs(A) < 1e-9:
+
+        trip = float(
+            target_width
+        )
+
+    else:
+
+        trip = max(
+            0,
+            (target_width - B) / A,
+        )
+
+    # ------------------------------------------------------
+    # Peak indices
+    # ------------------------------------------------------
+
+    left_idx = int(
+        np.clip(
+            round(
+                (trip - c1) / m1
+            ),
+            0,
+            n - 1,
+        )
+    )
+
+    right_idx = int(
+        np.clip(
+            round(
+                (trip - c2) / m2
+            ),
+            0,
+            n - 1,
+        )
+    )
+
+    if right_idx <= left_idx:
+
+        right_idx = min(
+            n - 1,
+            left_idx + 1,
+        )
+
+    # ======================================================
+    # DOME MODE
+    # ======================================================
+
+    if peak_cap >= trip:
+
+        left_curve = np.zeros(n)
+
+        for i in range(n):
+
+            value = (
+                m1 * i + c1
+            )
+
+            left_curve[i] = min(
+                value,
+                trip,
+            )
+
+            if value >= trip:
+
+                left_idx = i
+                break
+
+        right_curve = np.zeros(n)
+
+        for i in range(
+            n - 1,
+            -1,
+            -1,
+        ):
+
+            value = (
+                m2 * i + c2
+            )
+
+            right_curve[i] = min(
+                value,
+                trip,
+            )
+
+            if value >= trip:
+
+                right_idx = i
+                break
+
+        result = np.maximum(
+            left_curve,
+            right_curve,
+        )
+
+        width = max(
+            right_idx - left_idx,
+            2,
+        )
+
+        dome_height = max(
+            20,
+            0.12 * trip,
+        )
+
+        xc = np.linspace(
+            -1,
+            1,
+            width,
+        )
+
+        shape = np.sqrt(
+            np.maximum(
+                0,
+                1 - xc ** 2,
+            )
+        )
+
+        dome = (
+            trip
+            + dome_height * shape
+        )
+
+        dome[0] = trip
+        dome[-1] = trip
+
+        end_idx = min(
+            left_idx + width,
+            n,
+        )
+
+        result[
+            left_idx:end_idx
+        ] = dome[
+            :end_idx - left_idx
+        ]
+
+        result = savgol_filter(
+            result,
+            window,
+            3,
+        )
+
+        result = np.clip(
+            result,
+            0,
+            None,
+        )
+
+        result[
+            :left_start
+        ] = smooth[
+            :left_start
+        ]
+
+        result[
+            right_end:
+        ] = smooth[
+            right_end:
+        ]
+
+        result = savgol_filter(
+            result,
+            7,
+            3,
+        )
+
+        result *= (
+            power_availability / 100
+        )
+
+        result = np.clip(
+            result,
+            0,
+            None,
+        )
+
+        result[
+            result < 0.2
+        ] = 0
 
     # ======================================================
     # FLAT PEAK MODE
@@ -1017,6 +1898,449 @@ def cached_sym_shift_c(
     )
 
 
+# ==========================================================
+# REPORT STYLING
+# ==========================================================
+
+def style_report_sheet(ws):
+
+    header_fill = PatternFill(
+        fill_type="solid",
+        fgColor="0072FF",
+    )
+
+    header_font = Font(
+        color="FFFFFF",
+        bold=True,
+    )
+
+    # Header
+    for cell in ws[1]:
+
+        cell.fill = header_fill
+        cell.font = header_font
+
+        cell.alignment = Alignment(
+            horizontal="center",
+            vertical="center",
+        )
+
+    # Column widths
+    for column in ws.columns:
+
+        max_length = 0
+
+        for cell in column:
+
+            if cell.value is not None:
+
+                max_length = max(
+                    max_length,
+                    len(str(cell.value)),
+                )
+
+        ws.column_dimensions[
+            column[0].column_letter
+        ].width = min(
+            max_length + 2,
+            30,
+        )
+
+    ws.freeze_panes = "A2"
+    ws.auto_filter.ref = ws.dimensions
+
+
+# ==========================================================
+# BUILD REPORT
+# ==========================================================
+
+def build_excel_report(
+    original_bytes,
+    file_type,
+    source_df,
+    result_df,
+):
+
+    output = io.BytesIO()
+
+    if file_type == "csv":
+
+        with pd.ExcelWriter(
+            output,
+            engine="openpyxl",
+        ) as writer:
+
+            source_df.to_excel(
+                writer,
+                index=False,
+                sheet_name="Source",
+            )
+
+        output.seek(0)
+
+        workbook = load_workbook(
+            output
+        )
+
+    else:
+
+        workbook = load_workbook(
+            io.BytesIO(original_bytes)
+        )
+
+    report_sheet_name = "Aeromal Report"
+
+    if report_sheet_name in workbook.sheetnames:
+
+        del workbook[report_sheet_name]
+
+    ws = workbook.create_sheet(
+        report_sheet_name
+    )
+
+    headers = [
+        "Block",
+        "Percentile",
+        "Profile",
+        "Sym Profile",
+    ]
+
+    ws.append(headers)
+
+    for row in result_df[headers].itertuples(
+        index=False,
+        name=None,
+    ):
+
+        ws.append(row)
+
+    style_report_sheet(ws)
+
+    output = io.BytesIO()
+
+    workbook.save(
+        output
+    )
+
+    output.seek(0)
+
+    return output.getvalue()
+    if abs(A) < 1e-9:
+
+        trip = float(
+            target_width
+        )
+
+    else:
+
+        trip = max(
+            0,
+            (target_width - B) / A,
+        )
+
+    # ------------------------------------------------------
+    # Peak indices
+    # ------------------------------------------------------
+
+    left_idx = int(
+        np.clip(
+            round(
+                (trip - c1) / m1
+            ),
+            0,
+            n - 1,
+        )
+    )
+
+    right_idx = int(
+        np.clip(
+            round(
+                (trip - c2) / m2
+            ),
+            0,
+            n - 1,
+        )
+    )
+
+    if right_idx <= left_idx:
+
+        right_idx = min(
+            n - 1,
+            left_idx + 1,
+        )
+
+    # ======================================================
+    # DOME MODE
+    # ======================================================
+
+    if peak_cap >= trip:
+
+        left_curve = np.zeros(n)
+
+        for i in range(n):
+
+            value = (
+                m1 * i + c1
+            )
+
+            left_curve[i] = min(
+                value,
+                trip,
+            )
+
+            if value >= trip:
+
+                left_idx = i
+                break
+
+        right_curve = np.zeros(n)
+
+        for i in range(
+            n - 1,
+            -1,
+            -1,
+        ):
+
+            value = (
+                m2 * i + c2
+            )
+
+            right_curve[i] = min(
+                value,
+                trip,
+            )
+
+            if value >= trip:
+
+                right_idx = i
+                break
+
+        result = np.maximum(
+            left_curve,
+            right_curve,
+        )
+
+        width = max(
+            right_idx - left_idx,
+            2,
+        )
+
+        dome_height = max(
+            20,
+            0.12 * trip,
+        )
+
+        xc = np.linspace(
+            -1,
+            1,
+            width,
+        )
+
+        shape = np.sqrt(
+            np.maximum(
+                0,
+                1 - xc ** 2,
+            )
+        )
+
+        dome = (
+            trip
+            + dome_height * shape
+        )
+
+        dome[0] = trip
+        dome[-1] = trip
+
+        end_idx = min(
+            left_idx + width,
+            n,
+        )
+
+        result[
+            left_idx:end_idx
+        ] = dome[
+            :end_idx - left_idx
+        ]
+
+        result = savgol_filter(
+            result,
+            window,
+            3,
+        )
+
+        result = np.clip(
+            result,
+            0,
+            None,
+        )
+
+        result[
+            :left_start
+        ] = smooth[
+            :left_start
+        ]
+
+        result[
+            right_end:
+        ] = smooth[
+            right_end:
+        ]
+
+        result = savgol_filter(
+            result,
+            7,
+            3,
+        )
+
+        result *= (
+            power_availability / 100
+        )
+
+        result = np.clip(
+            result,
+            0,
+            None,
+        )
+
+        result[
+            result < 0.2
+        ] = 0
+
+    # ======================================================
+    # FLAT PEAK MODE
+    # ======================================================
+
+    else:
+
+        for i in range(n):
+
+            value = (
+                m1 * i + c1
+            )
+
+            result[i] = value
+
+            if value >= peak_cap:
+
+                left_idx = i
+                break
+
+        right_curve = np.zeros(n)
+
+        for i in range(
+            n - 1,
+            -1,
+            -1,
+        ):
+
+            value = (
+                m2 * i + c2
+            )
+
+            right_curve[i] = value
+
+            if value >= peak_cap:
+
+                right_idx = i
+                break
+
+        result = np.maximum(
+            result,
+            right_curve,
+        )
+
+        if right_idx > left_idx:
+
+            result[
+                left_idx:right_idx
+            ] = peak_cap
+
+        result = np.clip(
+            result,
+            0,
+            peak_cap,
+        )
+
+        result = savgol_filter(
+            result,
+            window,
+            3,
+        )
+
+        result[
+            :left_start
+        ] = smooth[
+            :left_start
+        ]
+
+        result[
+            right_end:
+        ] = smooth[
+            right_end:
+        ]
+
+        result = savgol_filter(
+            result,
+            7,
+            3,
+        )
+
+        result *= (
+            power_availability / 100
+        )
+
+        result = np.clip(
+            result,
+            0,
+            peak_cap,
+        )
+
+        result[
+            result < 1
+        ] = 0
+
+    # ------------------------------------------------------
+    # Best shift
+    # ------------------------------------------------------
+
+    best_shift = cached_best_shift(
+        tuple(result.tolist())
+    )
+
+    return (
+        tuple(percentile.tolist()),
+        tuple(result.tolist()),
+        best_shift,
+    )
+
+
+# ==========================================================
+# CURTAILMENT SYMMETRY
+# ==========================================================
+
+@st.cache_data(show_spinner=False)
+def cached_sym_shift_c(
+    final_profile_tuple,
+    shift,
+):
+
+    profile = np.asarray(
+        final_profile_tuple,
+        dtype=float,
+    )
+
+    shifted = np.roll(
+        profile,
+        -int(shift),
+    )
+
+    symmetric = (
+        profile + shifted[::-1]
+    ) / 2
+
+    return tuple(
+        symmetric.tolist()
+    )
 # ==========================================================
 # REPORT STYLING
 # ==========================================================
@@ -1399,6 +2723,7 @@ else:
         )
 
         st.stop()
+        st.stop()
 
     sheet_name = st.selectbox(
         "📑 Select Excel Sheet",
@@ -1668,8 +2993,8 @@ if not curtailment:
     edge_blocks = st.slider(
         "Exact Percentile Match at Start and End (blocks)",
         min_value=1,
-        max_value=35,
-        value=30,
+        max_value=12,
+        value=4,
         step=1,
         help="The first and last N Sym Profile values are matched exactly to the displayed 95th percentile.",
         key="edge_match_no_curtailment",
@@ -1690,7 +3015,7 @@ if not curtailment:
         symmetric = smooth_sym_parabolic_region(
             symmetric,
             percentile,
-            window_length=7,
+            window_length=5,
             edge_blocks=edge_blocks,
         )
 
@@ -1748,7 +3073,6 @@ if not curtailment:
             "Sym Profile": symmetric,
         }
     )
-
     st.subheader(
         "📊 Generated Curve"
     )
@@ -1870,38 +3194,28 @@ else:
     edge_blocks = st.slider(
         "Exact Percentile Match at Start and End (blocks)",
         min_value=1,
-        max_value=35,
-        value=30,
+        max_value=12,
+        value=4,
         step=1,
         help="The first and last N Sym Profile values are matched exactly to the displayed percentile curve.",
         key="edge_match_curtailment",
     )
+
     symmetric = match_symmetry_edges(
         symmetric,
         percentile,
         edge_blocks,
     )
 
-    smooth_sym_enabled = st.checkbox(
-        "Apply smoothening to Sym Profile after edge matching (window length 5)",
-        value=False,
-        help="Smooth only the detected morning rise and evening fall, split at the percentile peak. The matched edge blocks are protected and matched again afterward.",
-        key="smooth_sym_curtailment",
-    )
-    if smooth_sym_enabled:
-        symmetric = smooth_sym_parabolic_region(
-            symmetric,
-            percentile,
-            window_length=5,
-            edge_blocks=edge_blocks,
-        )
-
-    # Reapply exact matching after smoothing so the edge values remain exact.
+    # Keep exact start/end percentile matching in Curtailment Mode.
+    # The optional Sym Profile smoothening is intentionally available only
+    # in No Curtailment Mode.
     symmetric = match_symmetry_edges(
         symmetric,
         percentile,
         edge_blocks,
     )
+
     st.caption(
         f"Edge match verification: RMSE = {edge_match_rmse(symmetric, percentile, edge_blocks):.8f} "
         f"across the first and last {edge_blocks} blocks. A value of 0 means an exact match."
@@ -1969,10 +3283,12 @@ else:
 st.divider()
 
 st.subheader("📄 Download Template CSV")
+
 st.caption(
     "Choose a curve and pooling station to download a CSV with "
     "the station name, Time Block, and Power(MW) for blocks 1-96."
 )
+
 st.info(
     "CSV compatibility tip: CSV cannot store Excel cell formatting. To avoid "
     "Excel changing separators, block numbers, or numeric values, import the file "
@@ -1986,21 +3302,33 @@ st.info(
 station_columns = [
     str(column)
     for column in source_df.columns
-    if any(str(column).strip().endswith(suffix)
-           for suffix in POOLING_STATION_SUFFIXES)
+    if any(
+        str(column).strip().endswith(suffix)
+        for suffix in POOLING_STATION_SUFFIXES
+    )
 ]
 
 # If the uploaded file does not contain those suffixes, allow the user
 # to select from its available columns rather than failing.
 if not station_columns:
-    station_columns = [str(column) for column in source_df.columns]
+    station_columns = [
+        str(column)
+        for column in source_df.columns
+    ]
 
 # Keep the current selected calculation column available as a fallback.
 if selected_column not in station_columns and not any(
-    any(str(column).strip().endswith(suffix) for suffix in POOLING_STATION_SUFFIXES)
+    any(
+        str(column).strip().endswith(suffix)
+        for suffix in POOLING_STATION_SUFFIXES
+    )
     for column in source_df.columns
 ):
-    station_columns = list(dict.fromkeys(station_columns + [selected_column]))
+    station_columns = list(
+        dict.fromkeys(
+            station_columns + [selected_column]
+        )
+    )
 
 template_col1, template_col2 = st.columns(2)
 
@@ -2014,7 +3342,11 @@ with template_col1:
 with template_col2:
     selected_curve = st.selectbox(
         "Select Curve",
-        options=["Profile", "Percentile", "Sym Profile"],
+        options=[
+            "Profile",
+            "Percentile",
+            "Sym Profile",
+        ],
         key="template_curve",
     )
 
@@ -2029,6 +3361,7 @@ apply_one_block_shift = st.checkbox(
 )
 
 try:
+
     curve_map = {
         "Profile": profile,
         "Percentile": percentile,
@@ -2041,12 +3374,18 @@ try:
     ).flatten()
 
     if len(curve_values) != 96:
+
         st.error(
             f"Selected curve must contain 96 values. Found {len(curve_values)}."
         )
+
     else:
+
         if apply_one_block_shift:
-            curve_values = np.roll(curve_values, 1)
+            curve_values = np.roll(
+                curve_values,
+                1,
+            )
 
         template_bytes = build_profile_template_csv(
             station_column=selected_station,
@@ -2059,8 +3398,18 @@ try:
             .replace("/", "_")
             .replace("\\", "_")
         )
-        safe_curve_name = selected_curve.replace(" ", "_")
-        shift_suffix = "_Shifted" if apply_one_block_shift else ""
+
+        safe_curve_name = selected_curve.replace(
+            " ",
+            "_",
+        )
+
+        shift_suffix = (
+            "_Shifted"
+            if apply_one_block_shift
+            else ""
+        )
+
         template_file_name = (
             f"{safe_station_name}_{safe_curve_name}"
             f"{shift_suffix}_Template.csv"
@@ -2076,7 +3425,11 @@ try:
         )
 
 except Exception as e:
-    st.error(f"Template CSV could not be generated: {e}")
+
+    st.error(
+        f"Template CSV could not be generated: {e}"
+    )
+
 
 # ==========================================================
 # FINAL REPORT
