@@ -1849,8 +1849,8 @@ else:
     edge_blocks = st.slider(
         "Exact Percentile Match at Start and End (blocks)",
         min_value=1,
-        max_value=12,
-        value=4,
+        max_value=35,
+        value=30,
         step=1,
         help="The first and last N Sym Profile values will exactly equal the displayed 95th percentile values. Edge matching is applied after optional smoothing.",
         key="edge_match_curtailment",
