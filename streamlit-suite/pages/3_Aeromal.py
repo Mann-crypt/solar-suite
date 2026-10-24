@@ -261,8 +261,8 @@ def edge_match_rmse(sym_profile, percentile_profile, edge_blocks=4):
 def smooth_sym_parabolic_region(
     sym_profile,
     percentile_profile,
-    window_length=5,
-    edge_blocks=30,
+    window_length=7,
+    edge_blocks=35,
 ):
     """Smooth only the detected rising and falling parabolic sections.
 
@@ -1690,7 +1690,7 @@ if not curtailment:
         symmetric = smooth_sym_parabolic_region(
             symmetric,
             percentile,
-            window_length=5,
+            window_length=7,
             edge_blocks=edge_blocks,
         )
 
