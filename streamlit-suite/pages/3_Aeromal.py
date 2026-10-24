@@ -262,7 +262,7 @@ def smooth_sym_parabolic_region(
     sym_profile,
     percentile_profile,
     window_length=5,
-    edge_blocks=4,
+    edge_blocks=30,
 ):
     """Smooth only the detected rising and falling parabolic sections.
 
