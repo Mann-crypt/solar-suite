@@ -258,12 +258,18 @@ def edge_match_rmse(sym_profile, percentile_profile, edge_blocks=4):
 # OPTIONAL SMOOTHING: PARABOLIC / ACTIVE GENERATION REGION ONLY
 # ==========================================================
 
-def smooth_sym_parabolic_region(sym_profile, percentile_profile, window_length=5):
-    """Smooth only the active daytime section, leaving night-time blocks untouched.
+def smooth_sym_parabolic_region(
+    sym_profile,
+    percentile_profile,
+    window_length=5,
+    edge_blocks=4,
+):
+    """Smooth only the detected rising and falling parabolic sections.
 
-    The active region is detected from the percentile curve using 2% of its
-    maximum as the threshold. A Savitzky-Golay filter is applied only inside
-    that region, not across all 96 blocks.
+    The daytime region is detected from the percentile curve using 2% of its
+    peak as the activity threshold. The peak divides the region into separate
+    rising and falling sections, which are smoothed independently. The first
+    and last `edge_blocks` are excluded so the exact-matched blocks stay fixed.
     """
     symmetric = np.asarray(sym_profile, dtype=float).copy()
     percentile = np.asarray(percentile_profile, dtype=float)
@@ -271,31 +277,51 @@ def smooth_sym_parabolic_region(sym_profile, percentile_profile, window_length=5
     if symmetric.size != percentile.size or symmetric.size < 5:
         return symmetric
 
-    peak = float(np.max(percentile)) if percentile.size else 0.0
-    if peak <= 0:
+    peak_value = float(np.max(percentile)) if percentile.size else 0.0
+    if peak_value <= 0:
         return symmetric
 
-    threshold = max(0.1, peak * 0.02)
+    threshold = max(0.1, peak_value * 0.02)
     active = np.flatnonzero(percentile > threshold)
     if active.size < 5:
         return symmetric
 
-    start, end = int(active[0]), int(active[-1])
-    segment = symmetric[start:end + 1]
+    active_start = int(active[0])
+    active_end = int(active[-1])
+    peak_idx = int(np.argmax(percentile[active_start:active_end + 1]) + active_start)
 
-    # Window must be odd, at least 5, and no longer than the active segment.
-    window = min(int(window_length), len(segment))
-    if window % 2 == 0:
-        window -= 1
-    if window < 5:
-        return symmetric
+    # Preserve the exact start/end blocks during smoothing. They are matched
+    # again after this function as a final safety measure.
+    edge_count = int(np.clip(edge_blocks, 0, symmetric.size // 2))
+    left_limit = max(active_start, edge_count)
+    right_limit = min(active_end, symmetric.size - edge_count - 1)
 
-    symmetric[start:end + 1] = savgol_filter(
-        segment,
-        window_length=window,
-        polyorder=2,
-        mode="interp",
-    )
+    def smooth_segment(left, right):
+        """Smooth inclusive segment bounds when at least five points exist."""
+        if right - left + 1 < 5:
+            return
+        segment = symmetric[left:right + 1]
+        window = min(int(window_length), len(segment))
+        if window % 2 == 0:
+            window -= 1
+        if window < 5:
+            return
+        symmetric[left:right + 1] = savgol_filter(
+            segment,
+            window_length=window,
+            polyorder=2,
+            mode="interp",
+        )
+
+    # Smooth the morning rise and evening fall separately, rather than filtering
+    # all 96 blocks or treating the whole day as one segment.
+    rise_right = min(peak_idx, right_limit)
+    fall_left = max(peak_idx, left_limit)
+    if left_limit <= rise_right:
+        smooth_segment(left_limit, rise_right)
+    if fall_left <= right_limit:
+        smooth_segment(fall_left, right_limit)
+
     return np.clip(symmetric, 0, None)
 
 
@@ -1639,10 +1665,25 @@ if not curtailment:
         symmetric_t
     )
 
+    edge_blocks = st.slider(
+        "Exact Percentile Match at Start and End (blocks)",
+        min_value=1,
+        max_value=12,
+        value=4,
+        step=1,
+        help="The first and last N Sym Profile values are matched exactly to the displayed 95th percentile.",
+        key="edge_match_no_curtailment",
+    )
+    symmetric = match_symmetry_edges(
+        symmetric,
+        percentile,
+        edge_blocks,
+    )
+
     smooth_sym_enabled = st.checkbox(
-        "Apply smoothening to Sym Profile (window length 5)",
+        "Apply smoothening to Sym Profile after edge matching (window length 5)",
         value=False,
-        help="Smooth only the active parabolic/daytime portion of Sym Profile. The night-time blocks are not smoothed.",
+        help="Smooth only the detected morning rise and evening fall, split at the percentile peak. The matched edge blocks are protected and matched again afterward.",
         key="smooth_sym_no_curtailment",
     )
     if smooth_sym_enabled:
@@ -1650,17 +1691,10 @@ if not curtailment:
             symmetric,
             percentile,
             window_length=5,
+            edge_blocks=edge_blocks,
         )
 
-    edge_blocks = st.slider(
-        "Exact Percentile Match at Start and End (blocks)",
-        min_value=1,
-        max_value=35,
-        value=30,
-        step=1,
-        help="The first and last N Sym Profile values will exactly equal the 95th percentile values. Edge matching is applied after optional smoothing.",
-        key="edge_match_no_curtailment",
-    )
+    # Reapply exact matching after smoothing so the edge values remain exact.
     symmetric = match_symmetry_edges(
         symmetric,
         percentile,
@@ -1833,10 +1867,25 @@ else:
         symmetric_t
     )
 
+    edge_blocks = st.slider(
+        "Exact Percentile Match at Start and End (blocks)",
+        min_value=1,
+        max_value=12,
+        value=4,
+        step=1,
+        help="The first and last N Sym Profile values are matched exactly to the displayed percentile curve.",
+        key="edge_match_curtailment",
+    )
+    symmetric = match_symmetry_edges(
+        symmetric,
+        percentile,
+        edge_blocks,
+    )
+
     smooth_sym_enabled = st.checkbox(
-        "Apply smoothening to Sym Profile (window length 5)",
+        "Apply smoothening to Sym Profile after edge matching (window length 5)",
         value=False,
-        help="Smooth only the active parabolic/daytime portion of Sym Profile. The night-time blocks are not smoothed.",
+        help="Smooth only the detected morning rise and evening fall, split at the percentile peak. The matched edge blocks are protected and matched again afterward.",
         key="smooth_sym_curtailment",
     )
     if smooth_sym_enabled:
@@ -1844,17 +1893,10 @@ else:
             symmetric,
             percentile,
             window_length=5,
+            edge_blocks=edge_blocks,
         )
 
-    edge_blocks = st.slider(
-        "Exact Percentile Match at Start and End (blocks)",
-        min_value=1,
-        max_value=35,
-        value=30,
-        step=1,
-        help="The first and last N Sym Profile values will exactly equal the displayed 95th percentile values. Edge matching is applied after optional smoothing.",
-        key="edge_match_curtailment",
-    )
+    # Reapply exact matching after smoothing so the edge values remain exact.
     symmetric = match_symmetry_edges(
         symmetric,
         percentile,
