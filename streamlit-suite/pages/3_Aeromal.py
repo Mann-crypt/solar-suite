@@ -1451,8 +1451,8 @@ if not curtailment:
     edge_blocks = st.slider(
         "Exact Percentile Match at Start and End (blocks)",
         min_value=1,
-        max_value=12,
-        value=4,
+        max_value=40,
+        value=30,
         step=1,
         help=(
             "The first and last N Sym Profile values are matched "
@@ -1645,8 +1645,8 @@ else:
     edge_blocks = st.slider(
         "Exact Percentile Match at Start and End (blocks)",
         min_value=1,
-        max_value=12,
-        value=4,
+        max_value=40,
+        value=30,
         step=1,
         help=(
             "The first and last N Sym Profile values are matched "
