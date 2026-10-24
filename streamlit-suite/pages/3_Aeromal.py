@@ -213,6 +213,48 @@ def cached_best_shift(
 
 
 # ==========================================================
+# EDGE MATCHING: SYM PROFILE TO PERCENTILE
+# ==========================================================
+
+def match_symmetry_edges(sym_profile, percentile_profile, edge_blocks=4):
+    """
+    Make the first and last `edge_blocks` values of Sym Profile exactly
+    equal to the corresponding percentile values. The middle remains unchanged.
+    """
+    symmetric = np.asarray(sym_profile, dtype=float).copy()
+    percentile = np.asarray(percentile_profile, dtype=float).copy()
+
+    if symmetric.size != percentile.size:
+        raise ValueError("Sym Profile and Percentile must have the same number of blocks.")
+
+    if symmetric.size == 0:
+        return symmetric
+
+    count = int(np.clip(edge_blocks, 0, symmetric.size // 2))
+    if count:
+        symmetric[:count] = percentile[:count]
+        symmetric[-count:] = percentile[-count:]
+
+    return np.clip(symmetric, 0, None)
+
+
+def edge_match_rmse(sym_profile, percentile_profile, edge_blocks=4):
+    """RMSE over the matched start/end blocks, useful for verification."""
+    symmetric = np.asarray(sym_profile, dtype=float)
+    percentile = np.asarray(percentile_profile, dtype=float)
+    count = int(np.clip(edge_blocks, 0, len(symmetric) // 2))
+
+    if count == 0:
+        return float("nan")
+
+    differences = np.concatenate((
+        symmetric[:count] - percentile[:count],
+        symmetric[-count:] - percentile[-count:],
+    ))
+    return float(np.sqrt(np.mean(differences ** 2)))
+
+
+# ==========================================================
 # NO CURTAILMENT
 # ==========================================================
 
@@ -385,6 +427,7 @@ def cached_no_curtailment(
 def cached_sym_shift_nc(
     smooth_tuple,
     shift,
+    window,
 ):
 
     smooth = np.asarray(
@@ -1536,6 +1579,7 @@ if not curtailment:
         symmetric_t = cached_sym_shift_nc(
             profile_t,
             shift,
+            window,
         )
 
     percentile = np.asarray(
@@ -1548,6 +1592,25 @@ if not curtailment:
 
     symmetric = np.asarray(
         symmetric_t
+    )
+
+    edge_blocks = st.slider(
+        "Exact Percentile Match at Start and End (blocks)",
+        min_value=1,
+        max_value=12,
+        value=4,
+        step=1,
+        help="The first and last N Sym Profile values will exactly equal the 95th percentile values.",
+        key="edge_match_no_curtailment",
+    )
+    symmetric = match_symmetry_edges(
+        symmetric,
+        percentile,
+        edge_blocks,
+    )
+    st.caption(
+        f"Edge match verification: RMSE = {edge_match_rmse(symmetric, percentile, edge_blocks):.8f} "
+        f"across the first and last {edge_blocks} blocks. A value of 0 means an exact match."
     )
 
     # ------------------------------------------------------
@@ -1710,6 +1773,25 @@ else:
 
     symmetric = np.asarray(
         symmetric_t
+    )
+
+    edge_blocks = st.slider(
+        "Exact Percentile Match at Start and End (blocks)",
+        min_value=1,
+        max_value=12,
+        value=4,
+        step=1,
+        help="The first and last N Sym Profile values will exactly equal the displayed 95th percentile values.",
+        key="edge_match_curtailment",
+    )
+    symmetric = match_symmetry_edges(
+        symmetric,
+        percentile,
+        edge_blocks,
+    )
+    st.caption(
+        f"Edge match verification: RMSE = {edge_match_rmse(symmetric, percentile, edge_blocks):.8f} "
+        f"across the first and last {edge_blocks} blocks. A value of 0 means an exact match."
     )
 
     # ------------------------------------------------------
